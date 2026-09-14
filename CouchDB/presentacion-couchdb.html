@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Apache CouchDB</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -526,6 +527,11 @@
   <span class="k">"target"</span><span class="p">:</span> <span class="s">"http://central.ose.local:5984/inspecciones"</span><span class="p">,</span>
   <span class="k">"continuous"</span><span class="p">:</span> true
 }</code></pre>
+    </div>
+    <div class="card">
+      <h3>PouchDB · el otro extremo del protocolo</h3>
+      <p style="font-size:14px; line-height:1.6;">El protocolo no lo habla solo CouchDB. <b>PouchDB</b> es una implementación en JavaScript que corre <i>dentro</i> del navegador o de la app móvil, guardando en IndexedDB, y sincroniza contra un CouchDB con una línea: <code class="inline">db.sync('http://servidor/base')</code>. Eso es lo que hace realista el "OSE Móvil" de la slide 05: la tablet no necesita un servidor instalado, alcanza con la app.</p>
+      <p style="font-size:14px; line-height:1.6; margin-top:10px;">En la demo que viene, las dos tablets son en realidad nodos CouchDB completos en vez de PouchDB. Es una simplificación para no tener que empaquetar una app: el protocolo de replicación que se ejecuta es exactamente el mismo.</p>
     </div>
   </section>
 
