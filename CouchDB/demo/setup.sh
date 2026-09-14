@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Levanta la base "inspecciones" en el nodo tablet (offline) con las vistas
-# y las lecturas de ejemplo. El central y la tablet-b se crean vacíos a
-# propósito, para poder mostrar la sincronización durante la demo.
+# Levanta la base "inspecciones" en las dos tablets, cada una offline y sin
+# verse entre si. La tablet A (jperez) carga su ruta completa. La tablet B
+# (mgonzalez) carga su propia ruta MAS dos lecturas que "chocan" a
+# proposito con dos de la tablet A (mismo _id, valor distinto): apenas las
+# dos tablets sincronicen con el central, esos dos documentos van a
+# aparecer como conflicto, listos para resolver en la UI central. El
+# central se crea vacio a proposito, para poder mostrar la sincronizacion
+# durante la demo.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -52,10 +57,13 @@ curl -s -X POST "$TABLET/inspecciones/_bulk_docs" \
   -d @lecturas.json | python3 -m json.tool
 
 echo
-echo "La tablet-b arranca vacía a propósito: es un segundo inspector que se"
-echo "suma después y primero tiene que 'Traer cambios del central' para"
-echo "empezar a trabajar con la misma base (ver DEMO.md, escenario de"
-echo "conflicto entre dos inspectores)."
+echo "La inspectora mgonzalez (tablet-b), sin ver lo anterior, carga su propia"
+echo "ruta — dos lecturas nuevas y dos que coinciden con medidores que jperez"
+echo "ya midió (OSE-3390 y OSE-4488), con valores distintos..."
+curl -s -X POST "$TABLET_B/inspecciones/_bulk_docs" \
+  -H "Content-Type: application/json" \
+  -d @lecturas-tablet-b.json | python3 -m json.tool
+
 echo
 echo "Listo. Estado inicial:"
 echo "  Tablet A  -> $TABLET/inspecciones   (Fauxton: http://localhost:5985/_utils)"

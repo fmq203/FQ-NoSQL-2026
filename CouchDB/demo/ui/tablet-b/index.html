@@ -148,6 +148,7 @@
 
   <div id="tip-float"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
   (function(){
     const tip = document.getElementById('tip-float');
@@ -217,6 +218,9 @@
   }
 
   let lastDocs = [];
+  let changedIds = [];
+  let prevRevs = {};
+  let firstLoad = true;
 
   async function loadList(){
     if(editingId) return; // no pisar un formulario de edicion abierto
@@ -228,6 +232,9 @@
         .filter(d => d && !d._deleted && d.type === 'lectura_medidor')
         .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
       lastDocs = docs;
+      changedIds = firstLoad ? [] : docs.filter(d => prevRevs[d._id] !== d._rev).map(d => d._id);
+      prevRevs = Object.fromEntries(docs.map(d => [d._id, d._rev]));
+      firstLoad = false;
       render();
     }catch(e){
       list.innerHTML = '<p class="empty">No se pudo conectar al nodo :5986.</p>';
@@ -243,7 +250,7 @@
         const conflicted = d._conflicts && d._conflicts.length;
         if(d._id === editingId){
           return `
-            <div class="card">
+            <div class="card" data-cardid="${d._id}">
               <div class="card-top">
                 <div class="meta">
                   <div class="id">${d._id}</div>
@@ -258,7 +265,7 @@
             </div>`;
         }
         return `
-          <div class="card">
+          <div class="card" data-cardid="${d._id}">
             <div class="card-top">
               <div class="meta">
                 <div class="id">${d._id}</div>
@@ -276,6 +283,13 @@
     }
     const pending = docs.filter(d => !d.sincronizado).length;
     pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes');
+
+    if(window.gsap && changedIds && changedIds.length){
+      changedIds.forEach(id => {
+        const el = list.querySelector(`[data-cardid="${CSS.escape(id)}"]`);
+        if(el) gsap.fromTo(el, { backgroundColor: '#dcece7' }, { backgroundColor: '#ffffff', duration: 1.1, ease: 'power1.out' });
+      });
+    }
   }
 
   list.addEventListener('click', async (ev) => {

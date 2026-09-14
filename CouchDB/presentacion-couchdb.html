@@ -322,28 +322,32 @@
       <figure>
         <svg viewBox="0 0 300 210" role="img" aria-label="Diagrama del archivo de almacenamiento append-only antes y después de compactar">
           <text x="0" y="14" font-family="IBM Plex Mono" font-size="10" fill="currentColor" opacity="0.6">ANTES DE COMPACTAR</text>
-          <g font-family="IBM Plex Mono" font-size="9">
-            <rect x="0" y="24" width="34" height="24" fill="none" stroke="currentColor" opacity="0.35"/>
-            <text x="17" y="39" text-anchor="middle" fill="currentColor" opacity="0.5">rev1</text>
-            <rect x="38" y="24" width="34" height="24" fill="none" stroke="currentColor" opacity="0.35"/>
-            <text x="55" y="39" text-anchor="middle" fill="currentColor" opacity="0.5">rev2</text>
-            <rect x="76" y="24" width="34" height="24" fill="none" stroke="currentColor" opacity="0.6"/>
-            <text x="93" y="39" text-anchor="middle" fill="currentColor" opacity="0.8">otroDoc</text>
-            <rect x="114" y="24" width="34" height="24" fill="none" stroke="currentColor"/>
-            <text x="131" y="39" text-anchor="middle" fill="currentColor">rev3</text>
-            <line x1="131" y1="10" x2="131" y2="22" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arrEnd)"/>
-            <text x="131" y="8" text-anchor="middle" fill="var(--accent)" font-weight="600">header</text>
+          <g id="anim4-before" font-family="IBM Plex Mono" font-size="9">
+            <g class="blk"><rect x="0" y="24" width="34" height="24" fill="none" stroke="currentColor" opacity="0.35"/>
+            <text x="17" y="39" text-anchor="middle" fill="currentColor" opacity="0.5">rev1</text></g>
+            <g class="blk"><rect x="38" y="24" width="34" height="24" fill="none" stroke="currentColor" opacity="0.35"/>
+            <text x="55" y="39" text-anchor="middle" fill="currentColor" opacity="0.5">rev2</text></g>
+            <g class="blk"><rect x="76" y="24" width="34" height="24" fill="none" stroke="currentColor" opacity="0.6"/>
+            <text x="93" y="39" text-anchor="middle" fill="currentColor" opacity="0.8">otroDoc</text></g>
+            <g class="blk"><rect x="114" y="24" width="34" height="24" fill="none" stroke="currentColor"/>
+            <text x="131" y="39" text-anchor="middle" fill="currentColor">rev3</text></g>
           </g>
-          <line x1="0" y1="70" x2="300" y2="70" stroke="currentColor" opacity="0.15"/>
+          <g id="anim4-arrow">
+            <line x1="131" y1="10" x2="131" y2="22" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arrEnd)"/>
+            <text x="131" y="8" text-anchor="middle" fill="var(--accent)" font-weight="600" font-family="IBM Plex Mono" font-size="9">header</text>
+          </g>
+          <line id="anim4-divider" x1="0" y1="70" x2="300" y2="70" stroke="currentColor" opacity="0.15"/>
           <text x="0" y="92" font-family="IBM Plex Mono" font-size="10" fill="currentColor" opacity="0.6">DESPUÉS DE COMPACTAR</text>
-          <g font-family="IBM Plex Mono" font-size="9">
+          <g id="anim4-after" font-family="IBM Plex Mono" font-size="9">
             <rect x="0" y="102" width="34" height="24" fill="none" stroke="currentColor" opacity="0.6"/>
             <text x="17" y="117" text-anchor="middle" fill="currentColor" opacity="0.8">otroDoc</text>
             <rect x="38" y="102" width="34" height="24" fill="none" stroke="currentColor"/>
             <text x="55" y="117" text-anchor="middle" fill="currentColor">rev3</text>
           </g>
-          <text x="0" y="148" font-size="10" fill="currentColor" opacity="0.7" font-family="IBM Plex Sans">Solo se conservan las últimas revisiones vivas;</text>
-          <text x="0" y="163" font-size="10" fill="currentColor" opacity="0.7" font-family="IBM Plex Sans">las escrituras siguen aceptándose durante la compactación.</text>
+          <g id="anim4-caption">
+            <text x="0" y="148" font-size="10" fill="currentColor" opacity="0.7" font-family="IBM Plex Sans">Solo se conservan las últimas revisiones vivas;</text>
+            <text x="0" y="163" font-size="10" fill="currentColor" opacity="0.7" font-family="IBM Plex Sans">las escrituras siguen aceptándose durante la compactación.</text>
+          </g>
           <defs>
             <marker id="arrEnd" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><polygon points="0,0 6,3 0,6" fill="var(--accent)"/></marker>
           </defs>
@@ -409,24 +413,30 @@
     <figure>
       <svg viewBox="0 0 620 180" role="img" aria-label="Dos tablets con PouchDB sincronizando con un servidor CouchDB central">
         <g font-family="IBM Plex Mono" font-size="11">
-          <rect x="255" y="10" width="110" height="46" rx="6" fill="none" stroke="currentColor"/>
-          <text x="310" y="30" text-anchor="middle" fill="currentColor">CouchDB</text>
-          <text x="310" y="44" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">servidor central</text>
+          <g id="anim6-central">
+            <rect x="255" y="10" width="110" height="46" rx="6" fill="none" stroke="currentColor"/>
+            <text x="310" y="30" text-anchor="middle" fill="currentColor">CouchDB</text>
+            <text x="310" y="44" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">servidor central</text>
+          </g>
 
-          <rect x="40" y="120" width="140" height="46" rx="6" fill="none" stroke="currentColor"/>
-          <text x="110" y="140" text-anchor="middle" fill="currentColor">Tablet A · PouchDB</text>
-          <text x="110" y="154" text-anchor="middle" fill="var(--secondary)" font-size="9">en línea</text>
+          <g id="anim6-tabletA">
+            <rect x="40" y="120" width="140" height="46" rx="6" fill="none" stroke="currentColor"/>
+            <text x="110" y="140" text-anchor="middle" fill="currentColor">Tablet A · PouchDB</text>
+            <text x="110" y="154" text-anchor="middle" fill="var(--secondary)" font-size="9">en línea</text>
+          </g>
 
-          <rect x="440" y="120" width="140" height="46" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>
-          <text x="510" y="140" text-anchor="middle" fill="currentColor">Tablet B · PouchDB</text>
-          <text x="510" y="154" text-anchor="middle" fill="var(--accent)" font-size="9">sin conexión · en cola</text>
+          <g id="anim6-tabletB">
+            <rect x="440" y="120" width="140" height="46" rx="6" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>
+            <text x="510" y="140" text-anchor="middle" fill="currentColor">Tablet B · PouchDB</text>
+            <text x="510" y="154" text-anchor="middle" fill="var(--accent)" font-size="9">sin conexión · en cola</text>
+          </g>
 
-          <line x1="270" y1="56" x2="150" y2="118" stroke="currentColor" opacity="0.7" marker-end="url(#a2)"/>
-          <line x1="150" y1="118" x2="270" y2="56" stroke="currentColor" opacity="0.7" marker-end="url(#a2)"/>
-          <text x="175" y="90" fill="currentColor" opacity="0.8" font-size="9">push / pull continuo</text>
+          <line id="anim6-line1" x1="270" y1="56" x2="150" y2="118" stroke="currentColor" opacity="0.7" marker-end="url(#a2)"/>
+          <line id="anim6-line2" x1="150" y1="118" x2="270" y2="56" stroke="currentColor" opacity="0.7" marker-end="url(#a2)"/>
+          <text id="anim6-sync-label" x="175" y="90" fill="currentColor" opacity="0.8" font-size="9">push / pull continuo</text>
 
-          <line x1="440" y1="130" x2="368" y2="90" stroke="currentColor" opacity="0.35" stroke-dasharray="3 3" marker-end="url(#a2)"/>
-          <text x="392" y="112" fill="var(--accent)" font-size="9">reintenta al reconectar</text>
+          <line id="anim6-retry-line" x1="440" y1="130" x2="368" y2="90" stroke="currentColor" opacity="0.35" stroke-dasharray="3 3" marker-end="url(#a2)"/>
+          <text id="anim6-retry-label" x="392" y="112" fill="var(--accent)" font-size="9">reintenta al reconectar</text>
         </g>
         <defs><marker id="a2" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="currentColor"/></marker></defs>
       </svg>
@@ -519,26 +529,32 @@
     <figure>
       <svg viewBox="0 0 560 170" role="img" aria-label="Clúster de tres nodos con tres shards y factor de replicación dos">
         <g font-family="IBM Plex Mono" font-size="11">
-          <rect x="10" y="20" width="160" height="120" rx="8" fill="none" stroke="currentColor"/>
-          <text x="90" y="42" text-anchor="middle" fill="currentColor" font-weight="600">Nodo 1</text>
-          <rect x="30" y="56" width="120" height="26" rx="4" fill="var(--accent-tint)" stroke="var(--accent)"/>
-          <text x="90" y="73" text-anchor="middle" fill="var(--accent)">shard 1</text>
-          <rect x="30" y="90" width="120" height="26" rx="4" fill="var(--secondary-tint)" stroke="var(--secondary)"/>
-          <text x="90" y="107" text-anchor="middle" fill="var(--secondary)">shard 2</text>
+          <g id="anim9-node1">
+            <rect x="10" y="20" width="160" height="120" rx="8" fill="none" stroke="currentColor"/>
+            <text x="90" y="42" text-anchor="middle" fill="currentColor" font-weight="600">Nodo 1</text>
+            <rect x="30" y="56" width="120" height="26" rx="4" fill="var(--accent-tint)" stroke="var(--accent)"/>
+            <text x="90" y="73" text-anchor="middle" fill="var(--accent)">shard 1</text>
+            <rect x="30" y="90" width="120" height="26" rx="4" fill="var(--secondary-tint)" stroke="var(--secondary)"/>
+            <text x="90" y="107" text-anchor="middle" fill="var(--secondary)">shard 2</text>
+          </g>
 
-          <rect x="200" y="20" width="160" height="120" rx="8" fill="none" stroke="currentColor"/>
-          <text x="280" y="42" text-anchor="middle" fill="currentColor" font-weight="600">Nodo 2</text>
-          <rect x="220" y="56" width="120" height="26" rx="4" fill="var(--secondary-tint)" stroke="var(--secondary)"/>
-          <text x="280" y="73" text-anchor="middle" fill="var(--secondary)">shard 2</text>
-          <rect x="220" y="90" width="120" height="26" rx="4" fill="none" stroke="currentColor" opacity="0.55"/>
-          <text x="280" y="107" text-anchor="middle" fill="currentColor" opacity="0.7">shard 3</text>
+          <g id="anim9-node2">
+            <rect x="200" y="20" width="160" height="120" rx="8" fill="none" stroke="currentColor"/>
+            <text x="280" y="42" text-anchor="middle" fill="currentColor" font-weight="600">Nodo 2</text>
+            <rect x="220" y="56" width="120" height="26" rx="4" fill="var(--secondary-tint)" stroke="var(--secondary)"/>
+            <text x="280" y="73" text-anchor="middle" fill="var(--secondary)">shard 2</text>
+            <rect x="220" y="90" width="120" height="26" rx="4" fill="none" stroke="currentColor" opacity="0.55"/>
+            <text x="280" y="107" text-anchor="middle" fill="currentColor" opacity="0.7">shard 3</text>
+          </g>
 
-          <rect x="390" y="20" width="160" height="120" rx="8" fill="none" stroke="currentColor"/>
-          <text x="470" y="42" text-anchor="middle" fill="currentColor" font-weight="600">Nodo 3</text>
-          <rect x="410" y="56" width="120" height="26" rx="4" fill="none" stroke="currentColor" opacity="0.55"/>
-          <text x="470" y="73" text-anchor="middle" fill="currentColor" opacity="0.7">shard 3</text>
-          <rect x="410" y="90" width="120" height="26" rx="4" fill="var(--accent-tint)" stroke="var(--accent)"/>
-          <text x="470" y="107" text-anchor="middle" fill="var(--accent)">shard 1</text>
+          <g id="anim9-node3">
+            <rect x="390" y="20" width="160" height="120" rx="8" fill="none" stroke="currentColor"/>
+            <text x="470" y="42" text-anchor="middle" fill="currentColor" font-weight="600">Nodo 3</text>
+            <rect x="410" y="56" width="120" height="26" rx="4" fill="none" stroke="currentColor" opacity="0.55"/>
+            <text x="470" y="73" text-anchor="middle" fill="currentColor" opacity="0.7">shard 3</text>
+            <rect x="410" y="90" width="120" height="26" rx="4" fill="var(--accent-tint)" stroke="var(--accent)"/>
+            <text x="470" y="107" text-anchor="middle" fill="var(--accent)">shard 1</text>
+          </g>
         </g>
       </svg>
       <figcaption>Ejemplo ilustrativo con q=3 shards y n=2 réplicas: cada shard vive en 2 de los 3 nodos, así que si un nodo cae, los datos siguen disponibles en otro.</figcaption>
@@ -745,6 +761,7 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
 </div>
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
   const bar = document.getElementById('progress');
   function onScroll(){
@@ -766,4 +783,59 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
     });
   }, {rootMargin:'-45% 0px -50% 0px', threshold:0});
   document.querySelectorAll('.slide').forEach(s=>io.observe(s));
+
+  if(window.gsap){
+    function drawLine(id, duration, delay){
+      const el = document.getElementById(id);
+      if(!el) return;
+      const x1 = +el.getAttribute('x1'), y1 = +el.getAttribute('y1');
+      const x2 = +el.getAttribute('x2'), y2 = +el.getAttribute('y2');
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      el.setAttribute('stroke-dasharray', len);
+      el.setAttribute('stroke-dashoffset', len);
+      gsap.to(el, { attr: { strokeDashoffset: 0 }, duration, delay, ease: 'power2.out' });
+    }
+
+    function animateOnce(targetId, build){
+      const el = document.getElementById(targetId);
+      if(!el) return;
+      const obs = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+          if(e.isIntersecting){ build(); obs.disconnect(); }
+        });
+      }, { threshold: 0.35 });
+      obs.observe(el);
+    }
+
+    // s4 · archivo append-only: aparecen las revisiones, el puntero header,
+    // la compactación y el texto, en ese orden.
+    animateOnce('s4', () => {
+      const tl = gsap.timeline();
+      tl.from('#anim4-before .blk', { opacity: 0, x: -8, duration: 0.35, stagger: 0.12, ease: 'power1.out' })
+        .from('#anim4-arrow', { opacity: 0, y: -6, duration: 0.3 }, '-=0.1')
+        .from('#anim4-divider', { scaleX: 0, transformOrigin: 'left center', duration: 0.4 })
+        .from('#anim4-after', { opacity: 0, y: 8, duration: 0.4 })
+        .from('#anim4-caption', { opacity: 0, duration: 0.4 }, '-=0.1');
+    });
+
+    // s6 · replicación: primero los tres nodos, después las flechas de
+    // sync "dibujándose", y por último la tablet offline reintentando.
+    animateOnce('s6', () => {
+      const tl = gsap.timeline();
+      tl.from('#anim6-central', { opacity: 0, y: -8, duration: 0.4 })
+        .from('#anim6-tabletA', { opacity: 0, y: 8, duration: 0.4 }, '-=0.15')
+        .from('#anim6-sync-label', { opacity: 0, duration: 0.3 }, '-=0.1')
+        .add(() => { drawLine('anim6-line1', 0.5, 0); drawLine('anim6-line2', 0.5, 0.1); })
+        .from('#anim6-tabletB', { opacity: 0, y: 8, duration: 0.4 }, '+=0.4')
+        .from(['#anim6-retry-line', '#anim6-retry-label'], { opacity: 0, duration: 0.4 }, '-=0.1');
+    });
+
+    // s9 · shards: los tres nodos aparecen de izquierda a derecha para
+    // remarcar que cada shard vive repartido entre ellos.
+    animateOnce('s9', () => {
+      gsap.from(['#anim9-node1', '#anim9-node2', '#anim9-node3'], {
+        opacity: 0, y: 10, duration: 0.45, stagger: 0.18, ease: 'power1.out'
+      });
+    });
+  }
 </script>
