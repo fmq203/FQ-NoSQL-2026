@@ -1,52 +1,50 @@
 # Demo en vivo — "OSE Móvil"
 
-Tres nodos CouchDB en Docker simulan el servidor central y dos tablets de
-campo, cada una con su propio inspector. Corresponde a las secciones
-"Ejemplo ficticio" y "Replicación" de `presentacion-couchdb.html`.
+Un servidor central y dos tablets de campo, cada una con su inspector.
+Corresponde a las secciones "Ejemplo ficticio" y "Replicación" de
+`presentacion-couchdb.html`.
 
-- **Central**  → http://localhost:5984 (Fauxton: http://localhost:5984/_utils)
-- **Tablet A**  → http://localhost:5985 (Fauxton: http://localhost:5985/_utils) — inspector jperez
-- **Tablet B**  → http://localhost:5986 (Fauxton: http://localhost:5986/_utils) — inspectora mgonzalez
-- Usuario/clave de los tres: `admin` / `admin123`
+Lo interesante es que **las dos tablets no son iguales**:
 
-Además de la API cruda hay tres **UI web** hechas a medida (HTML+JS plano,
-sin build) para mostrar la historia sin depender de Fauxton ni de la
-terminal:
+| | Tablet A · jperez | Tablet B · mgonzalez |
+|---|---|---|
+| Qué corre | CouchDB completo en Docker | **PouchDB en el navegador** |
+| Dónde guarda | volumen del contenedor | IndexedDB del navegador |
+| Cómo sincroniza | botón → `POST /_replicate` | `db.sync(..., {live:true})`, sola |
+| Se puede manejar por terminal | sí | no, vive en el navegador |
 
-- **UI Tablet A** → http://localhost:8082 (acento rojo) — formulario para
-  cargar lecturas, switch "En línea / Sin conexión", botones de
-  sincronización (subir y bajar cambios) y "editar valor" en cada lectura.
-- **UI Tablet B** → http://localhost:8083 (acento azul) — igual que la
-  anterior, para la segunda inspectora.
-- **UI Central** → http://localhost:8081 — panel de monitoreo: totales, m³
-  por zona, buscador Mango, "editar valor" por lectura y, cuando aparece un
-  conflicto, un link "resolver conflicto". Se actualiza sola cada 4
-  segundos, así que conviene tenerla abierta en otra ventana/proyector
-  mientras se operan las tablets.
+Para el central las dos son lo mismo: habla el mismo protocolo de
+replicación con ambas y no las distingue. Esa es justamente la gracia.
 
-En las tres UI, **pasar el mouse sobre cualquier botón de acción** muestra
-un tooltip con el método HTTP y el endpoint real de CouchDB que ese click
-dispara (por ejemplo `POST /_replicate` o `DELETE /inspecciones/{id}?rev=…`)
-— útil para mostrar en clase qué llamada concreta hay detrás de cada
-interacción, sin tener que leer el código fuente.
+## Direcciones
 
-## El escenario ya viene con un conflicto listo para mostrar
+- **Central** → http://localhost:5984 (Fauxton: http://localhost:5984/_utils)
+- **Tablet A** → http://localhost:5985 (Fauxton: http://localhost:5985/_utils)
+- Usuario/clave de los dos nodos: `admin` / `admin123`
 
-`setup.sh` carga las dos tablets **sin que se hayan visto entre sí**:
+Las tres interfaces web (HTML plano, sin build):
 
-- **Tablet A (jperez)**: su ruta completa, 6 lecturas.
-- **Tablet B (mgonzalez)**: su propia ruta — 2 lecturas nuevas, más **2 que
-  coinciden con medidores que jperez ya midió** (OSE-3390 y OSE-4488), con
-  valores distintos. Ninguna de las dos tablets sabe de la otra: cada una
-  arrancó su propio historial de revisiones para esos documentos.
+- **UI Central** → http://localhost:8081 — totales, m³ por zona, buscador
+  Mango, "editar valor" y "resolver conflicto". Se actualiza sola cada 4 s.
+- **UI Tablet A** → http://localhost:8082 (acento rojo) — switch de conexión
+  y botones de sincronización manual.
+- **UI Tablet B** → http://localhost:8083 (acento azul) — la app PouchDB.
+  No tiene botón de sincronizar: el switch prende una replicación continua.
 
-No hace falta editar nada a mano para generar el conflicto: apenas las dos
-tablets sincronizan con el central (en cualquier orden), esos dos
-documentos aparecen automáticamente como conflicto, listos para resolver
-en la UI central. Es el ejemplo más fiel al "multi-master replication" de
-la presentación: el conflicto no lo genera el central, lo generan **dos
-pares que nunca se vieron**, y solo se hace visible en el nodo que
-finalmente sincroniza con los dos.
+En las tres, **pasar el mouse sobre los botones** muestra la llamada real que
+dispara cada click (`POST /_replicate`, `db.put()`, `DELETE ...?rev=`).
+
+## El conflicto ya viene armado
+
+- **Tablet A** arranca con la ruta de jperez: 6 lecturas, cargadas por
+  `setup.sh` directo en su nodo CouchDB.
+- **Tablet B** se siembra sola la primera vez que abrís su página: 4 lecturas
+  de mgonzalez, de las cuales **2 comparten `_id`** con lecturas de jperez
+  (medidores OSE-3390 y OSE-4488) pero con otro valor.
+
+Ninguna de las dos vio a la otra: cada una arrancó su propio historial de
+revisiones para esos documentos. Apenas las dos repliquen al central, esos
+dos documentos quedan en conflicto, sin que haya que editar nada a mano.
 
 ## Guion para presentar
 
@@ -55,9 +53,8 @@ finalmente sincroniza con los dos.
    docker compose up -d
    ```
 
-2. **Cargar el escenario** (crea las bases, sube el design document con las
-   vistas, crea el índice Mango, habilita CORS para las UI, y carga las
-   lecturas de las dos tablets como se explica arriba):
+2. **Cargar el escenario** (bases, vistas, índice Mango, CORS y la ruta de
+   jperez en la tablet A):
    ```
    ./setup.sh
    ```
@@ -66,82 +63,69 @@ finalmente sincroniza con los dos.
    ```
    ./serve-ui.sh
    ```
-   Abrir http://localhost:8082 (tablet A), http://localhost:8083 (tablet B)
-   y http://localhost:8081 (central) — idealmente tres ventanas visibles
-   a la vez, o el central proyectado y las dos tablets en dos laptops/celus.
+   Abrir las tres en ventanas visibles a la vez, o el central proyectado y
+   las tablets en otros dispositivos.
 
-4. **Mostrar la asimetría** — las dos tablets ya tienen datos propios, el
-   central muestra 0. Opcional: cargar una lectura nueva a mano en
-   cualquiera de las dos (queda igual, local) para reforzar que escribir
-   nunca depende de la conexión.
+4. **Mostrar la asimetría** — las dos tablets tienen datos propios, el
+   central muestra 0. Cargar una lectura a mano en cualquiera de las dos:
+   se guarda igual, sin conexión. En la tablet B eso es un `db.put()`
+   contra IndexedDB, sin red de por medio.
 
-5. **Tablet A sincroniza primero** — activar su switch a "En línea" y
-   apretar **Sincronizar con central**. El panel central se actualiza solo
-   con los totales, el gráfico de barras por zona y la lista de documentos.
-   Todavía no hay conflictos: el central solo vio una rama.
+5. **Tablet A sincroniza** — switch a "En línea" y botón **Sincronizar con
+   central**. El panel central se puebla solo. Todavía no hay conflictos.
 
-6. **Tablet B sincroniza después** — mismo switch, mismo botón. Apenas
-   termina, en el central el contador "conflictos" pasa a **2** y esos dos
-   documentos muestran el badge rojo "⚠ conflicto". Nada se pisó ni se
-   perdió: las dos versiones de cada lectura existen.
+6. **Tablet B se conecta** — acá no hay botón que apretar: al poner el
+   switch en "EN LÍNEA" arranca `db.sync(remoto, {live:true, retry:true})`
+   y replica sola. El panel de estado abajo muestra "sincronizando…" y
+   después "al día". En el central, el contador de conflictos pasa a **2**.
 
-7. **Resolver en la UI central** — abrir "resolver conflicto" en cada uno
-   de los dos documentos. Se abre un panel con los dos valores enfrentados
-   (el de jperez y el de mgonzalez) y un botón para cada uno. Elegir
-   cualquiera: CouchDB nunca decide por vos, la aplicación es la que
-   corrige la inconsistencia (en la vida real, acá OSE mandaría a
-   remedir el medidor en disputa). Al confirmar se guarda la elección y
-   además se borra explícitamente la revisión perdedora
-   (`DELETE .../{id}?rev={rev_perdedora}`) — ese borrado es lo que
-   realmente cierra el conflicto; sin él, CouchDB seguiría reportando la
-   rama vieja para siempre.
+7. **Resolver en la UI central** — "resolver conflicto" en cada uno de los
+   dos documentos. Se ven los dos valores enfrentados con su revisión, y al
+   elegir uno se guarda la decisión y se borra la revisión perdedora
+   (`DELETE .../{id}?rev=…`), que es lo que realmente cierra el conflicto.
 
-8. **Consulta Mango en vivo** — en la UI central, elegir una zona y un
-   mínimo de m³ y apretar Buscar (es la misma consulta de la sección
-   "Lenguaje de consulta" de la presentación, ahora con resultados reales).
+8. **Consulta Mango** — zona + mínimo de m³ en el panel central.
 
-9. Opcional: en cada tablet, apretar **"↓ Traer cambios del central"** para
-   que las tres copias vuelvan a quedar idénticas, sin rastro del
-   conflicto ya resuelto.
+9. Como la tablet B quedó en sincronización continua, la resolución le baja
+   sola: sin tocar nada, su pantalla se actualiza con el valor resuelto.
 
-### Generar un conflicto extra, a mano y en vivo
+## Reiniciar entre ensayos
 
-Si querés mostrar cómo se provoca un conflicto además del que ya viene
-armado (por ejemplo para una pregunta del público), cualquier lectura que
-ya esté sincronizada en las dos tablets sirve: usá "editar valor" en la
-tablet A con un número, después "editar valor" en la tablet B con otro
-número *antes* de volver a sincronizar, y sincronizá cualquiera de las
-dos. Mismo mecanismo, en vivo.
+Los dos nodos CouchDB se limpian con `docker compose down -v`, **pero eso no
+toca a la tablet B**: sus datos viven en el IndexedDB del navegador. Para
+dejarla como al principio usá el link **"reiniciar datos locales"** abajo de
+todo en http://localhost:8083 (hace `db.destroy()` y vuelve a sembrar).
 
-Alternativa por terminal (dispara las dos sincronizaciones y muestra los
-conflictos ya armados por `setup.sh`, sin resolverlos):
-```
-./conflict-demo-peers.sh
-```
-
-## Apagar todo al terminar
-
+Reset completo:
 ```
 ./stop-ui.sh
 docker compose down -v
+docker compose up -d && ./setup.sh && ./serve-ui.sh
+# y en http://localhost:8083 → "reiniciar datos locales"
 ```
 
-## Solo terminal (sin las UI web)
+## Solo terminal
 
-Si preferís mostrar todo por línea de comandos en vez de las páginas:
+La tablet B no se puede manejar por terminal (corre en el navegador). Para
+el resto:
 ```
-./replicate.sh        # dispara la replicación tablet A -> central
-./replicate-b.sh       # dispara la replicación tablet B -> central
-./view-query.sh        # vista MapReduce por_zona
-./mango-query.sh       # consulta Mango de la presentación
-./conflict-demo.sh     # variante 2 nodos (central vs tablet A) editando a mano
+./replicate.sh             # replicación tablet A -> central
+./view-query.sh            # vista MapReduce por_zona
+./mango-query.sh           # consulta Mango
+./conflict-demo-peers.sh   # sincroniza A y reporta el estado de conflictos
+./conflict-demo.sh         # conflicto central vs tablet A, editando a mano
 ```
 
 ## Si algo falla
 
-- `docker compose ps` — confirmar que los tres contenedores están `healthy`/`Up`.
-- Si un puerto está ocupado, cambiar `5984`/`5985`/`5986` en `docker-compose.yml`
-  (y el puerto correspondiente en `ui/*/index.html`, constante `API`).
-- Los scripts usan `python3 -m json.tool` solo para formatear la salida; si
-  no está disponible, sacar ese tramo del pipe y listo (el JSON crudo de
-  CouchDB también sirve para mostrar en pantalla).
+- `docker compose ps` — los dos contenedores en `Up`.
+- **La tablet B no carga**: tiene que existir `ui/tablet-b/pouchdb.min.js`
+  (va versionado en el repo, no se baja de internet). Si falta, la página
+  lo avisa en rojo.
+- **La tablet B no sincroniza**: revisá que el central tenga CORS activo
+  (lo hace `setup.sh`) y que la consola del navegador no muestre errores de
+  origen. PouchDB habla directo desde el navegador al puerto 5984.
+- **Datos viejos en la tablet B** tras un `down -v`: es esperable, borralos
+  con "reiniciar datos locales".
+- Si un puerto está ocupado, cambiá `5984`/`5985` en `docker-compose.yml` y
+  la constante `API` / `REMOTA` en `ui/*/index.html`.
