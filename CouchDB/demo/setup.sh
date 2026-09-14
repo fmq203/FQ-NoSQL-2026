@@ -28,7 +28,9 @@ echo "Habilitando CORS (las UI web y PouchDB hablan desde el navegador)..."
 for NODE in "$CENTRAL" "$TABLET"; do
   curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/httpd/enable_cors" -d '"true"'
   curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/origins" -d '"*"'
-  curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/credentials" -d '"false"'
+  # PouchDB manda las peticiones con credenciales: sin esto en "true" el
+  # navegador descarta la respuesta y la replicacion falla en silencio.
+  curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/credentials" -d '"true"'
   curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/methods" -d '"GET, PUT, POST, HEAD, DELETE"'
   curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/headers" -d '"accept, authorization, content-type, origin, referer"'
 done
