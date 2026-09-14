@@ -6,7 +6,7 @@ campo, cada una con su propio inspector. Corresponde a las secciones
 
 - **Central**  → http://localhost:5984 (Fauxton: http://localhost:5984/_utils)
 - **Tablet A**  → http://localhost:5985 (Fauxton: http://localhost:5985/_utils) — inspector jperez
-- **Tablet B**  → http://localhost:5986 (Fauxton: http://localhost:5986/_utils) — inspector mgonzalez
+- **Tablet B**  → http://localhost:5986 (Fauxton: http://localhost:5986/_utils) — inspectora mgonzalez
 - Usuario/clave de los tres: `admin` / `admin123`
 
 Además de la API cruda hay tres **UI web** hechas a medida (HTML+JS plano,
@@ -17,7 +17,7 @@ terminal:
   cargar lecturas, switch "En línea / Sin conexión", botones de
   sincronización (subir y bajar cambios) y "editar valor" en cada lectura.
 - **UI Tablet B** → http://localhost:8083 (acento azul) — igual que la
-  anterior pero para el segundo inspector; arranca vacía a propósito.
+  anterior, para la segunda inspectora.
 - **UI Central** → http://localhost:8081 — panel de monitoreo: totales, m³
   por zona, buscador Mango, "editar valor" por lectura y, cuando aparece un
   conflicto, un link "resolver conflicto". Se actualiza sola cada 4
@@ -30,6 +30,24 @@ dispara (por ejemplo `POST /_replicate` o `DELETE /inspecciones/{id}?rev=…`)
 — útil para mostrar en clase qué llamada concreta hay detrás de cada
 interacción, sin tener que leer el código fuente.
 
+## El escenario ya viene con un conflicto listo para mostrar
+
+`setup.sh` carga las dos tablets **sin que se hayan visto entre sí**:
+
+- **Tablet A (jperez)**: su ruta completa, 6 lecturas.
+- **Tablet B (mgonzalez)**: su propia ruta — 2 lecturas nuevas, más **2 que
+  coinciden con medidores que jperez ya midió** (OSE-3390 y OSE-4488), con
+  valores distintos. Ninguna de las dos tablets sabe de la otra: cada una
+  arrancó su propio historial de revisiones para esos documentos.
+
+No hace falta editar nada a mano para generar el conflicto: apenas las dos
+tablets sincronizan con el central (en cualquier orden), esos dos
+documentos aparecen automáticamente como conflicto, listos para resolver
+en la UI central. Es el ejemplo más fiel al "multi-master replication" de
+la presentación: el conflicto no lo genera el central, lo generan **dos
+pares que nunca se vieron**, y solo se hace visible en el nodo que
+finalmente sincroniza con los dos.
+
 ## Guion para presentar
 
 1. **Levantar los nodos**
@@ -38,10 +56,8 @@ interacción, sin tener que leer el código fuente.
    ```
 
 2. **Cargar el escenario** (crea las bases, sube el design document con las
-   vistas, crea el índice Mango, habilita CORS para las UI y carga 6
-   lecturas *solo en la tablet A*, simulando que jperez trabajó offline
-   todo el día. La tablet B queda vacía: es un segundo inspector que se
-   suma después):
+   vistas, crea el índice Mango, habilita CORS para las UI, y carga las
+   lecturas de las dos tablets como se explica arriba):
    ```
    ./setup.sh
    ```
@@ -54,78 +70,51 @@ interacción, sin tener que leer el código fuente.
    y http://localhost:8081 (central) — idealmente tres ventanas visibles
    a la vez, o el central proyectado y las dos tablets en dos laptops/celus.
 
-4. **Mostrar la asimetría** — la tablet A ya tiene 6 lecturas, la tablet B
-   no tiene ninguna todavía y el central muestra 0. Cargar una lectura
-   nueva a mano en la tablet A (queda igual, local) para reforzar que
-   escribir nunca depende de la conexión.
+4. **Mostrar la asimetría** — las dos tablets ya tienen datos propios, el
+   central muestra 0. Opcional: cargar una lectura nueva a mano en
+   cualquiera de las dos (queda igual, local) para reforzar que escribir
+   nunca depende de la conexión.
 
-5. **"Llega señal" en la tablet A** — activar su switch a "En línea" y
+5. **Tablet A sincroniza primero** — activar su switch a "En línea" y
    apretar **Sincronizar con central**. El panel central se actualiza solo
    con los totales, el gráfico de barras por zona y la lista de documentos.
+   Todavía no hay conflictos: el central solo vio una rama.
 
-6. **Consulta Mango en vivo** — en la UI central, elegir una zona y un
+6. **Tablet B sincroniza después** — mismo switch, mismo botón. Apenas
+   termina, en el central el contador "conflictos" pasa a **2** y esos dos
+   documentos muestran el badge rojo "⚠ conflicto". Nada se pisó ni se
+   perdió: las dos versiones de cada lectura existen.
+
+7. **Resolver en la UI central** — abrir "resolver conflicto" en cada uno
+   de los dos documentos. Se abre un panel con los dos valores enfrentados
+   (el de jperez y el de mgonzalez) y un botón para cada uno. Elegir
+   cualquiera: CouchDB nunca decide por vos, la aplicación es la que
+   corrige la inconsistencia (en la vida real, acá OSE mandaría a
+   remedir el medidor en disputa). Al confirmar se guarda la elección y
+   además se borra explícitamente la revisión perdedora
+   (`DELETE .../{id}?rev={rev_perdedora}`) — ese borrado es lo que
+   realmente cierra el conflicto; sin él, CouchDB seguiría reportando la
+   rama vieja para siempre.
+
+8. **Consulta Mango en vivo** — en la UI central, elegir una zona y un
    mínimo de m³ y apretar Buscar (es la misma consulta de la sección
    "Lenguaje de consulta" de la presentación, ahora con resultados reales).
 
-## Escenario principal: conflicto entre dos inspectores (peer-to-peer real)
+9. Opcional: en cada tablet, apretar **"↓ Traer cambios del central"** para
+   que las tres copias vuelvan a quedar idénticas, sin rastro del
+   conflicto ya resuelto.
 
-Esta es la versión más fiel al "multi-master replication" de la
-presentación: el conflicto no lo genera el central, lo generan **dos
-tablets que nunca se vieron entre sí**.
+### Generar un conflicto extra, a mano y en vivo
 
-a. **La tablet B se suma al equipo**: activá su switch a "En línea" y
-   apretá **"↓ Traer cambios del central"**. Ahora tablet B tiene la misma
-   copia de las 6 lecturas que ya sincronizó la tablet A (incluidas las
-   vistas y el índice Mango, que viajan como documentos de diseño).
+Si querés mostrar cómo se provoca un conflicto además del que ya viene
+armado (por ejemplo para una pregunta del público), cualquier lectura que
+ya esté sincronizada en las dos tablets sirve: usá "editar valor" en la
+tablet A con un número, después "editar valor" en la tablet B con otro
+número *antes* de volver a sincronizar, y sincronizá cualquiera de las
+dos. Mismo mecanismo, en vivo.
 
-b. **Las dos tablets se desconectan** (dejá los dos switches en "Sin
-   conexión" — no importa si técnicamente el contenedor sigue arriba, lo
-   que estamos simulando es que dejan de sincronizar entre sí).
-
-c. **jperez (tablet A)** corrige el valor de una lectura, por ejemplo
-   OSE-5102, con "editar valor".
-
-d. **mgonzalez (tablet B)**, sin saber lo anterior, corrige *esa misma
-   lectura* con un número distinto — las dos partieron de la misma
-   revisión sincronizada en el paso (a), así que divergen limpiamente.
-
-e. Activá "En línea" en la **tablet A** y apretá **Sincronizar con
-   central** → esa versión llega primero y queda como la vigente.
-
-f. Activá "En línea" en la **tablet B** y apretá **Sincronizar con
-   central** → esta réplica trae la otra rama. Recién ahí, en el central,
-   aparece el conflicto: dos inspectores, cada uno seguro de su lectura,
-   ninguno pisó al otro.
-
-g. En la UI central, "resolver conflicto" → elegir cuál vale (o cuál
-   valor real habría que ir a remedir a campo, que es lo que pasa en la
-   vida real con OSE). Al confirmar se guarda la elección y se borra la
-   revisión perdedora (`DELETE .../{id}?rev={rev_perdedora}`) — ese
-   borrado es lo que realmente cierra el conflicto.
-
-h. Opcional: las dos tablets aprietan **"↓ Traer cambios del central"**
-   de nuevo para que las tres copias vuelvan a quedar idénticas.
-
-**Por qué conviene mostrar este escenario y no solo central-vs-tablet:**
-acá ninguno de los dos nodos que generan el conflicto es "la autoridad" —
-son dos pares (tablet A, tablet B) y el conflicto solo se materializa en
-un tercer nodo que los sincroniza a ambos. Es la prueba en vivo de que
-CouchDB no tiene jerarquía maestro/esclavo.
-
-### Variante rápida (2 nodos, sin tablet B)
-
-Si hay poco tiempo, se puede provocar el mismo tipo de conflicto editando
-la misma lectura en la tablet A y en el central antes de sincronizar
-(mismo mecanismo, un actor menos):
-
-1. "editar valor" en la tablet A (queda local).
-2. Sin sincronizar, "editar valor" en el central, mismo documento, otro
-   número.
-3. Sincronizar desde la tablet A → aparece el conflicto en el central.
-4. "resolver conflicto" en el central.
-
-Alternativa por terminal (mismo mecanismo, sin clickear, solo genera y
-muestra el conflicto — no lo resuelve):
+Alternativa por terminal (dispara las dos sincronizaciones y muestra los
+conflictos ya armados por `setup.sh`, sin resolverlos):
 ```
 ./conflict-demo-peers.sh
 ```
@@ -141,9 +130,11 @@ docker compose down -v
 
 Si preferís mostrar todo por línea de comandos en vez de las páginas:
 ```
-./replicate.sh      # dispara la replicación tablet A -> central
-./view-query.sh      # vista MapReduce por_zona
-./mango-query.sh     # consulta Mango de la presentación
+./replicate.sh        # dispara la replicación tablet A -> central
+./replicate-b.sh       # dispara la replicación tablet B -> central
+./view-query.sh        # vista MapReduce por_zona
+./mango-query.sh       # consulta Mango de la presentación
+./conflict-demo.sh     # variante 2 nodos (central vs tablet A) editando a mano
 ```
 
 ## Si algo falla
