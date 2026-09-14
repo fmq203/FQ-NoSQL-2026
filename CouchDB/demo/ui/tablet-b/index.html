@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OSE Móvil — Tablet</title>
+<title>OSE Móvil — Tablet B</title>
 <style>
   :root{
     --bg:#eae6d9;
@@ -11,8 +11,8 @@
     --surface:#ffffff;
     --ink:#1d1b15;
     --ink-dim:#5c5748;
-    --accent:#c53a1f;
-    --accent-tint:#f6e2d7;
+    --accent:#2f5f8a;
+    --accent-tint:#dde6ee;
     --ok:#2c6e63;
     --ok-tint:#dcece7;
     --warn:#b8781a;
@@ -103,8 +103,8 @@
     <div class="cam"></div>
     <header>
       <div>
-        <h1>OSE Móvil</h1>
-        <p>inspector: jperez · nodo :5985</p>
+        <h1>OSE Móvil — B</h1>
+        <p>inspector: mgonzalez · nodo :5986</p>
       </div>
       <div class="toggle" id="toggle">
         <span class="dot"></span>
@@ -175,7 +175,7 @@
     });
   })();
 
-  const API = 'http://localhost:5985';
+  const API = 'http://localhost:5986';
   const AUTH = 'Basic ' + btoa('admin:admin123');
   const DB = '/inspecciones';
 
@@ -230,7 +230,7 @@
       lastDocs = docs;
       render();
     }catch(e){
-      list.innerHTML = '<p class="empty">No se pudo conectar al nodo :5985.</p>';
+      list.innerHTML = '<p class="empty">No se pudo conectar al nodo :5986.</p>';
     }
   }
 
@@ -318,7 +318,7 @@
       type: 'lectura_medidor',
       medidor_id: medidor,
       zona,
-      inspector: 'jperez',
+      inspector: 'mgonzalez',
       fecha: now.toISOString(),
       valor_m3: valor,
       sincronizado: false,

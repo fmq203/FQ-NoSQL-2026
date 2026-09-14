@@ -91,6 +91,17 @@
   td.num{font-family:var(--mono); text-align:right;}
 
   .note{font-size:11.5px; color:var(--ink-dim); font-family:var(--mono); margin-top:2px;}
+
+  [data-tip]{cursor:help;}
+  h2[data-tip], .live[data-tip]{cursor:help; border-bottom:1px dotted var(--ink-dim); width:fit-content;}
+  #tip-float{
+    position:fixed; z-index:9999; pointer-events:none;
+    background:var(--ink); color:var(--bg); font-family:var(--mono); font-size:10.5px; line-height:1.45;
+    padding:7px 10px; border-radius:7px; max-width:280px; white-space:pre-line;
+    box-shadow:0 10px 24px -10px rgba(0,0,0,.5);
+    opacity:0; transform:translateY(2px); transition:opacity .12s ease, transform .12s ease;
+  }
+  #tip-float.show{opacity:1; transform:translateY(0);}
 </style>
 </head>
 <body>
@@ -100,7 +111,7 @@
       <h1>OSE Central</h1>
       <p>panel de monitoreo · nodo :5984</p>
     </div>
-    <div class="live"><span class="dot"></span>actualizando cada 4s</div>
+    <div class="live" data-tip="GET /inspecciones/_changes?include_docs=true&#38;conflicts=true&#38;style=all_docs&#10;se repite cada 4 segundos"><span class="dot"></span>actualizando cada 4s</div>
   </header>
 
   <div class="stats" id="stats">
@@ -113,7 +124,7 @@
   <div class="cols">
     <div>
       <div class="panel">
-        <h2>m³ acumulados por zona</h2>
+        <h2 data-tip="GET /inspecciones/_design/lecturas/_view/por_zona?group=true&#10;vista MapReduce, reduce _stats">m³ acumulados por zona</h2>
         <div id="bars"><p class="empty">Cargando…</p></div>
       </div>
       <div class="panel">
@@ -127,7 +138,7 @@
             <label for="mmin">Mínimo m³</label>
             <input id="mmin" type="number" value="0" step="100" style="width:100px;">
           </div>
-          <button type="submit">Buscar</button>
+          <button type="submit" data-tip="POST /inspecciones/_find&#10;selector + sort, usa el índice Mango creado en setup.sh">Buscar</button>
         </form>
         <div id="mango-results"></div>
         <p class="note" id="mango-note"></p>
@@ -137,10 +148,12 @@
     <div class="panel">
       <h2>Documentos replicados</h2>
       <div class="list" id="list"><p class="empty">Cargando…</p></div>
-      <p class="note">La sincronización la dispara la tablet; acá se pueden corregir valores y resolver conflictos.</p>
+      <p class="note">La sincronización la disparan las tablets (A y B); acá se pueden corregir valores y resolver conflictos.</p>
     </div>
   </div>
 </div>
+
+<div id="tip-float"></div>
 
 <script>
   const API = 'http://localhost:5984';
@@ -198,7 +211,7 @@
       return `<div class="card">${top}
         <div class="edit-row">
           <input id="edit-input" type="number" step="0.1" value="${d.valor_m3}">
-          <button class="btn-mini save" data-save="${d._id}">Guardar</button>
+          <button class="btn-mini save" data-save="${d._id}" data-tip="PUT /inspecciones/${d._id}\nActualiza el valor con la _rev actual">Guardar</button>
           <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
         </div>
       </div>`;
@@ -210,11 +223,11 @@
         <div class="conflict-panel">
           <div class="conflict-opt">
             <div><div class="label">actual (central)</div><div class="value">${d.valor_m3} m³</div></div>
-            <button class="btn-keep" data-keep="central" data-id="${d._id}">Mantener este</button>
+            <button class="btn-keep" data-keep="central" data-id="${d._id}" data-tip="DELETE /inspecciones/${d._id}?rev=${d._conflicts[0]}\nDescarta la revisión perdedora, no toca la actual">Mantener este</button>
           </div>
           <div class="conflict-opt">
             <div><div class="label">en conflicto (llegó de la tablet)</div><div class="value">${losing.valor_m3} m³</div></div>
-            <button class="btn-keep" data-keep="tablet" data-id="${d._id}">Usar este</button>
+            <button class="btn-keep" data-keep="tablet" data-id="${d._id}" data-tip="PUT /inspecciones/${d._id}\n+ DELETE ...?rev=${d._conflicts[0]}\nReemplaza el valor y cierra el conflicto">Usar este</button>
           </div>
           <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
         </div>` : '<p class="empty">Cargando revisión en conflicto…</p>';
@@ -224,7 +237,7 @@
     return `<div class="card">${top}
       <div class="link-row">
         <button class="link-btn" data-edit="${d._id}">editar valor</button>
-        ${conflicted ? `<button class="link-btn crit" data-resolve="${d._id}">resolver conflicto</button>` : ''}
+        ${conflicted ? `<button class="link-btn crit" data-resolve="${d._id}" data-tip="GET /inspecciones/${d._id}?rev=${d._conflicts[0]}\nTrae el contenido de la revisión en conflicto">resolver conflicto</button>` : ''}
       </div>
     </div>`;
   }
@@ -352,6 +365,32 @@
   function refresh(){ loadDocs(); loadBars(); }
   refresh();
   setInterval(refresh, 4000);
+
+  (function(){
+    const tip = document.getElementById('tip-float');
+    let active = null;
+    function place(e){
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top = (e.clientY + 14) + 'px';
+      requestAnimationFrame(() => {
+        const r = tip.getBoundingClientRect();
+        if(r.right > innerWidth - 8) tip.style.left = (innerWidth - r.width - 8) + 'px';
+        if(r.bottom > innerHeight - 8) tip.style.top = (e.clientY - r.height - 14) + 'px';
+      });
+    }
+    document.addEventListener('mouseover', (e) => {
+      const el = e.target.closest('[data-tip]');
+      if(!el) return;
+      active = el;
+      tip.textContent = el.dataset.tip;
+      tip.classList.add('show');
+      place(e);
+    });
+    document.addEventListener('mousemove', (e) => { if(active) place(e); });
+    document.addEventListener('mouseout', (e) => {
+      if(e.target.closest('[data-tip]') === active){ active = null; tip.classList.remove('show'); }
+    });
+  })();
 </script>
 </body>
 </html>

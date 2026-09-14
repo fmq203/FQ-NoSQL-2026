@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Demo opcional (avanzada) para el bloque "Replicacion y sincronizacion":
-# edita el MISMO documento en central y en tablet sin sincronizar entre
-# medio, y despues replica para mostrar que CouchDB no pierde ningun
-# cambio: guarda ambas revisiones y expone el conflicto en _conflicts.
+# Variante rapida (2 nodos, central vs tablet A) del conflicto de
+# replicacion: edita el MISMO documento en central y en tablet sin
+# sincronizar entre medio, y despues replica para mostrar que CouchDB no
+# pierde ningun cambio: guarda ambas revisiones y expone el conflicto en
+# _conflicts. Para el escenario mas realista de dos inspectores (peer to
+# peer, sin que el central sea "la autoridad"), ver conflict-demo-peers.sh.
 #
 # Requisito: haber corrido antes setup.sh y replicate.sh al menos una vez,
 # para que el documento ya exista en los dos nodos.
