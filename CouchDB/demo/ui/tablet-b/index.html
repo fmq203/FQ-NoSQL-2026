@@ -71,6 +71,7 @@
   .badge.pend{background:var(--warn-tint); color:var(--warn);}
   .badge.sync{background:var(--ok-tint); color:var(--ok);}
   .badge.conf{background:var(--crit-tint); color:var(--crit);}
+  .badge.otro{background:var(--bg); color:var(--ink-dim); border:1px solid var(--line);}
   .empty{font-size:12.5px; color:var(--ink-dim); text-align:center; padding:18px 0;}
 
   .edit-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-decoration:underline; cursor:pointer; align-self:flex-start;}
@@ -192,7 +193,12 @@
     });
   })();
 
-  const REMOTA = 'http://admin:admin123@localhost:5984/inspecciones';
+  // Sin usuario:clave en la URL: los navegadores rechazan construir un
+  // fetch() con credenciales embebidas. PouchDB las manda por header con
+  // la opcion auth.
+  const REMOTA_URL = 'http://localhost:5984/inspecciones';
+  const REMOTA_OPTS = { auth: { username: 'admin', password: 'admin123' } };
+  const INSPECTOR = 'mgonzalez';
 
   // Ruta de mgonzalez. Las dos primeras comparten _id con lecturas que ya
   // cargó jperez en la tablet A: cuando las dos repliquen al central, esos
@@ -237,7 +243,6 @@
   let changedIds = [];
   let prevRevs = {};
   let firstLoad = true;
-  const yaMarcados = new Set();
 
   function shortRev(rev){
     if(!rev) return '—';
@@ -314,15 +319,20 @@
               </div>
               <div class="badges">
                 ${conflicted ? '<span class="badge conf">⚠ conflicto</span>' : ''}
-                <span class="badge ${d.sincronizado ? 'sync' : 'pend'}">${d.sincronizado ? 'sincronizada' : 'pendiente'}</span>
+                ${d.inspector === INSPECTOR
+                  ? `<span class="badge ${d.sincronizado ? 'sync' : 'pend'}">${d.sincronizado ? 'sincronizada' : 'pendiente'}</span>`
+                  : `<span class="badge otro">de ${d.inspector}</span>`}
               </div>
             </div>
             <button class="edit-link" data-edit="${d._id}">editar valor</button>
           </div>`;
       }).join('');
     }
-    const pending = docs.filter(d => !d.sincronizado).length;
-    pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes');
+    const propias = docs.filter(d => d.inspector === INSPECTOR);
+    const pending = propias.filter(d => !d.sincronizado).length;
+    const ajenas = docs.length - propias.length;
+    pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes')
+      + (ajenas ? ' · ' + ajenas + ' recibidas' : '');
 
     if(window.gsap && changedIds.length){
       changedIds.forEach(id => {
@@ -345,7 +355,6 @@
       delete limpio._conflicts;
       try{
         await local.put(limpio);
-        yaMarcados.delete(id);
       }catch(e){
         alert('No se pudo guardar: ' + e.message);
       }
@@ -369,7 +378,7 @@
         type: 'lectura_medidor',
         medidor_id: medidor,
         zona,
-        inspector: 'mgonzalez',
+        inspector: INSPECTOR,
         fecha: ahora.toISOString(),
         valor_m3: valor,
         sincronizado: false,
@@ -382,35 +391,61 @@
     }
   });
 
-  async function marcarSincronizados(ids){
-    const nuevos = ids.filter(id => !id.startsWith('_design') && !yaMarcados.has(id));
-    if(!nuevos.length) return;
-    nuevos.forEach(id => yaMarcados.add(id));
-    const res = await local.allDocs({ keys: nuevos, include_docs: true });
-    const updates = res.rows
-      .map(r => r.doc)
-      .filter(d => d && d.sincronizado === false)
-      .map(d => ({ ...d, sincronizado: true }));
-    if(updates.length) await local.bulkDocs(updates);
+  // Cuando la replicación queda "paused" sin error significa que terminó de
+  // subir todo lo que había. Recién ahí marcamos como sincronizadas, y solo
+  // las lecturas propias: las que llegaron de otra tablet no son nuestras
+  // para andar reescribiéndolas. El flag de single-flight evita que dos
+  // "paused" seguidos corran a la vez y se pisen generando conflictos.
+  let marcando = false;
+  async function marcarPropiasSincronizadas(){
+    if(marcando) return 0;
+    marcando = true;
+    try{
+      const res = await local.allDocs({ include_docs: true });
+      const updates = res.rows
+        .map(r => r.doc)
+        .filter(d => d && d.type === 'lectura_medidor'
+                     && d.inspector === INSPECTOR
+                     && d.sincronizado === false)
+        .map(d => ({ ...d, sincronizado: true }));
+      if(!updates.length) return 0;
+      const resultados = await local.bulkDocs(updates);
+      const fallidos = resultados.filter(r => r.error);
+      if(fallidos.length) console.warn('[marcar] no se pudieron marcar', fallidos);
+      return updates.length - fallidos.length;
+    } finally {
+      marcando = false;
+    }
   }
 
   function startSync(){
     setSync('active', 'conectando…', 'Replicación continua contra el central (:5984).');
-    syncHandler = local.sync(REMOTA, { live: true, retry: true })
-      .on('change', async info => {
-        if(info.direction === 'push'){
-          try{ await marcarSincronizados(info.change.docs.map(d => d._id)); }catch(e){}
-        }
-        setSync('active', 'sincronizando…');
-        loadList();
-      })
-      .on('paused', err => {
-        if(err) setSync('error', 'sin alcanzar el central', 'Reintentando sola. Los cambios siguen guardándose local.');
-        else setSync('idle', 'al día', 'Replicación continua activa: no hay botón que apretar.');
-        loadList();
-      })
+    syncHandler = local.sync(REMOTA_URL, { ...REMOTA_OPTS, live: true, retry: true })
+      .on('change', () => { setSync('active', 'sincronizando…'); loadList(); })
       .on('active', () => setSync('active', 'sincronizando…'))
-      .on('error', err => setSync('error', 'error de sincronización', String(err && err.message || err)));
+      .on('paused', async err => {
+        if(err){
+          setSync('error', 'sin alcanzar el central', 'Reintentando sola. Los cambios siguen guardándose local. ' + (err.message || ''));
+          console.error('[sync paused con error]', err);
+        } else {
+          setSync('idle', 'al día', 'Replicación continua activa: no hay botón que apretar.');
+          try{
+            await marcarPropiasSincronizadas();
+          }catch(e){
+            setSync('error', 'no se pudo marcar como sincronizado', e.message);
+            console.error('[marcarPropiasSincronizadas]', e);
+          }
+        }
+        loadList();
+      })
+      .on('denied', err => {
+        setSync('error', 'acceso denegado por el central', String(err && err.message || err));
+        console.error('[sync denied]', err);
+      })
+      .on('error', err => {
+        setSync('error', 'error de sincronización', String(err && err.message || err));
+        console.error('[sync error]', err);
+      });
   }
 
   function stopSync(){
@@ -434,7 +469,6 @@
     if(changesHandler) changesHandler.cancel();
     await local.destroy();
     local = new PouchDB('inspecciones');
-    yaMarcados.clear();
     prevRevs = {};
     firstLoad = true;
     await sembrarSiVacia();
