@@ -1,0 +1,12 @@
+{
+  "_id": "_design/lecturas",
+  "views": {
+    "por_zona": {
+      "map": "function(doc){ if(doc.type==='lectura_medidor'){ emit(doc.zona, doc.valor_m3); } }",
+      "reduce": "_stats"
+    },
+    "pendientes_sync": {
+      "map": "function(doc){ if(doc.type==='lectura_medidor' && !doc.sincronizado){ emit(doc._id, null); } }"
+    }
+  }
+}

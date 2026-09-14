@@ -1,0 +1,26 @@
+services:
+  couch-central:
+    image: couchdb:3.5
+    container_name: ose-central
+    ports:
+      - "5984:5984"
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin123
+    volumes:
+      - central-data:/opt/couchdb/data
+
+  couch-tablet:
+    image: couchdb:3.5
+    container_name: ose-tablet
+    ports:
+      - "5985:5984"
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin123
+    volumes:
+      - tablet-data:/opt/couchdb/data
+
+volumes:
+  central-data:
+  tablet-data:

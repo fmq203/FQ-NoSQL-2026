@@ -1,0 +1,10 @@
+{
+  "selector": {
+    "type": "lectura_medidor",
+    "zona": "Canelones-Este",
+    "valor_m3": { "$gt": 15000 }
+  },
+  "fields": ["_id", "medidor_id", "valor_m3", "fecha"],
+  "sort": [{ "valor_m3": "desc" }],
+  "limit": 20
+}

@@ -1,0 +1,7 @@
+{
+  "index": {
+    "fields": ["type", "zona", "valor_m3"]
+  },
+  "name": "idx-tipo-zona-valor",
+  "type": "json"
+}
