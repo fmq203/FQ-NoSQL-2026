@@ -119,7 +119,13 @@
     color:var(--accent); background:var(--accent-tint); display:inline-block;
     padding:4px 9px; border-radius:999px; font-weight:500;
   }
+  .eyebrow.live{background:var(--accent); color:var(--accent-ink); font-weight:600;}
   .slide-num{font-family:var(--font-mono); font-size:12px; color:var(--ink-dim); white-space:nowrap; padding-top:4px;}
+
+  .demo-steps{list-style:none; margin:18px 0 0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:12px 24px;}
+  @media (max-width:640px){ .demo-steps{grid-template-columns:1fr;} }
+  .demo-steps li{display:flex; gap:10px; align-items:flex-start; font-size:14px; line-height:1.5;}
+  .step-n{font-family:var(--font-mono); font-size:11px; color:var(--accent); background:var(--accent-tint); border-radius:5px; padding:2px 7px; flex:none; margin-top:2px;}
   .slide h2{font-size:clamp(22px,3vw,30px); font-weight:700; letter-spacing:-.01em; margin-bottom:6px;}
   .dek{color:var(--ink-dim); font-size:15px; max-width:62ch; margin-bottom:6px;}
 
@@ -231,9 +237,10 @@
     <li><a href="#s13"><span class="n">12</span>Performance</a></li>
     <li><a href="#s14"><span class="n">13</span>Cloud</a></li>
     <li><a href="#s15"><span class="n">14</span>Casos de uso</a></li>
-    <li><a href="#s16"><span class="n">15</span>Cuándo usarla</a></li>
-    <li><a href="#s17"><span class="n">16</span>Opinión</a></li>
-    <li><a href="#s18"><span class="n">17</span>Cierre</a></li>
+    <li><a href="#sdemo"><span class="n">15</span>Demo en vivo</a></li>
+    <li><a href="#s16"><span class="n">16</span>Cuándo usarla</a></li>
+    <li><a href="#s17"><span class="n">17</span>Opinión</a></li>
+    <li><a href="#s18"><span class="n">18</span>Cierre</a></li>
   </ul>
 </nav>
 
@@ -251,7 +258,7 @@
     <h1>Apache CouchDB</h1>
     <p class="sub">Base de datos NoSQL documental. HTTP/JSON nativo, control de concurrencia multiversión y replicación multi&#8209;maestro pensada para el mundo desconectado.</p>
     <div class="meta">
-      <div>Presenta: <b class="fill">[Tu nombre]</b></div>
+      <div>Presenta: <b>Felipe Queirolo</b></div>
       <div>Materia: <b>Bases de Datos NoSQL</b></div>
       <div>Tecnólogo Informático 2026 · Taller NoSQL</div>
       <div>Fecha de presentación: <b>8/10/2026</b></div>
@@ -261,34 +268,35 @@
   <!-- S2 AGENDA -->
   <section class="slide" id="s2">
     <div class="slide-head">
-      <div><span class="eyebrow">Índice</span><h2>Agenda</h2><p class="dek">Los 13 puntos pedidos en la consigna, más el contexto técnico necesario para que se entiendan.</p></div>
-      <div class="slide-num">01 / 17</div>
+      <div><span class="eyebrow">Índice</span><h2>Agenda</h2><p class="dek">Del origen del proyecto a cómo se opera en producción, con una demo en vivo entre medio.</p></div>
+      <div class="slide-num">01 / 18</div>
     </div>
     <div class="index-grid">
-      <a href="#s3"><span class="idx-n">02</span>Historia de la tecnología<span class="idx-req">Req. 1</span></a>
-      <a href="#s4"><span class="idx-n">03</span>Arquitectura y fundamentos<span class="idx-req">contexto</span></a>
-      <a href="#s5"><span class="idx-n">04</span>Diseño de esquema<span class="idx-req">Req. 2</span></a>
-      <a href="#s6"><span class="idx-n">05</span>Ejemplo ficticio: OSE Móvil<span class="idx-req">Req. 3</span></a>
-      <a href="#s7"><span class="idx-n">06</span>Lenguaje de consulta<span class="idx-req">Req. 4</span></a>
-      <a href="#s8"><span class="idx-n">07</span>Replicación y sincronización<span class="idx-req">Req. 8a</span></a>
-      <a href="#s9"><span class="idx-n">08</span>Almacenamiento y escalamiento<span class="idx-req">Req. 8b</span></a>
-      <a href="#s10"><span class="idx-n">09</span>Configuración y administración<span class="idx-req">Req. 9</span></a>
-      <a href="#s11"><span class="idx-n">10</span>Seguridad: tráfico y reposo<span class="idx-req">Req. 10</span></a>
-      <a href="#s12"><span class="idx-n">11</span>Backups<span class="idx-req">Req. 11</span></a>
-      <a href="#s13"><span class="idx-n">12</span>Performance<span class="idx-req">Req. 6</span></a>
-      <a href="#s14"><span class="idx-n">13</span>Uso en cloud<span class="idx-req">Req. 7</span></a>
-      <a href="#s15"><span class="idx-n">14</span>Casos empresariales / gobierno<span class="idx-req">Req. 5</span></a>
-      <a href="#s16"><span class="idx-n">15</span>Cuándo usar CouchDB<span class="idx-req">Req. 13</span></a>
-      <a href="#s17"><span class="idx-n">16</span>Opinión del grupo<span class="idx-req">Req. 12</span></a>
-      <a href="#s18"><span class="idx-n">17</span>Cierre y referencias<span class="idx-req">fin</span></a>
+      <a href="#s3"><span class="idx-n">02</span>Historia de la tecnología<span class="idx-req">Fundamentos</span></a>
+      <a href="#s4"><span class="idx-n">03</span>Arquitectura y fundamentos<span class="idx-req">Fundamentos</span></a>
+      <a href="#s5"><span class="idx-n">04</span>Diseño de esquema<span class="idx-req">Fundamentos</span></a>
+      <a href="#s6"><span class="idx-n">05</span>Ejemplo ficticio: OSE Móvil<span class="idx-req">Práctica</span></a>
+      <a href="#s7"><span class="idx-n">06</span>Lenguaje de consulta<span class="idx-req">Práctica</span></a>
+      <a href="#s8"><span class="idx-n">07</span>Replicación y sincronización<span class="idx-req">Distribución</span></a>
+      <a href="#s9"><span class="idx-n">08</span>Almacenamiento y escalamiento<span class="idx-req">Distribución</span></a>
+      <a href="#s10"><span class="idx-n">09</span>Configuración y administración<span class="idx-req">Operación</span></a>
+      <a href="#s11"><span class="idx-n">10</span>Seguridad: tráfico y reposo<span class="idx-req">Operación</span></a>
+      <a href="#s12"><span class="idx-n">11</span>Backups<span class="idx-req">Operación</span></a>
+      <a href="#s13"><span class="idx-n">12</span>Performance<span class="idx-req">Operación</span></a>
+      <a href="#s14"><span class="idx-n">13</span>Uso en cloud<span class="idx-req">Adopción</span></a>
+      <a href="#s15"><span class="idx-n">14</span>Casos empresariales / gobierno<span class="idx-req">Adopción</span></a>
+      <a href="#sdemo"><span class="idx-n">15</span>Demo en vivo: OSE Móvil<span class="idx-req">Demo</span></a>
+      <a href="#s16"><span class="idx-n">16</span>Cuándo usar CouchDB<span class="idx-req">Adopción</span></a>
+      <a href="#s17"><span class="idx-n">17</span>Opinión personal<span class="idx-req">Cierre</span></a>
+      <a href="#s18"><span class="idx-n">18</span>Cierre y referencias<span class="idx-req">Cierre</span></a>
     </div>
   </section>
 
   <!-- S3 HISTORIA -->
   <section class="slide" id="s3">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 1 de 13</span><h2>Historia de la tecnología</h2><p class="dek">De proyecto personal de un ex&#8209;desarrollador de Lotus Notes a proyecto de la Apache Software Foundation.</p></div>
-      <div class="slide-num">02 / 17</div>
+      <div><span class="eyebrow">Fundamentos</span><h2>Historia de la tecnología</h2><p class="dek">De proyecto personal de un ex&#8209;desarrollador de Lotus Notes a proyecto de la Apache Software Foundation.</p></div>
+      <div class="slide-num">02 / 18</div>
     </div>
     <div class="timeline">
       <div class="tl-row"><div class="tl-year">2005</div><div class="tl-mid"><div class="tl-dot"></div><div class="tl-line"></div></div><div class="tl-body"><b>Damien Katz</b>, ex&#8209;ingeniero de Lotus Notes en IBM, comienza CouchDB en <b>Erlang</b> y lo autofinancia casi dos años antes de publicarlo.</div></div>
@@ -309,8 +317,8 @@
   <!-- S4 ARQUITECTURA -->
   <section class="slide" id="s4">
     <div class="slide-head">
-      <div><span class="eyebrow">Contexto técnico</span><h2>Arquitectura y fundamentos</h2><p class="dek">Cuatro decisiones de diseño que explican todo lo demás: documentos JSON, MVCC, un archivo append&#8209;only y una API que es HTTP puro.</p></div>
-      <div class="slide-num">03 / 17</div>
+      <div><span class="eyebrow">Fundamentos</span><h2>Arquitectura y fundamentos</h2><p class="dek">Cuatro decisiones de diseño que explican todo lo demás: documentos JSON, MVCC, un archivo append&#8209;only y una API que es HTTP puro.</p></div>
+      <div class="slide-num">03 / 18</div>
     </div>
     <div class="cols">
       <ul class="plain">
@@ -360,8 +368,8 @@
   <!-- S5 DISEÑO DE ESQUEMA -->
   <section class="slide" id="s5">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 2 de 13</span><h2>Métodos para el diseño de esquema</h2><p class="dek">CouchDB no impone esquema, pero diseñar bien un modelo documental sigue siendo un oficio con reglas propias.</p></div>
-      <div class="slide-num">04 / 17</div>
+      <div><span class="eyebrow">Fundamentos</span><h2>Métodos para el diseño de esquema</h2><p class="dek">CouchDB no impone esquema, pero diseñar bien un modelo documental sigue siendo un oficio con reglas propias.</p></div>
+      <div class="slide-num">04 / 18</div>
     </div>
     <ul class="plain">
       <li><b>Modelar por agregado de negocio</b>, no por tabla normalizada: un documento agrupa todo lo que se lee junto (pensar "entidad completa", no "fila").</li>
@@ -377,8 +385,8 @@
   <!-- S6 EJEMPLO FICTICIO -->
   <section class="slide" id="s6">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 3 de 13</span><h2>Ejemplo ficticio: "OSE Móvil"</h2><p class="dek">Una app hipotética de lectura de medidores para inspectores que trabajan en zonas rurales sin cobertura estable.</p></div>
-      <div class="slide-num">05 / 17</div>
+      <div><span class="eyebrow">Práctica</span><h2>Ejemplo ficticio: "OSE Móvil"</h2><p class="dek">Una app hipotética de lectura de medidores para inspectores que trabajan en zonas rurales sin cobertura estable.</p></div>
+      <div class="slide-num">05 / 18</div>
     </div>
     <p class="dek" style="max-width:none; margin-bottom:4px;">Cada tablet corre <b>PouchDB</b> (el hermano JavaScript de CouchDB) de forma local. El inspector carga lecturas todo el día sin señal; al volver a una zona con cobertura, la app sincroniza automáticamente contra el servidor central.</p>
     <div class="code">
@@ -447,8 +455,8 @@
   <!-- S7 LENGUAJE DE CONSULTA -->
   <section class="slide" id="s7">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 4 de 13</span><h2>Lenguaje de consulta</h2><p class="dek">Tres formas de preguntar: la API HTTP cruda, vistas MapReduce, y Mango — el buscador declarativo sin JavaScript.</p></div>
-      <div class="slide-num">06 / 17</div>
+      <div><span class="eyebrow">Práctica</span><h2>Lenguaje de consulta</h2><p class="dek">Tres formas de preguntar: la API HTTP cruda, vistas MapReduce, y Mango — el buscador declarativo sin JavaScript.</p></div>
+      <div class="slide-num">06 / 18</div>
     </div>
     <div class="tabwrap">
       <table>
@@ -491,8 +499,8 @@
   <!-- S8 REPLICACION -->
   <section class="slide" id="s8">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 8 de 13 · replicación</span><h2>Replicación y sincronización</h2><p class="dek">La característica que distingue a CouchDB del resto: replicación multi‑maestro nativa, pensada para el modo offline.</p></div>
-      <div class="slide-num">07 / 17</div>
+      <div><span class="eyebrow">Distribución</span><h2>Replicación y sincronización</h2><p class="dek">La característica que distingue a CouchDB del resto: replicación multi‑maestro nativa, pensada para el modo offline.</p></div>
+      <div class="slide-num">07 / 18</div>
     </div>
     <ul class="plain">
       <li><b>Protocolo de replicación Couch:</b> puede ser puntual o continuo, push o pull, filtrado por función, y corre entre cualquier par de nodos CouchDB — o CouchDB y PouchDB — sin jerarquía fija.</li>
@@ -518,8 +526,8 @@
   <!-- S9 ALMACENAMIENTO / ESCALAMIENTO -->
   <section class="slide" id="s9">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 8 de 13 · almacenamiento y escalamiento</span><h2>Almacenamiento, distribución y escalamiento</h2><p class="dek">De un único archivo append‑only a un clúster con particiones (shards) y réplicas internas.</p></div>
-      <div class="slide-num">08 / 17</div>
+      <div><span class="eyebrow">Distribución</span><h2>Almacenamiento, distribución y escalamiento</h2><p class="dek">De un único archivo append‑only a un clúster con particiones (shards) y réplicas internas.</p></div>
+      <div class="slide-num">08 / 18</div>
     </div>
     <ul class="plain">
       <li><b>Single node:</b> una base = un archivo <code class="inline">.couch</code>. Simple, suficiente para equipos chicos o instalaciones edge.</li>
@@ -568,8 +576,8 @@
   <!-- S10 CONFIGURACION Y ADMINISTRACION -->
   <section class="slide" id="s10">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 9 de 13</span><h2>Configuración y administración</h2><p class="dek">Todo se puede configurar por archivo o en caliente por HTTP; toda la administración visual vive en Fauxton.</p></div>
-      <div class="slide-num">09 / 17</div>
+      <div><span class="eyebrow">Operación</span><h2>Configuración y administración</h2><p class="dek">Todo se puede configurar por archivo o en caliente por HTTP; toda la administración visual vive en Fauxton.</p></div>
+      <div class="slide-num">09 / 18</div>
     </div>
     <div class="cols">
       <ul class="plain">
@@ -595,8 +603,8 @@
   <!-- S11 SEGURIDAD -->
   <section class="slide" id="s11">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 10 de 13</span><h2>Seguridad en tráfico y en reposo</h2><p class="dek">Autenticación, TLS y un límite importante a tener claro: el cifrado en disco no lo resuelve CouchDB.</p></div>
-      <div class="slide-num">10 / 17</div>
+      <div><span class="eyebrow">Operación</span><h2>Seguridad en tráfico y en reposo</h2><p class="dek">Autenticación, TLS y un límite importante a tener claro: el cifrado en disco no lo resuelve CouchDB.</p></div>
+      <div class="slide-num">10 / 18</div>
     </div>
     <div class="cols">
       <div class="card">
@@ -621,8 +629,8 @@
   <!-- S12 BACKUPS -->
   <section class="slide" id="s12">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 11 de 13</span><h2>Backups</h2><p class="dek">Tres estrategias, de la más simple a la más operativa, y ninguna requiere apagar el servicio.</p></div>
-      <div class="slide-num">11 / 17</div>
+      <div><span class="eyebrow">Operación</span><h2>Backups</h2><p class="dek">Tres estrategias, de la más simple a la más operativa, y ninguna requiere apagar el servicio.</p></div>
+      <div class="slide-num">11 / 18</div>
     </div>
     <ul class="plain">
       <li><b>Copia de archivos:</b> como el motor de almacenamiento es append‑only, copiar la carpeta de datos en caliente (con <code class="inline">fsync</code>) es seguro.</li>
@@ -643,8 +651,8 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
   <!-- S13 PERFORMANCE -->
   <section class="slide" id="s13">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 6 de 13</span><h2>Performance</h2><p class="dek">MVCC sin locks favorece la escritura concurrente; las vistas y la compactación son las palancas que hay que operar.</p></div>
-      <div class="slide-num">12 / 17</div>
+      <div><span class="eyebrow">Operación</span><h2>Performance</h2><p class="dek">MVCC sin locks favorece la escritura concurrente; las vistas y la compactación son las palancas que hay que operar.</p></div>
+      <div class="slide-num">12 / 18</div>
     </div>
     <ul class="plain">
       <li><b>Lectura por <code class="inline">_id</code>:</b> resolución directa por B‑tree, muy rápida y estable.</li>
@@ -659,8 +667,8 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
   <!-- S14 CLOUD -->
   <section class="slide" id="s14">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 7 de 13</span><h2>Uso en cloud</h2><p class="dek">IBM Cloudant es el camino gestionado oficial; también corre como cualquier otra carga contenerizada.</p></div>
-      <div class="slide-num">13 / 17</div>
+      <div><span class="eyebrow">Adopción</span><h2>Uso en cloud</h2><p class="dek">IBM Cloudant es el camino gestionado oficial; también corre como cualquier otra carga contenerizada.</p></div>
+      <div class="slide-num">13 / 18</div>
     </div>
     <div class="cols">
       <div class="card">
@@ -683,8 +691,8 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
   <!-- S15 CASOS -->
   <section class="slide" id="s15">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 5 de 13</span><h2>Casos empresariales y de gobierno</h2><p class="dek">Organizaciones reales que eligieron CouchDB, casi siempre por el mismo motivo: datos que viajan y no siempre están conectados.</p></div>
-      <div class="slide-num">14 / 17</div>
+      <div><span class="eyebrow">Adopción</span><h2>Casos empresariales y de gobierno</h2><p class="dek">Organizaciones reales que eligieron CouchDB, casi siempre por el mismo motivo: datos que viajan y no siempre están conectados.</p></div>
+      <div class="slide-num">14 / 18</div>
     </div>
     <div class="tabwrap">
       <table>
@@ -699,11 +707,77 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
     </div>
   </section>
 
+  <!-- SDEMO -->
+  <section class="slide" id="sdemo">
+    <div class="slide-head">
+      <div><span class="eyebrow live">Demo en vivo</span><h2>Qué vamos a ver funcionando</h2><p class="dek">El mismo caso "OSE Móvil" de la slide 05, pero ejecutándose: tres nodos CouchDB reales en Docker, dos tablets de campo y el panel del central.</p></div>
+      <div class="slide-num">15 / 18</div>
+    </div>
+
+    <ol class="demo-steps">
+      <li><span class="step-n">01</span><div><b>Escritura sin conexión.</b> Una lectura nueva se guarda en la tablet aunque el central esté inalcanzable.</div></li>
+      <li><span class="step-n">02</span><div><b>Sincronización.</b> La tablet "recupera señal" y replica; el panel central se actualiza solo, sin recargar.</div></li>
+      <li><span class="step-n">03</span><div><b>Vista MapReduce.</b> Los m³ por zona salen de la vista <code class="inline">por_zona</code> con <code class="inline">reduce: _stats</code>.</div></li>
+      <li><span class="step-n">04</span><div><b>Consulta Mango.</b> Filtro por zona y mínimo de m³, usando el índice creado en el setup.</div></li>
+      <li><span class="step-n">05</span><div><b>Conflicto multi‑maestro.</b> Dos inspectores midieron el mismo medidor sin verse: ninguna versión se pierde.</div></li>
+      <li><span class="step-n">06</span><div><b>Resolución.</b> La aplicación elige cuál vale y borra la revisión perdedora — ahí se cierra el conflicto.</div></li>
+    </ol>
+
+    <figure>
+      <svg viewBox="0 0 640 290" role="img" aria-label="Infraestructura de la demo: tres interfaces web, tres nodos CouchDB en Docker, y la replicación de cada tablet hacia el nodo central">
+        <defs>
+          <marker id="arrDemo" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="currentColor"/></marker>
+          <marker id="arrDemoAcc" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="var(--accent)"/></marker>
+        </defs>
+        <g font-family="IBM Plex Mono" font-size="11">
+          <rect x="15" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
+          <text x="85" y="54" text-anchor="middle" fill="currentColor">UI Tablet A</text>
+          <text x="85" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8082</text>
+
+          <rect x="250" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
+          <text x="320" y="54" text-anchor="middle" fill="currentColor">UI Central</text>
+          <text x="320" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8081</text>
+
+          <rect x="485" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
+          <text x="555" y="54" text-anchor="middle" fill="currentColor">UI Tablet B</text>
+          <text x="555" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8083</text>
+
+          <rect x="5" y="130" width="630" height="145" rx="10" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
+          <text x="20" y="150" fill="currentColor" opacity="0.6" font-size="9">red docker compose · imagen couchdb:3.5</text>
+
+          <rect x="15" y="170" width="140" height="85" rx="6" fill="none" stroke="currentColor"/>
+          <text x="85" y="202" text-anchor="middle" fill="currentColor">CouchDB</text>
+          <text x="85" y="224" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-tablet · 5985</text>
+
+          <rect x="250" y="170" width="140" height="85" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <text x="320" y="202" text-anchor="middle" fill="currentColor">CouchDB</text>
+          <text x="320" y="224" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-central · 5984</text>
+
+          <rect x="485" y="170" width="140" height="85" rx="6" fill="none" stroke="currentColor"/>
+          <text x="555" y="202" text-anchor="middle" fill="currentColor">CouchDB</text>
+          <text x="555" y="224" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-tablet-b · 5986</text>
+
+          <line x1="85" y1="88" x2="85" y2="166" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <line x1="320" y1="88" x2="320" y2="166" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <line x1="555" y1="88" x2="555" y2="166" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <text x="332" y="114" fill="currentColor" opacity="0.75" font-size="9">fetch HTTP/JSON (CORS)</text>
+
+          <line x1="157" y1="212" x2="244" y2="212" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
+          <text x="200" y="202" text-anchor="middle" fill="var(--accent)" font-size="9">POST /_replicate</text>
+
+          <line x1="483" y1="212" x2="396" y2="212" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
+          <text x="440" y="202" text-anchor="middle" fill="var(--accent)" font-size="9">POST /_replicate</text>
+        </g>
+      </svg>
+      <figcaption>Las tres interfaces son HTML plano y hablan directo con la API HTTP de <i>su propio</i> nodo. La replicación, en cambio, es servidor a servidor: la ejecuta CouchDB entre contenedores, sin pasar por el navegador — por eso una tablet puede sincronizar aunque su pantalla esté cerrada.</figcaption>
+    </figure>
+  </section>
+
   <!-- S16 CUANDO USARLA -->
   <section class="slide" id="s16">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 13 de 13</span><h2>Ejemplos de uso: cuándo sí, cuándo no</h2><p class="dek">La pregunta no es "¿es buena?" sino "¿el problema es el que CouchDB resuelve mejor?"</p></div>
-      <div class="slide-num">15 / 17</div>
+      <div><span class="eyebrow">Adopción</span><h2>Ejemplos de uso: cuándo sí, cuándo no</h2><p class="dek">La pregunta no es "¿es buena?" sino "¿el problema es el que CouchDB resuelve mejor?"</p></div>
+      <div class="slide-num">16 / 18</div>
     </div>
     <div class="cols">
       <div class="card">
@@ -729,11 +803,11 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
   <!-- S17 OPINION -->
   <section class="slide" id="s17">
     <div class="slide-head">
-      <div><span class="eyebrow">Requisito 12 de 13</span><h2>Opinión del grupo</h2><p class="dek">Personalizá este texto con tu propia mirada antes de presentar — acá va un punto de partida.</p></div>
-      <div class="slide-num">16 / 17</div>
+      <div><span class="eyebrow">Cierre</span><h2>Opinión personal</h2><p class="dek">Qué me convenció y qué no, después de investigar la tecnología y de armar la demo con tres nodos reales.</p></div>
+      <div class="slide-num">17 / 18</div>
     </div>
-    <p style="font-size:15px; line-height:1.7; max-width:64ch;">Lo que más convence de CouchDB es que resuelve un problema muy específico con una elegancia real: el protocolo de replicación multi‑maestro y el diseño offline‑first no son un agregado tardío, sino la razón de ser del proyecto desde 2005. Que la única API sea HTTP/JSON también baja mucho la barrera de entrada — se puede prototipar con <code class="inline">curl</code> sin instalar ningún driver.</p>
-    <p style="font-size:15px; line-height:1.7; max-width:64ch; margin-top:12px;">Como contrapartida, el ecosistema y la comunidad son bastante más chicos que los de MongoDB, hay menos opciones de nube gestionada fuera de Cloudant, y administrar un clúster (shards, factor de replicación, quorum) tiene una curva de aprendizaje que un proyecto chico puede no necesitar nunca. Las vistas MapReduce, aunque potentes, se sienten más rígidas de escribir que un pipeline de agregación moderno.</p>
+    <p style="font-size:15px; line-height:1.7; max-width:64ch;">Lo que más me convence de CouchDB es que resuelve un problema muy específico con una elegancia real: el protocolo de replicación multi‑maestro y el diseño offline‑first no son un agregado tardío, sino la razón de ser del proyecto desde 2005. Que la única API sea HTTP/JSON también baja mucho la barrera de entrada — se puede prototipar con <code class="inline">curl</code> sin instalar ningún driver.</p>
+    <p style="font-size:15px; line-height:1.7; max-width:64ch; margin-top:12px;">Como contrapartida, el ecosistema y la comunidad son bastante más chicos que los de MongoDB, hay menos opciones de nube gestionada fuera de Cloudant, y administrar un clúster (shards, factor de replicación, quorum) tiene una curva de aprendizaje que un proyecto chico puede no necesitar nunca. Las vistas MapReduce, aunque potentes, me resultaron más rígidas de escribir que un pipeline de agregación moderno.</p>
     <p style="font-size:15px; line-height:1.7; max-width:64ch; margin-top:12px;"><b>Conclusión:</b> no es la base de datos "por defecto" para cualquier proyecto, pero para el caso puntual de sincronización offline entre dispositivos y servidor, es difícil encontrar algo tan directo.</p>
   </section>
 
@@ -741,7 +815,7 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
   <section class="slide" id="s18">
     <div class="slide-head">
       <div><span class="eyebrow">Fin</span><h2>Cierre y referencias</h2></div>
-      <div class="slide-num">17 / 17</div>
+      <div class="slide-num">18 / 18</div>
     </div>
     <p class="dek" style="margin-bottom:16px;">Gracias — quedan abiertas las preguntas.</p>
     <div class="card">
