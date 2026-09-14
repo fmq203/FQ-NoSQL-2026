@@ -53,7 +53,8 @@
   .bar-row .figs{font-family:var(--mono); color:var(--ink-dim); text-align:right; white-space:nowrap;}
 
   .list{display:flex; flex-direction:column; gap:7px; max-height:420px; overflow-y:auto;}
-  .card{background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .card{background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; align-items:stretch; gap:8px;}
+  .card-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
   .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim);}
   .card .desc{font-size:13.5px; font-weight:600; margin-top:1px;}
   .card .val{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); margin-top:1px;}
@@ -61,6 +62,22 @@
   .badge{font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px; white-space:nowrap;}
   .badge.crit{background:var(--crit-tint); color:var(--crit);}
   .empty{font-size:12.5px; color:var(--ink-dim); text-align:center; padding:22px 0;}
+
+  .link-row{display:flex; gap:12px;}
+  .link-btn{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-decoration:underline; cursor:pointer;}
+  .link-btn.crit{color:var(--crit);}
+
+  .edit-row{display:flex; gap:6px;}
+  .edit-row input{flex:1;}
+  .btn-mini{padding:6px 10px; font-size:11.5px; border-radius:6px;}
+  .btn-mini.save{background:var(--ok); color:#fff;}
+  .btn-mini.cancel{background:var(--line); color:var(--ink-dim);}
+
+  .conflict-panel{border:1px dashed var(--crit); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; background:var(--crit-tint);}
+  .conflict-opt{display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--surface); border-radius:6px; padding:8px 10px;}
+  .conflict-opt .label{font-size:10.5px; color:var(--ink-dim); font-family:var(--mono);}
+  .conflict-opt .value{font-weight:600; font-family:var(--mono);}
+  .btn-keep{background:var(--crit); color:#fff; padding:6px 10px; font-size:11.5px; border-radius:6px; flex:none;}
 
   form{display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;}
   .f{display:flex; flex-direction:column; gap:3px;}
@@ -120,7 +137,7 @@
     <div class="panel">
       <h2>Documentos replicados</h2>
       <div class="list" id="list"><p class="empty">Cargando…</p></div>
-      <p class="note">La sincronización la dispara la tablet cuando "recupera señal"; este panel solo lee.</p>
+      <p class="note">La sincronización la dispara la tablet; acá se pueden corregir valores y resolver conflictos.</p>
     </div>
   </div>
 </div>
@@ -143,51 +160,144 @@
     return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
   }
 
-  let lastZonas = [];
+  let lastDocs = [];
+  let openId = null;      // _id del doc con un panel abierto (editar o resolver)
+  let openMode = null;    // 'edit' | 'resolve'
+  const conflictCache = {}; // _id -> doc de la revision perdedora, ya resuelto
 
   async function loadDocs(){
+    if(openId) return; // no pisar un panel de edicion/resolucion abierto
     try{
       const res = await api(DB + '/_changes?include_docs=true&conflicts=true&style=all_docs');
       const data = await res.json();
-      const docs = data.results
+      lastDocs = data.results
         .map(r => r.doc)
-        .filter(d => d && !d._deleted && d.type === 'lectura_medidor');
-
-      docs.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
-
-      const stats = document.querySelectorAll('#stats .n');
-      const zonas = [...new Set(docs.map(d => d.zona))];
-      lastZonas = zonas;
-      stats[0].textContent = docs.length;
-      stats[1].textContent = zonas.length;
-      stats[2].textContent = docs.length ? fmtTime(docs[0].fecha) : '—';
-
-      const conflicted = docs.filter(d => d._conflicts && d._conflicts.length);
-      const confStat = document.getElementById('conf-stat');
-      stats[3].textContent = conflicted.length;
-      confStat.classList.toggle('crit', conflicted.length > 0);
-
-      const list = document.getElementById('list');
-      list.innerHTML = docs.length ? docs.map(d => `
-        <div class="card">
-          <div>
-            <div class="id">${d._id}</div>
-            <div class="desc">${d.medidor_id} · ${d.zona}</div>
-            <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
-          </div>
-          <div class="badges">
-            ${d._conflicts && d._conflicts.length ? '<span class="badge crit">⚠ conflicto</span>' : ''}
-          </div>
-        </div>
-      `).join('') : '<p class="empty">Todavía no llegó ninguna lectura de la tablet.</p>';
-
-      const zonaSelect = document.getElementById('mzona');
-      const current = zonaSelect.value;
-      zonaSelect.innerHTML = zonas.map(z => `<option ${z===current?'selected':''}>${z}</option>`).join('') || '<option>—</option>';
+        .filter(d => d && !d._deleted && d.type === 'lectura_medidor')
+        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+      renderList();
     }catch(e){
       document.getElementById('list').innerHTML = '<p class="empty">No se pudo conectar al nodo :5984.</p>';
     }
   }
+
+  function cardTemplate(d){
+    const conflicted = d._conflicts && d._conflicts.length;
+    const top = `
+      <div class="card-top">
+        <div>
+          <div class="id">${d._id}</div>
+          <div class="desc">${d.medidor_id} · ${d.zona}</div>
+          <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
+        </div>
+        <div class="badges">
+          ${conflicted ? '<span class="badge crit">⚠ conflicto</span>' : ''}
+        </div>
+      </div>`;
+
+    if(openId === d._id && openMode === 'edit'){
+      return `<div class="card">${top}
+        <div class="edit-row">
+          <input id="edit-input" type="number" step="0.1" value="${d.valor_m3}">
+          <button class="btn-mini save" data-save="${d._id}">Guardar</button>
+          <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
+        </div>
+      </div>`;
+    }
+
+    if(openId === d._id && openMode === 'resolve'){
+      const losing = conflictCache[d._id];
+      const body = losing ? `
+        <div class="conflict-panel">
+          <div class="conflict-opt">
+            <div><div class="label">actual (central)</div><div class="value">${d.valor_m3} m³</div></div>
+            <button class="btn-keep" data-keep="central" data-id="${d._id}">Mantener este</button>
+          </div>
+          <div class="conflict-opt">
+            <div><div class="label">en conflicto (llegó de la tablet)</div><div class="value">${losing.valor_m3} m³</div></div>
+            <button class="btn-keep" data-keep="tablet" data-id="${d._id}">Usar este</button>
+          </div>
+          <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
+        </div>` : '<p class="empty">Cargando revisión en conflicto…</p>';
+      return `<div class="card">${top}${body}</div>`;
+    }
+
+    return `<div class="card">${top}
+      <div class="link-row">
+        <button class="link-btn" data-edit="${d._id}">editar valor</button>
+        ${conflicted ? `<button class="link-btn crit" data-resolve="${d._id}">resolver conflicto</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function renderList(){
+    const docs = lastDocs;
+    const stats = document.querySelectorAll('#stats .n');
+    const zonas = [...new Set(docs.map(d => d.zona))];
+    stats[0].textContent = docs.length;
+    stats[1].textContent = zonas.length;
+    stats[2].textContent = docs.length ? fmtTime(docs[0].fecha) : '—';
+
+    const conflicted = docs.filter(d => d._conflicts && d._conflicts.length);
+    const confStat = document.getElementById('conf-stat');
+    stats[3].textContent = conflicted.length;
+    confStat.classList.toggle('crit', conflicted.length > 0);
+
+    const list = document.getElementById('list');
+    list.innerHTML = docs.length ? docs.map(cardTemplate).join('') : '<p class="empty">Todavía no llegó ninguna lectura de la tablet.</p>';
+
+    const zonaSelect = document.getElementById('mzona');
+    const current = zonaSelect.value;
+    zonaSelect.innerHTML = zonas.map(z => `<option ${z===current?'selected':''}>${z}</option>`).join('') || '<option>—</option>';
+  }
+
+  document.getElementById('list').addEventListener('click', async (ev) => {
+    const t = ev.target;
+    if(t.dataset.edit){ openId = t.dataset.edit; openMode = 'edit'; renderList(); return; }
+    if(t.dataset.cancel){ openId = null; openMode = null; renderList(); return; }
+
+    if(t.dataset.resolve){
+      const id = t.dataset.resolve;
+      openId = id; openMode = 'resolve'; renderList();
+      const doc = lastDocs.find(d => d._id === id);
+      const losingRev = doc._conflicts[0];
+      const res = await api(DB + '/' + encodeURIComponent(id) + '?rev=' + losingRev);
+      conflictCache[id] = await res.json();
+      if(openId === id) renderList();
+      return;
+    }
+
+    if(t.dataset.save){
+      const id = t.dataset.save;
+      const valor = parseFloat(document.getElementById('edit-input').value);
+      const doc = lastDocs.find(d => d._id === id);
+      if(!doc || Number.isNaN(valor)) return;
+      const clean = { ...doc, valor_m3: valor };
+      delete clean._conflicts;
+      await api(DB + '/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(clean) });
+      openId = null; openMode = null;
+      loadDocs();
+      return;
+    }
+
+    if(t.dataset.keep){
+      const id = t.dataset.id;
+      const doc = lastDocs.find(d => d._id === id);
+      const losingRev = doc._conflicts[0];
+      if(t.dataset.keep === 'tablet'){
+        const losing = conflictCache[id];
+        const merged = { ...doc, valor_m3: losing.valor_m3, sincronizado: losing.sincronizado, fecha: losing.fecha };
+        delete merged._conflicts;
+        await api(DB + '/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(merged) });
+      }
+      // en los dos casos hay que borrar explicitamente la revision perdedora
+      // para cerrar el conflicto: CouchDB nunca lo hace solo.
+      await api(DB + '/' + encodeURIComponent(id) + '?rev=' + losingRev, { method: 'DELETE' });
+      delete conflictCache[id];
+      openId = null; openMode = null;
+      loadDocs();
+      return;
+    }
+  });
 
   async function loadBars(){
     try{
