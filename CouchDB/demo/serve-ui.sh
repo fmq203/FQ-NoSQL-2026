@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sirve las dos UI estaticas (no necesitan build, son HTML+JS planos que
+# Sirve las tres UI estaticas (no necesitan build, son HTML+JS planos que
 # hablan directo con la API HTTP de cada nodo CouchDB via fetch).
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -11,7 +11,11 @@ echo $! > .pids/central.pid
 nohup python3 -m http.server 8082 --directory ui/tablet >/tmp/ose-ui-tablet.log 2>&1 &
 echo $! > .pids/tablet.pid
 
+nohup python3 -m http.server 8083 --directory ui/tablet-b >/tmp/ose-ui-tablet-b.log 2>&1 &
+echo $! > .pids/tablet-b.pid
+
 sleep 1
-echo "UI Central -> http://localhost:8081"
-echo "UI Tablet  -> http://localhost:8082"
+echo "UI Central   -> http://localhost:8081"
+echo "UI Tablet A  -> http://localhost:8082"
+echo "UI Tablet B  -> http://localhost:8083"
 echo "(para bajarlas: ./stop-ui.sh)"

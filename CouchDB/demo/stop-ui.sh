@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-for name in central tablet; do
+for name in central tablet tablet-b; do
   pidfile=".pids/$name.pid"
   if [ -f "$pidfile" ]; then
     kill "$(cat "$pidfile")" 2>/dev/null || true
