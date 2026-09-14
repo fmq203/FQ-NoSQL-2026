@@ -66,7 +66,21 @@
   .badge{font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px; white-space:nowrap; flex:none;}
   .badge.pend{background:var(--warn-tint); color:var(--warn);}
   .badge.sync{background:var(--ok-tint); color:var(--ok);}
+  .badge.conf{background:var(--accent-tint); color:var(--accent);}
   .empty{font-size:12.5px; color:var(--ink-dim); text-align:center; padding:18px 0;}
+
+  .card{flex-direction:column; align-items:stretch;}
+  .card-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .badges{display:flex; flex-direction:column; gap:4px; align-items:flex-end;}
+  .edit-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-decoration:underline; cursor:pointer; margin-top:4px; align-self:flex-start;}
+  .edit-row{display:flex; gap:6px; margin-top:8px;}
+  .edit-row input{flex:1;}
+  .btn-mini{padding:6px 10px; font-size:11.5px; border-radius:6px;}
+  .btn-mini.save{background:var(--ok); color:#fff;}
+  .btn-mini.cancel{background:var(--line); color:var(--ink-dim);}
+
+  .btn-secondary{width:100%; background:var(--surface); color:var(--ink); border:1px solid var(--line); margin-top:8px;}
+  .btn-secondary:disabled{opacity:.4; cursor:not-allowed;}
 
   .toast{font-size:12px; font-family:var(--mono); background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:9px 11px; color:var(--ink-dim); min-height:16px;}
   .toast.ok{color:var(--ok); border-color:var(--ok);}
@@ -117,6 +131,7 @@
     <div class="list" id="list"><p class="empty">Cargando…</p></div>
 
     <button class="btn-sync" id="sync-btn" disabled>Sincronizar con central</button>
+    <button class="btn-secondary" id="pull-btn" disabled>↓ Traer cambios del central</button>
     <div class="toast" id="toast" style="margin-top:10px;">Listo.</div>
   </div>
 
@@ -129,9 +144,11 @@
   const toggle = document.getElementById('toggle');
   const toggleLabel = document.getElementById('toggle-label');
   const syncBtn = document.getElementById('sync-btn');
+  const pullBtn = document.getElementById('pull-btn');
   const toast = document.getElementById('toast');
   const list = document.getElementById('list');
   const pendingCount = document.getElementById('pending-count');
+  let editingId = null;
 
   function setToast(msg, kind){
     toast.textContent = msg;
@@ -151,6 +168,7 @@
     device.dataset.online = v ? '1' : '0';
     toggleLabel.textContent = v ? 'EN LÍNEA' : 'SIN CONEXIÓN';
     syncBtn.disabled = !v;
+    pullBtn.disabled = !v;
   }
   toggle.addEventListener('click', () => setOnline(!online));
 
@@ -159,35 +177,93 @@
     return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
   }
 
-  async function loadList(){
-    try{
-      const res = await api(DB + '/_all_docs?include_docs=true');
-      const data = await res.json();
-      const docs = data.rows
-        .map(r => r.doc)
-        .filter(d => d && d.type === 'lectura_medidor')
-        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  let lastDocs = [];
 
-      if(!docs.length){
-        list.innerHTML = '<p class="empty">Todavía no cargaste lecturas.</p>';
-      } else {
-        list.innerHTML = docs.map(d => `
-          <div class="card">
-            <div class="meta">
-              <div class="id">${d._id}</div>
-              <div class="desc">${d.medidor_id} · ${d.zona}</div>
-              <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
-            </div>
-            <span class="badge ${d.sincronizado ? 'sync' : 'pend'}">${d.sincronizado ? 'sincronizada' : 'pendiente'}</span>
-          </div>
-        `).join('');
-      }
-      const pending = docs.filter(d => !d.sincronizado).length;
-      pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes');
+  async function loadList(){
+    if(editingId) return; // no pisar un formulario de edicion abierto
+    try{
+      const res = await api(DB + '/_changes?include_docs=true&conflicts=true&style=all_docs');
+      const data = await res.json();
+      const docs = data.results
+        .map(r => r.doc)
+        .filter(d => d && !d._deleted && d.type === 'lectura_medidor')
+        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+      lastDocs = docs;
+      render();
     }catch(e){
       list.innerHTML = '<p class="empty">No se pudo conectar al nodo :5985.</p>';
     }
   }
+
+  function render(){
+    const docs = lastDocs;
+    if(!docs.length){
+      list.innerHTML = '<p class="empty">Todavía no cargaste lecturas.</p>';
+    } else {
+      list.innerHTML = docs.map(d => {
+        const conflicted = d._conflicts && d._conflicts.length;
+        if(d._id === editingId){
+          return `
+            <div class="card">
+              <div class="card-top">
+                <div class="meta">
+                  <div class="id">${d._id}</div>
+                  <div class="desc">${d.medidor_id} · ${d.zona}</div>
+                </div>
+              </div>
+              <div class="edit-row">
+                <input id="edit-input" type="number" step="0.1" value="${d.valor_m3}">
+                <button class="btn-mini save" data-save="${d._id}">Guardar</button>
+                <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
+              </div>
+            </div>`;
+        }
+        return `
+          <div class="card">
+            <div class="card-top">
+              <div class="meta">
+                <div class="id">${d._id}</div>
+                <div class="desc">${d.medidor_id} · ${d.zona}</div>
+                <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
+              </div>
+              <div class="badges">
+                ${conflicted ? '<span class="badge conf">⚠ conflicto</span>' : ''}
+                <span class="badge ${d.sincronizado ? 'sync' : 'pend'}">${d.sincronizado ? 'sincronizada' : 'pendiente'}</span>
+              </div>
+            </div>
+            <button class="edit-link" data-edit="${d._id}">editar valor</button>
+          </div>`;
+      }).join('');
+    }
+    const pending = docs.filter(d => !d.sincronizado).length;
+    pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes');
+  }
+
+  list.addEventListener('click', async (ev) => {
+    const editId = ev.target.dataset.edit;
+    const saveId = ev.target.dataset.save;
+    if(editId){ editingId = editId; render(); return; }
+    if(ev.target.dataset.cancel){ editingId = null; render(); return; }
+    if(saveId){
+      const input = document.getElementById('edit-input');
+      const valor = parseFloat(input.value);
+      const doc = lastDocs.find(d => d._id === saveId);
+      if(!doc || Number.isNaN(valor)) return;
+      const clean = { ...doc };
+      delete clean._conflicts;
+      clean.valor_m3 = valor;
+      clean.sincronizado = false;
+      try{
+        const res = await api(DB + '/' + encodeURIComponent(saveId), { method: 'PUT', body: JSON.stringify(clean) });
+        if(!res.ok) throw new Error(await res.text());
+        setToast('Lectura ' + saveId + ' corregida localmente en la tablet.');
+      }catch(e){
+        setToast('Error al guardar: ' + e.message, 'err');
+      }
+      editingId = null;
+      loadList();
+    }
+  });
 
   document.getElementById('form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -254,6 +330,31 @@
       setToast('Error al sincronizar: ' + e.message, 'err');
     } finally {
       syncBtn.disabled = !online;
+    }
+  });
+
+  pullBtn.addEventListener('click', async () => {
+    if(!online) return;
+    setToast('Trayendo cambios del central…');
+    pullBtn.disabled = true;
+    try{
+      const rep = await api('/_replicate', {
+        method: 'POST',
+        body: JSON.stringify({
+          source: 'http://admin:admin123@couch-central:5984/inspecciones',
+          target: 'http://admin:admin123@localhost:5984/inspecciones',
+          create_target: false
+        })
+      });
+      if(!rep.ok) throw new Error(await rep.text());
+      const repData = await rep.json();
+      const written = repData.history && repData.history[0] ? repData.history[0].docs_written : '?';
+      setToast('Actualizado — ' + written + ' documentos recibidos del central.', 'ok');
+      loadList();
+    }catch(e){
+      setToast('Error al traer cambios: ' + e.message, 'err');
+    } finally {
+      pullBtn.disabled = !online;
     }
   });
 
