@@ -531,7 +531,7 @@
     <div class="card">
       <h3>PouchDB · el otro extremo del protocolo</h3>
       <p style="font-size:14px; line-height:1.6;">El protocolo no lo habla solo CouchDB. <b>PouchDB</b> es una implementación en JavaScript que corre <i>dentro</i> del navegador o de la app móvil, guardando en IndexedDB, y sincroniza contra un CouchDB con una línea: <code class="inline">db.sync('http://servidor/base')</code>. Eso es lo que hace realista el "OSE Móvil" de la slide 05: la tablet no necesita un servidor instalado, alcanza con la app.</p>
-      <p style="font-size:14px; line-height:1.6; margin-top:10px;">En la demo que viene, las dos tablets son en realidad nodos CouchDB completos en vez de PouchDB. Es una simplificación para no tener que empaquetar una app: el protocolo de replicación que se ejecuta es exactamente el mismo.</p>
+      <p style="font-size:14px; line-height:1.6; margin-top:10px;">En la demo que viene, la tablet B es exactamente esto: una página que abre su base con <code class="inline">new PouchDB('inspecciones')</code> y sincroniza con <code class="inline">live: true</code>. La tablet A, en cambio, es un nodo CouchDB completo. El central no nota la diferencia.</p>
     </div>
   </section>
 
@@ -728,7 +728,7 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
 
     <ol class="demo-steps">
       <li><span class="step-n">01</span><div><b>Escritura sin conexión.</b> Una lectura nueva se guarda en la tablet aunque el central esté inalcanzable.</div></li>
-      <li><span class="step-n">02</span><div><b>Sincronización.</b> La tablet "recupera señal" y replica; el panel central se actualiza solo, sin recargar.</div></li>
+      <li><span class="step-n">02</span><div><b>Dos clientes distintos.</b> Una tablet es un nodo CouchDB y la otra es PouchDB en el navegador. El central replica con las dos igual.</div></li>
       <li><span class="step-n">03</span><div><b>Vista MapReduce.</b> Los m³ por zona salen de la vista <code class="inline">por_zona</code> con <code class="inline">reduce: _stats</code>.</div></li>
       <li><span class="step-n">04</span><div><b>Consulta Mango.</b> Filtro por zona y mínimo de m³, usando el índice creado en el setup.</div></li>
       <li><span class="step-n">05</span><div><b>Conflicto multi‑maestro.</b> Dos inspectores midieron el mismo medidor sin verse: ninguna versión se pierde.</div></li>
@@ -754,34 +754,37 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
           <text x="555" y="54" text-anchor="middle" fill="currentColor">UI Tablet B</text>
           <text x="555" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8083</text>
 
-          <rect x="5" y="130" width="630" height="145" rx="10" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
-          <text x="20" y="150" fill="currentColor" opacity="0.6" font-size="9">red docker compose · imagen couchdb:3.5</text>
+          <text x="485" y="22" fill="currentColor" opacity="0.6" font-size="9">navegador</text>
+          <rect x="480" y="26" width="150" height="118" rx="8" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
+          <rect x="495" y="96" width="120" height="36" rx="5" fill="none" stroke="currentColor"/>
+          <text x="555" y="112" text-anchor="middle" fill="currentColor" font-size="10">PouchDB</text>
+          <text x="555" y="126" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">IndexedDB</text>
 
-          <rect x="15" y="170" width="140" height="85" rx="6" fill="none" stroke="currentColor"/>
-          <text x="85" y="202" text-anchor="middle" fill="currentColor">CouchDB</text>
-          <text x="85" y="224" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-tablet · 5985</text>
+          <rect x="5" y="170" width="400" height="105" rx="10" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
+          <text x="20" y="188" fill="currentColor" opacity="0.6" font-size="9">red docker compose · couchdb:3.5</text>
 
-          <rect x="250" y="170" width="140" height="85" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
-          <text x="320" y="202" text-anchor="middle" fill="currentColor">CouchDB</text>
-          <text x="320" y="224" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-central · 5984</text>
+          <rect x="15" y="196" width="140" height="66" rx="6" fill="none" stroke="currentColor"/>
+          <text x="85" y="222" text-anchor="middle" fill="currentColor">CouchDB</text>
+          <text x="85" y="240" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-tablet · 5985</text>
 
-          <rect x="485" y="170" width="140" height="85" rx="6" fill="none" stroke="currentColor"/>
-          <text x="555" y="202" text-anchor="middle" fill="currentColor">CouchDB</text>
-          <text x="555" y="224" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-tablet-b · 5986</text>
+          <rect x="250" y="196" width="140" height="66" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <text x="320" y="222" text-anchor="middle" fill="currentColor">CouchDB</text>
+          <text x="320" y="240" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-central · 5984</text>
 
-          <line x1="85" y1="88" x2="85" y2="166" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
-          <line x1="320" y1="88" x2="320" y2="166" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
-          <line x1="555" y1="88" x2="555" y2="166" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
-          <text x="332" y="114" fill="currentColor" opacity="0.75" font-size="9">fetch HTTP/JSON (CORS)</text>
+          <line x1="85" y1="88" x2="85" y2="192" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <line x1="320" y1="88" x2="320" y2="192" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <line x1="555" y1="88" x2="555" y2="92" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <text x="332" y="120" fill="currentColor" opacity="0.75" font-size="9">fetch HTTP/JSON (CORS)</text>
 
-          <line x1="157" y1="212" x2="244" y2="212" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
-          <text x="200" y="202" text-anchor="middle" fill="var(--accent)" font-size="9">POST /_replicate</text>
+          <line x1="157" y1="229" x2="244" y2="229" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
+          <text x="200" y="219" text-anchor="middle" fill="var(--accent)" font-size="9">POST /_replicate</text>
 
-          <line x1="483" y1="212" x2="396" y2="212" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
-          <text x="440" y="202" text-anchor="middle" fill="var(--accent)" font-size="9">POST /_replicate</text>
+          <path d="M 495 114 L 430 114 L 430 229 L 396 229" fill="none" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
+          <text x="462" y="106" text-anchor="middle" fill="var(--accent)" font-size="9">db.sync()</text>
+          <text x="462" y="118" text-anchor="middle" fill="var(--accent)" opacity="0.75" font-size="8">live: true</text>
         </g>
       </svg>
-      <figcaption>Las tres interfaces son HTML plano y hablan directo con la API HTTP de <i>su propio</i> nodo. La replicación, en cambio, es servidor a servidor: la ejecuta CouchDB entre contenedores, sin pasar por el navegador — por eso una tablet puede sincronizar aunque su pantalla esté cerrada.</figcaption>
+      <figcaption>Las dos tablets no corren lo mismo: la A es un nodo CouchDB completo que replica de servidor a servidor, y la B es <b>PouchDB dentro del navegador</b>, guardando en IndexedDB y sincronizando sola con <code class="inline">live: true</code>. Para el central son idénticas: habla el mismo protocolo con las dos y no las distingue.</figcaption>
     </figure>
 
     <div class="cols">
@@ -789,8 +792,8 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
         <h3>Interfaces de la demo</h3>
         <ul class="url-list">
           <li><span class="who">Panel central</span> <a href="http://localhost:8081" target="_blank" rel="noopener">localhost:8081</a></li>
-          <li><span class="who">Tablet A · jperez</span> <a href="http://localhost:8082" target="_blank" rel="noopener">localhost:8082</a></li>
-          <li><span class="who">Tablet B · mgonzalez</span> <a href="http://localhost:8083" target="_blank" rel="noopener">localhost:8083</a></li>
+          <li><span class="who">Tablet A · CouchDB</span> <a href="http://localhost:8082" target="_blank" rel="noopener">localhost:8082</a></li>
+          <li><span class="who">Tablet B · PouchDB</span> <a href="http://localhost:8083" target="_blank" rel="noopener">localhost:8083</a></li>
         </ul>
       </div>
       <div class="card">
@@ -798,7 +801,7 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
         <ul class="url-list">
           <li><span class="who">Nodo central</span> <a href="http://localhost:5984/_utils" target="_blank" rel="noopener">:5984/_utils</a></li>
           <li><span class="who">Nodo tablet A</span> <a href="http://localhost:5985/_utils" target="_blank" rel="noopener">:5985/_utils</a></li>
-          <li><span class="who">Nodo tablet B</span> <a href="http://localhost:5986/_utils" target="_blank" rel="noopener">:5986/_utils</a></li>
+          <li><span class="who">Tablet B</span> <span style="font-family:var(--font-mono); font-size:12px; color:var(--ink-dim);">no tiene: es IndexedDB</span></li>
         </ul>
         <p style="font-size:12px; color:var(--ink-dim); font-family:var(--font-mono); margin-top:10px;">usuario admin · clave admin123</p>
       </div>

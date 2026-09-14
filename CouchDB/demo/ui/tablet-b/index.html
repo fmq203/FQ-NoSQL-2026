@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OSE Móvil — Tablet B</title>
+<title>OSE Móvil — Tablet B (PouchDB)</title>
 <style>
   :root{
     --bg:#eae6d9;
@@ -52,43 +52,46 @@
   button{font:inherit; cursor:pointer; border:none; border-radius:8px; padding:10px 14px; font-weight:600; font-size:13.5px;}
   .btn-primary{background:var(--accent); color:#fff8f3;}
   .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
-  .btn-sync{width:100%; background:var(--ok); color:#fff; display:flex; align-items:center; justify-content:center; gap:8px;}
-  .btn-sync:disabled{background:var(--line); color:var(--ink-dim); cursor:not-allowed;}
 
   .section-title{display:flex; justify-content:space-between; align-items:baseline; margin:0 0 8px;}
   .section-title h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); margin:0; font-weight:600;}
   .pending-count{font-family:var(--mono); font-size:11px; color:var(--warn);}
 
-  .list{display:flex; flex-direction:column; gap:7px; max-height:340px; overflow-y:auto; margin-bottom:14px;}
-  .card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .list{display:flex; flex-direction:column; gap:7px; max-height:320px; overflow-y:auto; margin-bottom:14px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; align-items:stretch; gap:8px;}
+  .card-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
   .card .meta{min-width:0;}
   .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
   .rev{background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; color:var(--ink-dim); cursor:help;}
   .rev.conf{border-color:var(--crit); color:var(--crit);}
   .card .desc{font-size:13.5px; font-weight:600; margin-top:1px;}
   .card .val{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); margin-top:1px;}
+  .badges{display:flex; flex-direction:column; gap:4px; align-items:flex-end;}
   .badge{font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px; white-space:nowrap; flex:none;}
   .badge.pend{background:var(--warn-tint); color:var(--warn);}
   .badge.sync{background:var(--ok-tint); color:var(--ok);}
   .badge.conf{background:var(--crit-tint); color:var(--crit);}
   .empty{font-size:12.5px; color:var(--ink-dim); text-align:center; padding:18px 0;}
 
-  .card{flex-direction:column; align-items:stretch;}
-  .card-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
-  .badges{display:flex; flex-direction:column; gap:4px; align-items:flex-end;}
-  .edit-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-decoration:underline; cursor:pointer; margin-top:4px; align-self:flex-start;}
-  .edit-row{display:flex; gap:6px; margin-top:8px;}
+  .edit-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-decoration:underline; cursor:pointer; align-self:flex-start;}
+  .edit-row{display:flex; gap:6px;}
   .edit-row input{flex:1;}
   .btn-mini{padding:6px 10px; font-size:11.5px; border-radius:6px;}
   .btn-mini.save{background:var(--ok); color:#fff;}
   .btn-mini.cancel{background:var(--line); color:var(--ink-dim);}
 
-  .btn-secondary{width:100%; background:var(--surface); color:var(--ink); border:1px solid var(--line); margin-top:8px;}
-  .btn-secondary:disabled{opacity:.4; cursor:not-allowed;}
+  .sync-panel{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:11px 13px;}
+  .sync-row{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11.5px;}
+  .sync-dot{width:8px; height:8px; border-radius:50%; background:var(--ink-dim); flex:none;}
+  .sync-panel[data-state="off"] .sync-dot{background:var(--warn);}
+  .sync-panel[data-state="active"] .sync-dot{background:var(--accent); animation:blink 1s infinite;}
+  .sync-panel[data-state="idle"] .sync-dot{background:var(--ok);}
+  .sync-panel[data-state="error"] .sync-dot{background:var(--crit);}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .sync-sub{font-size:10.5px; color:var(--ink-dim); font-family:var(--mono); margin-top:6px; line-height:1.5;}
 
-  .toast{font-size:12px; font-family:var(--mono); background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:9px 11px; color:var(--ink-dim); min-height:16px;}
-  .toast.ok{color:var(--ok); border-color:var(--ok);}
-  .toast.err{color:var(--accent); border-color:var(--accent);}
+  .storage{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; font-family:var(--mono); font-size:10px; color:var(--ink-dim);}
+  .reset-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--crit); text-decoration:underline; cursor:pointer;}
 
   #tip-float{
     position:fixed; z-index:9999; pointer-events:none;
@@ -98,6 +101,8 @@
     opacity:0; transform:translateY(2px); transition:opacity .12s ease, transform .12s ease;
   }
   #tip-float.show{opacity:1; transform:translateY(0);}
+
+  .fatal{background:var(--crit-tint); border:1px solid var(--crit); color:var(--crit); border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.5;}
 </style>
 </head>
 <body>
@@ -106,20 +111,22 @@
     <header>
       <div>
         <h1>OSE Móvil — B</h1>
-        <p>inspector: mgonzalez · nodo :5986</p>
+        <p>mgonzalez · PouchDB en el navegador</p>
       </div>
-      <div class="toggle" id="toggle">
+      <div class="toggle" id="toggle" data-tip="Prende y apaga db.sync(remoto, {live:true, retry:true})&#10;No afecta la escritura local: esa anda siempre">
         <span class="dot"></span>
         <span id="toggle-label">SIN CONEXIÓN</span>
       </div>
     </header>
+
+    <div id="fatal" class="fatal" style="display:none;"></div>
 
     <form id="form">
       <h2>Nueva lectura</h2>
       <div class="row">
         <div>
           <label for="medidor">Medidor</label>
-          <input id="medidor" placeholder="OSE-4471" required>
+          <input id="medidor" placeholder="OSE-6210" required>
         </div>
         <div>
           <label for="zona">Zona</label>
@@ -132,24 +139,31 @@
       </div>
       <div>
         <label for="valor">Valor (m³)</label>
-        <input id="valor" type="number" step="0.1" placeholder="18452.7" required>
+        <input id="valor" type="number" step="0.1" placeholder="12480.6" required>
       </div>
-      <button class="btn-primary" type="submit" data-tip="PUT /inspecciones/{id}&#10;Crea el documento en esta tablet, sin tocar el central">Guardar lectura (local)</button>
+      <button class="btn-primary" type="submit" data-tip="db.put({...})&#10;Escribe en el IndexedDB del navegador. No toca la red.">Guardar lectura (local)</button>
     </form>
 
     <div class="section-title">
-      <h2>Lecturas en esta tablet</h2>
-      <span class="pending-count" id="pending-count">— pendientes</span>
+      <h2>Lecturas en este dispositivo</h2>
+      <span class="pending-count" id="pending-count">—</span>
     </div>
     <div class="list" id="list"><p class="empty">Cargando…</p></div>
 
-    <button class="btn-sync" id="sync-btn" disabled data-tip="POST /_replicate&#10;source: esta tablet &#8594; target: central">Sincronizar con central</button>
-    <button class="btn-secondary" id="pull-btn" disabled data-tip="POST /_replicate&#10;source: central &#8594; target: esta tablet">↓ Traer cambios del central</button>
-    <div class="toast" id="toast" style="margin-top:10px;">Listo.</div>
+    <div class="sync-panel" id="sync-panel" data-state="off">
+      <div class="sync-row"><span class="sync-dot"></span><span id="sync-state">sin sincronizar</span></div>
+      <div class="sync-sub" id="sync-sub">Los cambios quedan en el dispositivo hasta que actives la conexión.</div>
+    </div>
+
+    <div class="storage">
+      <span id="storage-info">IndexedDB · base local "inspecciones"</span>
+      <button class="reset-link" id="reset-btn" data-tip="db.destroy() y vuelve a sembrar&#10;Sirve para dejar la demo como al principio">reiniciar datos locales</button>
+    </div>
   </div>
 
   <div id="tip-float"></div>
 
+<script src="pouchdb.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
   (function(){
@@ -178,46 +192,52 @@
     });
   })();
 
-  const API = 'http://localhost:5986';
-  const AUTH = 'Basic ' + btoa('admin:admin123');
-  const DB = '/inspecciones';
+  const REMOTA = 'http://admin:admin123@localhost:5984/inspecciones';
+
+  // Ruta de mgonzalez. Las dos primeras comparten _id con lecturas que ya
+  // cargó jperez en la tablet A: cuando las dos repliquen al central, esos
+  // documentos van a quedar en conflicto.
+  const SEMILLA = [
+    { _id:'lectura:2026-09-13:00238', type:'lectura_medidor', medidor_id:'OSE-3390', zona:'Florida-Norte',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:10:00-03:00', valor_m3:5087.4, sincronizado:false,
+      geo:{lat:-34.101, lon:-56.221} },
+    { _id:'lectura:2026-09-13:00235', type:'lectura_medidor', medidor_id:'OSE-4488', zona:'Canelones-Este',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:22:00-03:00', valor_m3:9265.0, sincronizado:false,
+      geo:{lat:-34.712, lon:-55.978} },
+    { _id:'lectura:2026-09-13:00301', type:'lectura_medidor', medidor_id:'OSE-6210', zona:'Canelones-Oeste',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:35:00-03:00', valor_m3:12480.6, sincronizado:false,
+      geo:{lat:-34.725, lon:-56.018} },
+    { _id:'lectura:2026-09-13:00302', type:'lectura_medidor', medidor_id:'OSE-6233', zona:'Florida-Norte',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:48:00-03:00', valor_m3:7710.2, sincronizado:false,
+      geo:{lat:-34.108, lon:-56.231} }
+  ];
 
   const device = document.getElementById('device');
   const toggle = document.getElementById('toggle');
   const toggleLabel = document.getElementById('toggle-label');
-  const syncBtn = document.getElementById('sync-btn');
-  const pullBtn = document.getElementById('pull-btn');
-  const toast = document.getElementById('toast');
   const list = document.getElementById('list');
   const pendingCount = document.getElementById('pending-count');
+  const syncPanel = document.getElementById('sync-panel');
+  const syncState = document.getElementById('sync-state');
+  const syncSub = document.getElementById('sync-sub');
+  const storageInfo = document.getElementById('storage-info');
+  const fatal = document.getElementById('fatal');
+
+  if(typeof PouchDB === 'undefined'){
+    fatal.style.display = 'block';
+    fatal.textContent = 'No se pudo cargar pouchdb.min.js. Verificá que el archivo esté junto a index.html en ui/tablet-b/.';
+    throw new Error('PouchDB no disponible');
+  }
+
+  let local = new PouchDB('inspecciones');
+  let syncHandler = null;
+  let changesHandler = null;
   let editingId = null;
-
-  function setToast(msg, kind){
-    toast.textContent = msg;
-    toast.className = 'toast' + (kind ? ' ' + kind : '');
-  }
-
-  function api(path, opts={}){
-    return fetch(API + path, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', 'Authorization': AUTH, ...(opts.headers||{}) }
-    });
-  }
-
-  let online = false;
-  function setOnline(v){
-    online = v;
-    device.dataset.online = v ? '1' : '0';
-    toggleLabel.textContent = v ? 'EN LÍNEA' : 'SIN CONEXIÓN';
-    syncBtn.disabled = !v;
-    pullBtn.disabled = !v;
-  }
-  toggle.addEventListener('click', () => setOnline(!online));
-
-  function fmtTime(iso){
-    const d = new Date(iso);
-    return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
-  }
+  let lastDocs = [];
+  let changedIds = [];
+  let prevRevs = {};
+  let firstLoad = true;
+  const yaMarcados = new Set();
 
   function shortRev(rev){
     if(!rev) return '—';
@@ -225,19 +245,31 @@
     return gen + '-' + hash.slice(0, 7);
   }
 
-  let lastDocs = [];
-  let changedIds = [];
-  let prevRevs = {};
-  let firstLoad = true;
+  function fmtTime(iso){
+    const d = new Date(iso);
+    return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function setSync(state, texto, sub){
+    syncPanel.dataset.state = state;
+    syncState.textContent = texto;
+    if(sub) syncSub.textContent = sub;
+  }
+
+  async function sembrarSiVacia(){
+    const info = await local.info();
+    if(info.doc_count > 0) return false;
+    await local.bulkDocs(SEMILLA);
+    return true;
+  }
 
   async function loadList(){
     if(editingId) return; // no pisar un formulario de edicion abierto
     try{
-      const res = await api(DB + '/_changes?include_docs=true&conflicts=true&style=all_docs');
-      const data = await res.json();
-      const docs = data.results
+      const res = await local.allDocs({ include_docs:true, conflicts:true });
+      const docs = res.rows
         .map(r => r.doc)
-        .filter(d => d && !d._deleted && d.type === 'lectura_medidor')
+        .filter(d => d && d.type === 'lectura_medidor')
         .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
       lastDocs = docs;
       changedIds = firstLoad ? [] : docs.filter(d => prevRevs[d._id] !== d._rev).map(d => d._id);
@@ -245,14 +277,14 @@
       firstLoad = false;
       render();
     }catch(e){
-      list.innerHTML = '<p class="empty">No se pudo conectar al nodo :5986.</p>';
+      list.innerHTML = '<p class="empty">Error leyendo la base local: ' + e.message + '</p>';
     }
   }
 
   function render(){
     const docs = lastDocs;
     if(!docs.length){
-      list.innerHTML = '<p class="empty">Todavía no cargaste lecturas.</p>';
+      list.innerHTML = '<p class="empty">No hay lecturas en este dispositivo.</p>';
     } else {
       list.innerHTML = docs.map(d => {
         const conflicted = d._conflicts && d._conflicts.length;
@@ -267,7 +299,7 @@
               </div>
               <div class="edit-row">
                 <input id="edit-input" type="number" step="0.1" value="${d.valor_m3}">
-                <button class="btn-mini save" data-save="${d._id}" data-tip="PUT /inspecciones/${d._id}\nActualiza el valor con la _rev actual (nueva revisión)">Guardar</button>
+                <button class="btn-mini save" data-save="${d._id}" data-tip="db.put({...doc, _rev})\nNueva revisión en IndexedDB">Guardar</button>
                 <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
               </div>
             </div>`;
@@ -292,34 +324,30 @@
     const pending = docs.filter(d => !d.sincronizado).length;
     pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes');
 
-    if(window.gsap && changedIds && changedIds.length){
+    if(window.gsap && changedIds.length){
       changedIds.forEach(id => {
         const el = list.querySelector(`[data-cardid="${CSS.escape(id)}"]`);
-        if(el) gsap.fromTo(el, { backgroundColor: '#dcece7' }, { backgroundColor: '#ffffff', duration: 1.1, ease: 'power1.out' });
+        if(el) gsap.fromTo(el, { backgroundColor:'#dcece7' }, { backgroundColor:'#ffffff', duration:1.1, ease:'power1.out' });
       });
     }
   }
 
   list.addEventListener('click', async (ev) => {
-    const editId = ev.target.dataset.edit;
-    const saveId = ev.target.dataset.save;
-    if(editId){ editingId = editId; render(); return; }
-    if(ev.target.dataset.cancel){ editingId = null; render(); return; }
-    if(saveId){
-      const input = document.getElementById('edit-input');
-      const valor = parseFloat(input.value);
-      const doc = lastDocs.find(d => d._id === saveId);
+    const t = ev.target;
+    if(t.dataset.edit){ editingId = t.dataset.edit; render(); return; }
+    if(t.dataset.cancel){ editingId = null; render(); return; }
+    if(t.dataset.save){
+      const id = t.dataset.save;
+      const valor = parseFloat(document.getElementById('edit-input').value);
+      const doc = lastDocs.find(d => d._id === id);
       if(!doc || Number.isNaN(valor)) return;
-      const clean = { ...doc };
-      delete clean._conflicts;
-      clean.valor_m3 = valor;
-      clean.sincronizado = false;
+      const limpio = { ...doc, valor_m3: valor, sincronizado: false };
+      delete limpio._conflicts;
       try{
-        const res = await api(DB + '/' + encodeURIComponent(saveId), { method: 'PUT', body: JSON.stringify(clean) });
-        if(!res.ok) throw new Error(await res.text());
-        setToast('Lectura ' + saveId + ' corregida localmente en la tablet.');
+        await local.put(limpio);
+        yaMarcados.delete(id);
       }catch(e){
-        setToast('Error al guardar: ' + e.message, 'err');
+        alert('No se pudo guardar: ' + e.message);
       }
       editingId = null;
       loadList();
@@ -333,95 +361,114 @@
     const valor = parseFloat(document.getElementById('valor').value);
     if(!medidor || Number.isNaN(valor)) return;
 
-    const now = new Date();
-    const id = 'lectura:' + now.toISOString().slice(0,10) + ':' + String(Date.now()).slice(-6);
-    const doc = {
-      _id: id,
-      type: 'lectura_medidor',
-      medidor_id: medidor,
-      zona,
-      inspector: 'mgonzalez',
-      fecha: now.toISOString(),
-      valor_m3: valor,
-      sincronizado: false,
-      geo: { lat: -34.7 + Math.random()*0.05, lon: -55.98 - Math.random()*0.05 }
-    };
-
+    const ahora = new Date();
+    const id = 'lectura:' + ahora.toISOString().slice(0,10) + ':' + String(Date.now()).slice(-6);
     try{
-      const res = await api(DB + '/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(doc) });
-      if(!res.ok) throw new Error(await res.text());
-      setToast('Lectura guardada localmente (' + (online ? 'aún sin sincronizar' : 'sin conexión') + ').');
+      await local.put({
+        _id: id,
+        type: 'lectura_medidor',
+        medidor_id: medidor,
+        zona,
+        inspector: 'mgonzalez',
+        fecha: ahora.toISOString(),
+        valor_m3: valor,
+        sincronizado: false,
+        geo: { lat: -34.1 + Math.random()*0.05, lon: -56.22 - Math.random()*0.05 }
+      });
       ev.target.reset();
       loadList();
     }catch(e){
-      setToast('Error al guardar: ' + e.message, 'err');
+      alert('No se pudo guardar: ' + e.message);
     }
   });
 
-  syncBtn.addEventListener('click', async () => {
-    if(!online) return;
-    setToast('Sincronizando con el central…');
-    syncBtn.disabled = true;
+  async function marcarSincronizados(ids){
+    const nuevos = ids.filter(id => !id.startsWith('_design') && !yaMarcados.has(id));
+    if(!nuevos.length) return;
+    nuevos.forEach(id => yaMarcados.add(id));
+    const res = await local.allDocs({ keys: nuevos, include_docs: true });
+    const updates = res.rows
+      .map(r => r.doc)
+      .filter(d => d && d.sincronizado === false)
+      .map(d => ({ ...d, sincronizado: true }));
+    if(updates.length) await local.bulkDocs(updates);
+  }
+
+  function startSync(){
+    setSync('active', 'conectando…', 'Replicación continua contra el central (:5984).');
+    syncHandler = local.sync(REMOTA, { live: true, retry: true })
+      .on('change', async info => {
+        if(info.direction === 'push'){
+          try{ await marcarSincronizados(info.change.docs.map(d => d._id)); }catch(e){}
+        }
+        setSync('active', 'sincronizando…');
+        loadList();
+      })
+      .on('paused', err => {
+        if(err) setSync('error', 'sin alcanzar el central', 'Reintentando sola. Los cambios siguen guardándose local.');
+        else setSync('idle', 'al día', 'Replicación continua activa: no hay botón que apretar.');
+        loadList();
+      })
+      .on('active', () => setSync('active', 'sincronizando…'))
+      .on('error', err => setSync('error', 'error de sincronización', String(err && err.message || err)));
+  }
+
+  function stopSync(){
+    if(syncHandler){ syncHandler.cancel(); syncHandler = null; }
+    setSync('off', 'sin sincronizar', 'Los cambios quedan en el dispositivo hasta que actives la conexión.');
+  }
+
+  let online = false;
+  function setOnline(v){
+    online = v;
+    device.dataset.online = v ? '1' : '0';
+    toggleLabel.textContent = v ? 'EN LÍNEA' : 'SIN CONEXIÓN';
+    if(v) startSync(); else stopSync();
+  }
+  toggle.addEventListener('click', () => setOnline(!online));
+
+  document.getElementById('reset-btn').addEventListener('click', async () => {
+    if(!confirm('Borra la base local de este navegador y vuelve a cargar la ruta de mgonzalez. ¿Seguir?')) return;
+    stopSync();
+    setOnline(false);
+    if(changesHandler) changesHandler.cancel();
+    await local.destroy();
+    local = new PouchDB('inspecciones');
+    yaMarcados.clear();
+    prevRevs = {};
+    firstLoad = true;
+    await sembrarSiVacia();
+    escucharCambios();
+    loadList();
+  });
+
+  function escucharCambios(){
+    changesHandler = local.changes({ since:'now', live:true })
+      .on('change', () => loadList());
+  }
+
+  async function mostrarAlmacenamiento(){
+    if(!navigator.storage || !navigator.storage.estimate) return;
     try{
-      const rep = await api('/_replicate', {
-        method: 'POST',
-        body: JSON.stringify({
-          source: 'http://admin:admin123@localhost:5984/inspecciones',
-          target: 'http://admin:admin123@couch-central:5984/inspecciones',
-          create_target: false
-        })
-      });
-      if(!rep.ok) throw new Error(await rep.text());
-      const repData = await rep.json();
-      const written = repData.history && repData.history[0] ? repData.history[0].docs_written : '?';
+      const est = await navigator.storage.estimate();
+      const usado = (est.usage / 1024).toFixed(0);
+      storageInfo.textContent = `IndexedDB · ${usado} KB usados`;
+    }catch(e){}
+  }
 
-      const all = await (await api(DB + '/_all_docs?include_docs=true')).json();
-      const pendingDocs = all.rows
-        .map(r => r.doc)
-        .filter(d => d && d.type === 'lectura_medidor' && d.sincronizado === false);
-
-      if(pendingDocs.length){
-        const updates = pendingDocs.map(d => ({ ...d, sincronizado: true }));
-        await api(DB + '/_bulk_docs', { method: 'POST', body: JSON.stringify({ docs: updates }) });
-      }
-
-      setToast('Sincronizado — ' + written + ' documentos enviados al central.', 'ok');
-      loadList();
-    }catch(e){
-      setToast('Error al sincronizar: ' + e.message, 'err');
-    } finally {
-      syncBtn.disabled = !online;
-    }
-  });
-
-  pullBtn.addEventListener('click', async () => {
-    if(!online) return;
-    setToast('Trayendo cambios del central…');
-    pullBtn.disabled = true;
+  (async function init(){
     try{
-      const rep = await api('/_replicate', {
-        method: 'POST',
-        body: JSON.stringify({
-          source: 'http://admin:admin123@couch-central:5984/inspecciones',
-          target: 'http://admin:admin123@localhost:5984/inspecciones',
-          create_target: false
-        })
-      });
-      if(!rep.ok) throw new Error(await rep.text());
-      const repData = await rep.json();
-      const written = repData.history && repData.history[0] ? repData.history[0].docs_written : '?';
-      setToast('Actualizado — ' + written + ' documentos recibidos del central.', 'ok');
-      loadList();
+      const sembrada = await sembrarSiVacia();
+      escucharCambios();
+      await loadList();
+      await mostrarAlmacenamiento();
+      stopSync();
+      if(sembrada) setSync('off', 'sin sincronizar', 'Ruta de mgonzalez cargada en este navegador. Nadie la vio todavía.');
     }catch(e){
-      setToast('Error al traer cambios: ' + e.message, 'err');
-    } finally {
-      pullBtn.disabled = !online;
+      fatal.style.display = 'block';
+      fatal.textContent = 'Error inicializando PouchDB: ' + e.message;
     }
-  });
-
-  setOnline(false);
-  loadList();
-  setInterval(loadList, 4000);
+  })();
 </script>
 </body>
 </html>

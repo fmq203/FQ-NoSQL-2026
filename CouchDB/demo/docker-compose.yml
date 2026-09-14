@@ -21,18 +21,9 @@ services:
     volumes:
       - tablet-data:/opt/couchdb/data
 
-  couch-tablet-b:
-    image: couchdb:3.5
-    container_name: ose-tablet-b
-    ports:
-      - "5986:5984"
-    environment:
-      COUCHDB_USER: admin
-      COUCHDB_PASSWORD: admin123
-    volumes:
-      - tablet-b-data:/opt/couchdb/data
+  # La tablet B no tiene contenedor: corre PouchDB dentro del navegador
+  # (ui/tablet-b), guardando en IndexedDB y replicando contra couch-central.
 
 volumes:
   central-data:
   tablet-data:
-  tablet-b-data:
