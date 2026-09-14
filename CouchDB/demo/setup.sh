@@ -20,6 +20,15 @@ for NODE in "$CENTRAL" "$TABLET"; do
   done
 done
 
+echo "Habilitando CORS en ambos nodos (para las UI web de central y tablet)..."
+for NODE in "$CENTRAL" "$TABLET"; do
+  curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/httpd/enable_cors" -d '"true"'
+  curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/origins" -d '"*"'
+  curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/credentials" -d '"false"'
+  curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/methods" -d '"GET, PUT, POST, HEAD, DELETE"'
+  curl -s -o /dev/null -X PUT "$NODE/_node/_local/_config/cors/headers" -d '"accept, authorization, content-type, origin, referer"'
+done
+
 echo "Creando base 'inspecciones' en central y en tablet..."
 curl -s -X PUT "$CENTRAL/inspecciones" >/dev/null
 curl -s -X PUT "$TABLET/inspecciones" >/dev/null
