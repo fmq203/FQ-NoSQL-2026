@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSE Móvil — Tablet</title>
+<style>
+  :root{
+    --bg:#eae6d9;
+    --device:#f2f0e7;
+    --surface:#ffffff;
+    --ink:#1d1b15;
+    --ink-dim:#5c5748;
+    --accent:#c53a1f;
+    --accent-tint:#f6e2d7;
+    --ok:#2c6e63;
+    --ok-tint:#dcece7;
+    --warn:#b8781a;
+    --warn-tint:#f5e7cf;
+    --line:#ddd6c2;
+    --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); display:flex; justify-content:center; padding:28px 14px;}
+
+  .device{
+    width:100%; max-width:420px; background:var(--device);
+    border:1px solid var(--line); border-radius:26px;
+    padding:18px 18px 22px; box-shadow:0 20px 40px -24px rgba(0,0,0,.35);
+  }
+  .cam{width:8px; height:8px; border-radius:50%; background:var(--line); margin:0 auto 14px;}
+
+  header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;}
+  header h1{font-size:17px; margin:0 0 2px; font-weight:700;}
+  header p{margin:0; font-size:11.5px; color:var(--ink-dim); font-family:var(--mono);}
+
+  .toggle{display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 10px 6px 6px; cursor:pointer; user-select:none;}
+  .dot{width:9px; height:9px; border-radius:50%; background:#b23a2f; flex:none; transition:background .2s;}
+  .device[data-online="1"] .dot{background:var(--ok);}
+  .toggle span{font-size:11.5px; font-weight:600; font-family:var(--mono);}
+
+  form{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:9px; margin-bottom:14px;}
+  form h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); margin:0 0 2px; font-weight:600;}
+  .row{display:flex; gap:8px;}
+  .row > *{flex:1;}
+  label{font-size:10.5px; color:var(--ink-dim); font-family:var(--mono); display:block; margin-bottom:3px;}
+  input, select{width:100%; font:inherit; font-size:13.5px; padding:8px 9px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink);}
+  input:focus, select:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  button{font:inherit; cursor:pointer; border:none; border-radius:8px; padding:10px 14px; font-weight:600; font-size:13.5px;}
+  .btn-primary{background:var(--accent); color:#fff8f3;}
+  .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
+  .btn-sync{width:100%; background:var(--ok); color:#fff; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .btn-sync:disabled{background:var(--line); color:var(--ink-dim); cursor:not-allowed;}
+
+  .section-title{display:flex; justify-content:space-between; align-items:baseline; margin:0 0 8px;}
+  .section-title h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); margin:0; font-weight:600;}
+  .pending-count{font-family:var(--mono); font-size:11px; color:var(--warn);}
+
+  .list{display:flex; flex-direction:column; gap:7px; max-height:340px; overflow-y:auto; margin-bottom:14px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .card .meta{min-width:0;}
+  .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim);}
+  .card .desc{font-size:13.5px; font-weight:600; margin-top:1px;}
+  .card .val{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); margin-top:1px;}
+  .badge{font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px; white-space:nowrap; flex:none;}
+  .badge.pend{background:var(--warn-tint); color:var(--warn);}
+  .badge.sync{background:var(--ok-tint); color:var(--ok);}
+  .empty{font-size:12.5px; color:var(--ink-dim); text-align:center; padding:18px 0;}
+
+  .toast{font-size:12px; font-family:var(--mono); background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:9px 11px; color:var(--ink-dim); min-height:16px;}
+  .toast.ok{color:var(--ok); border-color:var(--ok);}
+  .toast.err{color:var(--accent); border-color:var(--accent);}
+</style>
+</head>
+<body>
+  <div class="device" id="device" data-online="0">
+    <div class="cam"></div>
+    <header>
+      <div>
+        <h1>OSE Móvil</h1>
+        <p>inspector: jperez · nodo :5985</p>
+      </div>
+      <div class="toggle" id="toggle">
+        <span class="dot"></span>
+        <span id="toggle-label">SIN CONEXIÓN</span>
+      </div>
+    </header>
+
+    <form id="form">
+      <h2>Nueva lectura</h2>
+      <div class="row">
+        <div>
+          <label for="medidor">Medidor</label>
+          <input id="medidor" placeholder="OSE-4471" required>
+        </div>
+        <div>
+          <label for="zona">Zona</label>
+          <select id="zona">
+            <option>Canelones-Este</option>
+            <option>Canelones-Oeste</option>
+            <option>Florida-Norte</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="valor">Valor (m³)</label>
+        <input id="valor" type="number" step="0.1" placeholder="18452.7" required>
+      </div>
+      <button class="btn-primary" type="submit">Guardar lectura (local)</button>
+    </form>
+
+    <div class="section-title">
+      <h2>Lecturas en esta tablet</h2>
+      <span class="pending-count" id="pending-count">— pendientes</span>
+    </div>
+    <div class="list" id="list"><p class="empty">Cargando…</p></div>
+
+    <button class="btn-sync" id="sync-btn" disabled>Sincronizar con central</button>
+    <div class="toast" id="toast" style="margin-top:10px;">Listo.</div>
+  </div>
+
+<script>
+  const API = 'http://localhost:5985';
+  const AUTH = 'Basic ' + btoa('admin:admin123');
+  const DB = '/inspecciones';
+
+  const device = document.getElementById('device');
+  const toggle = document.getElementById('toggle');
+  const toggleLabel = document.getElementById('toggle-label');
+  const syncBtn = document.getElementById('sync-btn');
+  const toast = document.getElementById('toast');
+  const list = document.getElementById('list');
+  const pendingCount = document.getElementById('pending-count');
+
+  function setToast(msg, kind){
+    toast.textContent = msg;
+    toast.className = 'toast' + (kind ? ' ' + kind : '');
+  }
+
+  function api(path, opts={}){
+    return fetch(API + path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', 'Authorization': AUTH, ...(opts.headers||{}) }
+    });
+  }
+
+  let online = false;
+  function setOnline(v){
+    online = v;
+    device.dataset.online = v ? '1' : '0';
+    toggleLabel.textContent = v ? 'EN LÍNEA' : 'SIN CONEXIÓN';
+    syncBtn.disabled = !v;
+  }
+  toggle.addEventListener('click', () => setOnline(!online));
+
+  function fmtTime(iso){
+    const d = new Date(iso);
+    return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  async function loadList(){
+    try{
+      const res = await api(DB + '/_all_docs?include_docs=true');
+      const data = await res.json();
+      const docs = data.rows
+        .map(r => r.doc)
+        .filter(d => d && d.type === 'lectura_medidor')
+        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+
+      if(!docs.length){
+        list.innerHTML = '<p class="empty">Todavía no cargaste lecturas.</p>';
+      } else {
+        list.innerHTML = docs.map(d => `
+          <div class="card">
+            <div class="meta">
+              <div class="id">${d._id}</div>
+              <div class="desc">${d.medidor_id} · ${d.zona}</div>
+              <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
+            </div>
+            <span class="badge ${d.sincronizado ? 'sync' : 'pend'}">${d.sincronizado ? 'sincronizada' : 'pendiente'}</span>
+          </div>
+        `).join('');
+      }
+      const pending = docs.filter(d => !d.sincronizado).length;
+      pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes');
+    }catch(e){
+      list.innerHTML = '<p class="empty">No se pudo conectar al nodo :5985.</p>';
+    }
+  }
+
+  document.getElementById('form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const medidor = document.getElementById('medidor').value.trim();
+    const zona = document.getElementById('zona').value;
+    const valor = parseFloat(document.getElementById('valor').value);
+    if(!medidor || Number.isNaN(valor)) return;
+
+    const now = new Date();
+    const id = 'lectura:' + now.toISOString().slice(0,10) + ':' + String(Date.now()).slice(-6);
+    const doc = {
+      _id: id,
+      type: 'lectura_medidor',
+      medidor_id: medidor,
+      zona,
+      inspector: 'jperez',
+      fecha: now.toISOString(),
+      valor_m3: valor,
+      sincronizado: false,
+      geo: { lat: -34.7 + Math.random()*0.05, lon: -55.98 - Math.random()*0.05 }
+    };
+
+    try{
+      const res = await api(DB + '/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(doc) });
+      if(!res.ok) throw new Error(await res.text());
+      setToast('Lectura guardada localmente (' + (online ? 'aún sin sincronizar' : 'sin conexión') + ').');
+      ev.target.reset();
+      loadList();
+    }catch(e){
+      setToast('Error al guardar: ' + e.message, 'err');
+    }
+  });
+
+  syncBtn.addEventListener('click', async () => {
+    if(!online) return;
+    setToast('Sincronizando con el central…');
+    syncBtn.disabled = true;
+    try{
+      const rep = await api('/_replicate', {
+        method: 'POST',
+        body: JSON.stringify({
+          source: 'http://admin:admin123@localhost:5984/inspecciones',
+          target: 'http://admin:admin123@couch-central:5984/inspecciones',
+          create_target: false
+        })
+      });
+      if(!rep.ok) throw new Error(await rep.text());
+      const repData = await rep.json();
+      const written = repData.history && repData.history[0] ? repData.history[0].docs_written : '?';
+
+      const all = await (await api(DB + '/_all_docs?include_docs=true')).json();
+      const pendingDocs = all.rows
+        .map(r => r.doc)
+        .filter(d => d && d.type === 'lectura_medidor' && d.sincronizado === false);
+
+      if(pendingDocs.length){
+        const updates = pendingDocs.map(d => ({ ...d, sincronizado: true }));
+        await api(DB + '/_bulk_docs', { method: 'POST', body: JSON.stringify({ docs: updates }) });
+      }
+
+      setToast('Sincronizado — ' + written + ' documentos enviados al central.', 'ok');
+      loadList();
+    }catch(e){
+      setToast('Error al sincronizar: ' + e.message, 'err');
+    } finally {
+      syncBtn.disabled = !online;
+    }
+  });
+
+  setOnline(false);
+  loadList();
+  setInterval(loadList, 4000);
+</script>
+</body>
+</html>
