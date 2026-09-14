@@ -126,6 +126,12 @@
   @media (max-width:640px){ .demo-steps{grid-template-columns:1fr;} }
   .demo-steps li{display:flex; gap:10px; align-items:flex-start; font-size:14px; line-height:1.5;}
   .step-n{font-family:var(--font-mono); font-size:11px; color:var(--accent); background:var(--accent-tint); border-radius:5px; padding:2px 7px; flex:none; margin-top:2px;}
+
+  .url-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
+  .url-list li{display:flex; justify-content:space-between; align-items:baseline; gap:14px; font-size:13.5px;}
+  .url-list .who{color:var(--ink-dim);}
+  .url-list a{font-family:var(--font-mono); font-size:12px; color:var(--accent); text-decoration:none; border-bottom:1px solid var(--accent-tint); white-space:nowrap;}
+  .url-list a:hover{border-bottom-color:var(--accent);}
   .slide h2{font-size:clamp(22px,3vw,30px); font-weight:700; letter-spacing:-.01em; margin-bottom:6px;}
   .dek{color:var(--ink-dim); font-size:15px; max-width:62ch; margin-bottom:6px;}
 
@@ -771,6 +777,26 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
       </svg>
       <figcaption>Las tres interfaces son HTML plano y hablan directo con la API HTTP de <i>su propio</i> nodo. La replicación, en cambio, es servidor a servidor: la ejecuta CouchDB entre contenedores, sin pasar por el navegador — por eso una tablet puede sincronizar aunque su pantalla esté cerrada.</figcaption>
     </figure>
+
+    <div class="cols">
+      <div class="card">
+        <h3>Interfaces de la demo</h3>
+        <ul class="url-list">
+          <li><span class="who">Panel central</span> <a href="http://localhost:8081" target="_blank" rel="noopener">localhost:8081</a></li>
+          <li><span class="who">Tablet A · jperez</span> <a href="http://localhost:8082" target="_blank" rel="noopener">localhost:8082</a></li>
+          <li><span class="who">Tablet B · mgonzalez</span> <a href="http://localhost:8083" target="_blank" rel="noopener">localhost:8083</a></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Fauxton · admin de CouchDB</h3>
+        <ul class="url-list">
+          <li><span class="who">Nodo central</span> <a href="http://localhost:5984/_utils" target="_blank" rel="noopener">:5984/_utils</a></li>
+          <li><span class="who">Nodo tablet A</span> <a href="http://localhost:5985/_utils" target="_blank" rel="noopener">:5985/_utils</a></li>
+          <li><span class="who">Nodo tablet B</span> <a href="http://localhost:5986/_utils" target="_blank" rel="noopener">:5986/_utils</a></li>
+        </ul>
+        <p style="font-size:12px; color:var(--ink-dim); font-family:var(--font-mono); margin-top:10px;">usuario admin · clave admin123</p>
+      </div>
+    </div>
   </section>
 
   <!-- S16 CUANDO USARLA -->
@@ -806,9 +832,9 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
       <div><span class="eyebrow">Cierre</span><h2>Opinión personal</h2><p class="dek">Qué me convenció y qué no, después de investigar la tecnología y de armar la demo con tres nodos reales.</p></div>
       <div class="slide-num">17 / 18</div>
     </div>
-    <p style="font-size:15px; line-height:1.7; max-width:64ch;">Lo que más me convence de CouchDB es que resuelve un problema muy específico con una elegancia real: el protocolo de replicación multi‑maestro y el diseño offline‑first no son un agregado tardío, sino la razón de ser del proyecto desde 2005. Que la única API sea HTTP/JSON también baja mucho la barrera de entrada — se puede prototipar con <code class="inline">curl</code> sin instalar ningún driver.</p>
-    <p style="font-size:15px; line-height:1.7; max-width:64ch; margin-top:12px;">Como contrapartida, el ecosistema y la comunidad son bastante más chicos que los de MongoDB, hay menos opciones de nube gestionada fuera de Cloudant, y administrar un clúster (shards, factor de replicación, quorum) tiene una curva de aprendizaje que un proyecto chico puede no necesitar nunca. Las vistas MapReduce, aunque potentes, me resultaron más rígidas de escribir que un pipeline de agregación moderno.</p>
-    <p style="font-size:15px; line-height:1.7; max-width:64ch; margin-top:12px;"><b>Conclusión:</b> no es la base de datos "por defecto" para cualquier proyecto, pero para el caso puntual de sincronización offline entre dispositivos y servidor, es difícil encontrar algo tan directo.</p>
+    <p style="font-size:15px; line-height:1.7; max-width:64ch;">Lo que más me gustó de CouchDB es que hace una cosa sola y la hace bien. La replicación multi‑maestro y el trabajo offline no son algo que le agregaron después, es para lo que nació el proyecto en 2005 y se nota. Armando la demo me llamó la atención lo poco que hay que pelearse con la herramienta: no instalé ningún driver, hice todo con <code class="inline">curl</code> y con <code class="inline">fetch</code> desde una página HTML común.</p>
+    <p style="font-size:15px; line-height:1.7; max-width:64ch; margin-top:12px;">Lo que no me cerró tanto: la comunidad es bastante más chica que la de MongoDB, y fuera de Cloudant casi no hay opciones de nube gestionada, así que si mañana querés delegar la infraestructura tenés poco de dónde agarrarte. Las vistas MapReduce me costaron más de lo que esperaba, porque hay que pensar la consulta antes de escribir el modelo y eso se siente raro viniendo de SQL. Y todo el tema de shards y quorum es una curva que un proyecto chico capaz nunca necesita subir.</p>
+    <p style="font-size:15px; line-height:1.7; max-width:64ch; margin-top:12px;"><b>¿La usaría?</b> Para un CRM o una app de ventas común, no, me iría a algo más convencional. Pero para el caso de la demo, gente en la calle cargando datos sin señal y sincronizando cuando puede, no encontré nada que lo resuelva tan directo. Ese es el nicho donde CouchDB no tiene mucha competencia.</p>
   </section>
 
   <!-- S18 CIERRE -->
