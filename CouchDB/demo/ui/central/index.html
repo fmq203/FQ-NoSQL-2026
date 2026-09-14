@@ -55,7 +55,10 @@
   .list{display:flex; flex-direction:column; gap:7px; max-height:420px; overflow-y:auto;}
   .card{background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; align-items:stretch; gap:8px;}
   .card-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
-  .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim);}
+  .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .rev{background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; color:var(--ink-dim); cursor:help;}
+  .rev.win{border-color:var(--ok); color:var(--ok);}
+  .rev.lose{border-color:var(--crit); color:var(--crit);}
   .card .desc{font-size:13.5px; font-weight:600; margin-top:1px;}
   .card .val{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); margin-top:1px;}
   .badges{display:flex; flex-direction:column; gap:4px; align-items:flex-end;}
@@ -174,6 +177,12 @@
     return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
   }
 
+  function shortRev(rev){
+    if(!rev) return '—';
+    const [gen, hash] = rev.split('-');
+    return gen + '-' + hash.slice(0, 7);
+  }
+
   let lastDocs = [];
   let openId = null;      // _id del doc con un panel abierto (editar o resolver)
   let openMode = null;    // 'edit' | 'resolve'
@@ -199,7 +208,9 @@
     const top = `
       <div class="card-top">
         <div>
-          <div class="id">${d._id}</div>
+          <div class="id">${d._id}
+            <span class="rev ${conflicted ? 'win' : ''}" data-tip="_rev completo (la revisión que devuelve la app hoy):\n${d._rev}">rev ${shortRev(d._rev)}</span>
+          </div>
           <div class="desc">${d.medidor_id} · ${d.zona}</div>
           <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
         </div>
@@ -223,11 +234,11 @@
       const body = losing ? `
         <div class="conflict-panel">
           <div class="conflict-opt">
-            <div><div class="label">actual (central)</div><div class="value">${d.valor_m3} m³</div></div>
+            <div><div class="label">actual (central) · <span class="rev win" data-tip="_rev completo:\n${d._rev}">${shortRev(d._rev)}</span></div><div class="value">${d.valor_m3} m³</div></div>
             <button class="btn-keep" data-keep="central" data-id="${d._id}" data-tip="DELETE /inspecciones/${d._id}?rev=${d._conflicts[0]}\nDescarta la revisión perdedora, no toca la actual">Mantener este</button>
           </div>
           <div class="conflict-opt">
-            <div><div class="label">en conflicto (llegó de la tablet)</div><div class="value">${losing.valor_m3} m³</div></div>
+            <div><div class="label">en conflicto (llegó de la tablet) · <span class="rev lose" data-tip="_rev completo:\n${d._conflicts[0]}">${shortRev(d._conflicts[0])}</span></div><div class="value">${losing.valor_m3} m³</div></div>
             <button class="btn-keep" data-keep="tablet" data-id="${d._id}" data-tip="PUT /inspecciones/${d._id}\n+ DELETE ...?rev=${d._conflicts[0]}\nReemplaza el valor y cierra el conflicto">Usar este</button>
           </div>
           <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
