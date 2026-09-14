@@ -1,0 +1,70 @@
+{
+  "docs": [
+    {
+      "_id": "lectura:2026-09-13:00234",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-4471",
+      "zona": "Canelones-Este",
+      "inspector": "jperez",
+      "fecha": "2026-09-13T14:32:00-03:00",
+      "valor_m3": 18452.7,
+      "sincronizado": false,
+      "geo": { "lat": -34.708, "lon": -55.982 }
+    },
+    {
+      "_id": "lectura:2026-09-13:00235",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-4488",
+      "zona": "Canelones-Este",
+      "inspector": "jperez",
+      "fecha": "2026-09-13T14:47:00-03:00",
+      "valor_m3": 9310.2,
+      "sincronizado": false,
+      "geo": { "lat": -34.711, "lon": -55.979 }
+    },
+    {
+      "_id": "lectura:2026-09-13:00236",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-5102",
+      "zona": "Canelones-Oeste",
+      "inspector": "jperez",
+      "fecha": "2026-09-13T15:05:00-03:00",
+      "valor_m3": 22110.0,
+      "sincronizado": false,
+      "geo": { "lat": -34.72, "lon": -56.01 }
+    },
+    {
+      "_id": "lectura:2026-09-13:00237",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-5119",
+      "zona": "Canelones-Oeste",
+      "inspector": "jperez",
+      "fecha": "2026-09-13T15:21:00-03:00",
+      "valor_m3": 16720.4,
+      "sincronizado": false,
+      "geo": { "lat": -34.723, "lon": -56.014 }
+    },
+    {
+      "_id": "lectura:2026-09-13:00238",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-3390",
+      "zona": "Florida-Norte",
+      "inspector": "jperez",
+      "fecha": "2026-09-13T15:44:00-03:00",
+      "valor_m3": 5023.9,
+      "sincronizado": false,
+      "geo": { "lat": -34.1, "lon": -56.22 }
+    },
+    {
+      "_id": "lectura:2026-09-13:00239",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-3401",
+      "zona": "Florida-Norte",
+      "inspector": "jperez",
+      "fecha": "2026-09-13T16:02:00-03:00",
+      "valor_m3": 15890.5,
+      "sincronizado": false,
+      "geo": { "lat": -34.104, "lon": -56.225 }
+    }
+  ]
+}
