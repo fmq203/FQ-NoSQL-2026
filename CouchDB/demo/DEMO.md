@@ -11,7 +11,13 @@ Lo interesante es que **las dos tablets no son iguales**:
 | Qué corre | CouchDB completo en Docker | **PouchDB en el navegador** |
 | Dónde guarda | volumen del contenedor | IndexedDB del navegador |
 | Cómo sincroniza | botón → `POST /_replicate` | `db.sync(..., {live:true})`, sola |
+| Qué muestra | todo lo que tenga su nodo | solo las lecturas de mgonzalez |
 | Se puede manejar por terminal | sí | no, vive en el navegador |
+
+La tablet B usa **replicación filtrada**: sube todo lo que genera, pero
+solo baja lo suyo (`pull: {selector: {inspector: 'mgonzalez'}}`). Un
+inspector no necesita la ruta de los demás en su dispositivo — el
+consolidado de todos se ve en el panel central.
 
 Para el central las dos son lo mismo: habla el mismo protocolo de
 replicación con ambas y no las distingue. Esa es justamente la gracia.
@@ -96,13 +102,18 @@ toca a la tablet B**: sus datos viven en el IndexedDB del navegador. Para
 dejarla como al principio usá el link **"reiniciar datos locales"** abajo de
 todo en http://localhost:8083 (hace `db.destroy()` y vuelve a sembrar).
 
-Reset completo:
+Reset completo, en el orden correcto:
 ```
-./stop-ui.sh
-docker compose down -v
-docker compose up -d && ./setup.sh && ./serve-ui.sh
-# y en http://localhost:8083 → "reiniciar datos locales"
+./reset.sh
 ```
+y después, el paso que el script no puede hacer por vos: abrir
+http://localhost:8083 y apretar **"reiniciar datos locales"**.
+
+> **Por qué importa.** Si reseteás los contenedores pero dejás la pestaña de
+> la tablet B con datos viejos, PouchDB no sabe que el central se borró:
+> vuelve a subir sus revisiones y el central termina con revisiones raíz
+> duplicadas, o sea conflictos que no son parte del guion. Pasa de verdad,
+> no es teórico.
 
 ## Solo terminal
 

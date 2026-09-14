@@ -114,7 +114,7 @@
         <h1>OSE Móvil — B</h1>
         <p>mgonzalez · PouchDB en el navegador</p>
       </div>
-      <div class="toggle" id="toggle" data-tip="Prende y apaga db.sync(remoto, {live:true, retry:true})&#10;No afecta la escritura local: esa anda siempre">
+      <div class="toggle" id="toggle" data-tip="db.sync(remoto, {live:true, retry:true,&#10;  pull:{selector:{inspector:'mgonzalez'}}})&#10;Solo baja lo propio. La escritura local anda siempre.">
         <span class="dot"></span>
         <span id="toggle-label">SIN CONEXIÓN</span>
       </div>
@@ -419,8 +419,16 @@
   }
 
   function startSync(){
-    setSync('active', 'conectando…', 'Replicación continua contra el central (:5984).');
-    syncHandler = local.sync(REMOTA_URL, { ...REMOTA_OPTS, live: true, retry: true })
+    setSync('active', 'conectando…', 'Replicación continua contra el central (:5984), filtrada: solo baja las lecturas de mgonzalez.');
+    // Subimos todo lo que generamos, pero bajamos SOLO las lecturas de
+    // mgonzalez: un inspector no necesita la ruta de los demás en su
+    // dispositivo. El consolidado de todos vive en el central.
+    syncHandler = local.sync(REMOTA_URL, {
+        ...REMOTA_OPTS,
+        live: true,
+        retry: true,
+        pull: { selector: { inspector: INSPECTOR } }
+      })
       .on('change', () => { setSync('active', 'sincronizando…'); loadList(); })
       .on('active', () => setSync('active', 'sincronizando…'))
       .on('paused', async err => {
