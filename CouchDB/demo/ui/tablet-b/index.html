@@ -62,7 +62,9 @@
   .list{display:flex; flex-direction:column; gap:7px; max-height:340px; overflow-y:auto; margin-bottom:14px;}
   .card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;}
   .card .meta{min-width:0;}
-  .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim);}
+  .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .rev{background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; color:var(--ink-dim); cursor:help;}
+  .rev.conf{border-color:var(--crit); color:var(--crit);}
   .card .desc{font-size:13.5px; font-weight:600; margin-top:1px;}
   .card .val{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); margin-top:1px;}
   .badge{font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px; white-space:nowrap; flex:none;}
@@ -217,6 +219,12 @@
     return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
   }
 
+  function shortRev(rev){
+    if(!rev) return '—';
+    const [gen, hash] = rev.split('-');
+    return gen + '-' + hash.slice(0, 7);
+  }
+
   let lastDocs = [];
   let changedIds = [];
   let prevRevs = {};
@@ -253,7 +261,7 @@
             <div class="card" data-cardid="${d._id}">
               <div class="card-top">
                 <div class="meta">
-                  <div class="id">${d._id}</div>
+                  <div class="id">${d._id} <span class="rev" data-tip="_rev completo:\n${d._rev}">rev ${shortRev(d._rev)}</span></div>
                   <div class="desc">${d.medidor_id} · ${d.zona}</div>
                 </div>
               </div>
@@ -268,7 +276,7 @@
           <div class="card" data-cardid="${d._id}">
             <div class="card-top">
               <div class="meta">
-                <div class="id">${d._id}</div>
+                <div class="id">${d._id} <span class="rev ${conflicted ? 'conf' : ''}" data-tip="_rev completo:\n${d._rev}">rev ${shortRev(d._rev)}</span></div>
                 <div class="desc">${d.medidor_id} · ${d.zona}</div>
                 <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
               </div>
