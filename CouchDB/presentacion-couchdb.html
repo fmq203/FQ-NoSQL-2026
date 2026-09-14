@@ -729,10 +729,11 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
     <ol class="demo-steps">
       <li><span class="step-n">01</span><div><b>Escritura sin conexión.</b> Una lectura nueva se guarda en la tablet aunque el central esté inalcanzable.</div></li>
       <li><span class="step-n">02</span><div><b>Dos clientes distintos.</b> Una tablet es un nodo CouchDB y la otra es PouchDB en el navegador. El central replica con las dos igual.</div></li>
-      <li><span class="step-n">03</span><div><b>Vista MapReduce.</b> Los m³ por zona salen de la vista <code class="inline">por_zona</code> con <code class="inline">reduce: _stats</code>.</div></li>
-      <li><span class="step-n">04</span><div><b>Consulta Mango.</b> Filtro por zona y mínimo de m³, usando el índice creado en el setup.</div></li>
-      <li><span class="step-n">05</span><div><b>Conflicto multi‑maestro.</b> Dos inspectores midieron el mismo medidor sin verse: ninguna versión se pierde.</div></li>
-      <li><span class="step-n">06</span><div><b>Resolución.</b> La aplicación elige cuál vale y borra la revisión perdedora — ahí se cierra el conflicto.</div></li>
+      <li><span class="step-n">03</span><div><b>Replicación filtrada.</b> Cada inspector solo baja sus propias lecturas; el consolidado de todos vive en el central.</div></li>
+      <li><span class="step-n">04</span><div><b>Vista MapReduce.</b> Los m³ por zona salen de la vista <code class="inline">por_zona</code> con <code class="inline">reduce: _stats</code>.</div></li>
+      <li><span class="step-n">05</span><div><b>Consulta Mango.</b> Filtro por zona y mínimo de m³, usando el índice creado en el setup.</div></li>
+      <li><span class="step-n">06</span><div><b>Conflicto multi‑maestro.</b> Dos inspectores midieron el mismo medidor sin verse: ninguna versión se pierde.</div></li>
+      <li><span class="step-n">07</span><div><b>Resolución.</b> La aplicación elige cuál vale y borra la revisión perdedora — ahí se cierra el conflicto.</div></li>
     </ol>
 
     <figure>
