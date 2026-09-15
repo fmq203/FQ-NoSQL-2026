@@ -34,7 +34,8 @@ Sin eso, la tablet B todavia tiene en IndexedDB las lecturas de la corrida
 anterior y al sincronizar las reenvia, generando conflictos que no son
 parte del guion.
 
-  UI Central  -> http://localhost:8081
+  UI Central  -> http://localhost:8081   (elegis contra que master operar)
   UI Tablet A -> http://localhost:8082
   UI Tablet B -> http://localhost:8083
+  Monitor     -> http://localhost:8084   (estado de todos los nodos)
 TXT
