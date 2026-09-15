@@ -72,6 +72,27 @@
   p{margin:0; line-height:1.6;}
   a{color:inherit;}
 
+  #navctl{
+    position:fixed; right:22px; bottom:22px; z-index:55;
+    display:flex; align-items:center; gap:2px;
+    background:var(--surface); border:1px solid var(--line); border-radius:999px;
+    box-shadow:var(--shadow); padding:5px 6px;
+  }
+  #navctl button{
+    width:34px; height:34px; border-radius:50%; border:none; cursor:pointer;
+    background:transparent; color:var(--ink); font-size:17px; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #navctl button:hover:not(:disabled){background:var(--accent-tint); color:var(--accent);}
+  #navctl button:disabled{opacity:.25; cursor:default;}
+  #navctl button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  #navctl .pos{
+    font-family:var(--font-mono); font-size:11.5px; color:var(--ink-dim);
+    min-width:52px; text-align:center; font-variant-numeric:tabular-nums; user-select:none;
+  }
+  @media (max-width:900px){ #navctl{right:12px; bottom:12px;} }
+  @media print{ #navctl, #nav, #progress{display:none;} }
+
   #progress{position:fixed; top:0; left:0; height:3px; background:var(--accent); z-index:60; width:0%; transition:width .1s linear;}
 
   /* ---------- Nav ---------- */
@@ -387,6 +408,26 @@
       <li><b>Documentos pequeños y de responsabilidad única</b> reducen la probabilidad de conflicto cuando hay escritura multi‑maestro, y facilitan el merge manual si igual ocurre.</li>
       <li><b><code class="inline">_design</code> documents</b> agrupan vistas, filtros de replicación y reglas de validación (<code class="inline">validate_doc_update</code>): en la práctica, son "el esquema" de la base.</li>
     </ul>
+
+    <div class="cols">
+      <div class="code" style="margin:0;">
+        <div class="bar">_design/lecturas · validate_doc_update</div>
+        <pre><code><span class="p">function</span>(newDoc, oldDoc, userCtx) {
+  <span class="p">if</span> (newDoc.type !== <span class="s">'lectura_medidor'</span>) <span class="p">return</span>;
+
+  <span class="p">if</span> (!newDoc.medidor_id)
+    <span class="p">throw</span>({<span class="k">forbidden</span>: <span class="s">'falta medidor_id'</span>});
+
+  <span class="p">if</span> (oldDoc && newDoc.valor_m3 &lt; oldDoc.valor_m3)
+    <span class="p">throw</span>({<span class="k">forbidden</span>: <span class="s">'un medidor no retrocede'</span>});
+}</code></pre>
+      </div>
+      <div class="card">
+        <h3>Validación del lado del servidor</h3>
+        <p style="font-size:13.5px;">Esta función corre en CouchDB en <b>cada escritura</b>, venga del cliente o de una replicación. Si lanza <code class="inline">forbidden</code>, el documento no entra. Es el equivalente a un <i>constraint</i>: no depende de que la app se porte bien.</p>
+        <p style="font-size:13.5px; margin-top:8px;"><b>Ojo con un detalle:</b> cuando una rama en conflicto llega por replicación, <code class="inline">oldDoc</code> viene vacío, así que la regla de "no retrocede" no se dispara. La validación cuida las escrituras; las divergencias las arregla la resolución de conflictos. Son dos cosas distintas.</p>
+      </div>
+    </div>
   </section>
 
   <!-- S6 EJEMPLO FICTICIO -->
@@ -488,6 +529,10 @@
           <p style="font-size:13.5px;">Consultas declarativas por JSON, estilo MongoDB, sin escribir funciones. Requiere un índice (<code class="inline">_index</code>) sobre los campos que se filtran, o recorre la base entera. <code class="inline">_explain</code> dice cuál eligió el planificador.</p>
           <p style="font-size:13.5px; margin-top:8px;"><b>Su límite:</b> Mango no agrega. No tiene <code class="inline">reduce</code> ni <code class="inline">group_by</code>. Para "cuántos m³ por zona" hay que usar una vista igual.</p>
         </div>
+        <div class="card" style="margin-top:14px;">
+          <h3>¿Y los JOIN?</h3>
+          <p style="font-size:13.5px;">No hay. El equivalente idiomático es que la vista emita como valor un <code class="inline">{_id: "otro-documento"}</code>: al consultarla con <code class="inline">include_docs=true</code>, CouchDB adjunta ese documento en la misma respuesta. Una sola vuelta al servidor, dos tipos de documento.</p>
+        </div>
       </div>
       <div class="code" style="margin:0;">
         <div class="bar">POST /inspecciones/_find</div>
@@ -514,6 +559,7 @@
     <ul class="plain">
       <li><b>Protocolo de replicación Couch:</b> puede ser puntual o continuo, push o pull, filtrado por función, y corre entre cualquier par de nodos CouchDB — o CouchDB y PouchDB — sin jerarquía fija.</li>
       <li><b>Offline‑first por diseño:</b> el dispositivo trabaja siempre contra su copia local; la sincronización con el resto del mundo es un proceso aparte que se retoma solo cuando hay red.</li>
+      <li><b>La validación no alcanza:</b> una rama en conflicto que llega replicada no tiene <code class="inline">oldDoc</code>, así que las reglas de <code class="inline">validate_doc_update</code> que comparan contra el valor anterior no se aplican. Por eso hace falta resolver conflictos, además de validar.</li>
       <li><b>Conflictos, no bloqueos:</b> si dos réplicas editan el mismo documento sin verse, CouchDB no pierde datos: guarda todas las revisiones en conflicto (<code class="inline">_conflicts</code>), marca una "ganadora" determinística para no romper lecturas simples, y deja la fusión real en manos de la aplicación.</li>
     </ul>
     <div class="tags">
@@ -732,8 +778,8 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
       <li><span class="step-n">01</span><div><b>Escritura sin conexión.</b> Una lectura nueva se guarda en la tablet aunque el central esté inalcanzable.</div></li>
       <li><span class="step-n">02</span><div><b>Dos clientes distintos.</b> Una tablet es un nodo CouchDB y la otra es PouchDB en el navegador. El central replica con las dos igual.</div></li>
       <li><span class="step-n">03</span><div><b>Replicación filtrada.</b> Cada inspector solo baja sus propias lecturas; el consolidado de todos vive en el central.</div></li>
-      <li><span class="step-n">04</span><div><b>Vista MapReduce.</b> Los m³ por zona salen de la vista <code class="inline">por_zona</code> con <code class="inline">reduce: _stats</code>.</div></li>
-      <li><span class="step-n">05</span><div><b>Consulta Mango.</b> Filtro por zona y mínimo de m³, usando el índice creado en el setup.</div></li>
+      <li><span class="step-n">04</span><div><b>Drill-down MapReduce.</b> Una sola vista con clave <code class="inline">[zona, año, mes]</code> responde tres niveles de agregación: lo elige <code class="inline">group_level</code>.</div></li>
+      <li><span class="step-n">05</span><div><b>Mango y su plan.</b> <code class="inline">_explain</code> muestra qué índice usó y qué rango recorrió — y qué pasa al filtrar por un campo sin índice.</div></li>
       <li><span class="step-n">06</span><div><b>Conflicto multi‑maestro.</b> Dos inspectores midieron el mismo medidor sin verse: ninguna versión se pierde.</div></li>
       <li><span class="step-n">07</span><div><b>Se cae un master.</b> Bajamos un central en vivo: el otro sigue aceptando escrituras y, cuando vuelve, se pone al día solo.</div></li>
       <li><span class="step-n">08</span><div><b>Resolución.</b> La aplicación elige cuál vale y borra la revisión perdedora — ahí se cierra el conflicto.</div></li>
@@ -889,6 +935,12 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
 </div>
 </main>
 
+<div id="navctl">
+  <button id="prev-slide" aria-label="Diapositiva anterior" title="Anterior (← o Re Pág)">&#8249;</button>
+  <span class="pos" id="slide-pos">— / —</span>
+  <button id="next-slide" aria-label="Diapositiva siguiente" title="Siguiente (→, Espacio o Av Pág)">&#8250;</button>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
   const bar = document.getElementById('progress');
@@ -911,6 +963,58 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
     });
   }, {rootMargin:'-45% 0px -50% 0px', threshold:0});
   document.querySelectorAll('.slide').forEach(s=>io.observe(s));
+
+  // Navegacion por diapositiva: flechas en pantalla y teclado.
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const btnPrev = document.getElementById('prev-slide');
+  const btnNext = document.getElementById('next-slide');
+  const posLabel = document.getElementById('slide-pos');
+  let actual = 0;
+
+  function pintarPos(){
+    // La portada no lleva numero, igual que en las chapitas de cada
+    // diapositiva: asi el contador dice lo mismo que la slide.
+    posLabel.textContent = actual === 0
+      ? 'portada'
+      : actual + ' / ' + (slides.length - 1);
+    btnPrev.disabled = actual === 0;
+    btnNext.disabled = actual === slides.length - 1;
+  }
+
+  function irA(i){
+    actual = Math.max(0, Math.min(slides.length - 1, i));
+    slides[actual].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    pintarPos();
+  }
+
+  btnPrev.addEventListener('click', () => irA(actual - 1));
+  btnNext.addEventListener('click', () => irA(actual + 1));
+
+  // El observer de arriba ya sabe cual esta en pantalla: lo usamos para que
+  // el contador siga al scroll manual, no solo a las flechas.
+  const ioPos = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if(!e.isIntersecting) return;
+      const i = slides.indexOf(e.target);
+      if(i >= 0){ actual = i; pintarPos(); }
+    });
+  }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+  slides.forEach(s => ioPos.observe(s));
+
+  document.addEventListener('keydown', (e) => {
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    switch(e.key){
+      case 'ArrowRight': case 'PageDown': irA(actual + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'PageUp':   irA(actual - 1); e.preventDefault(); break;
+      case ' ': irA(e.shiftKey ? actual - 1 : actual + 1); e.preventDefault(); break;
+      case 'Home': irA(0); e.preventDefault(); break;
+      case 'End':  irA(slides.length - 1); e.preventDefault(); break;
+    }
+  });
+
+  pintarPos();
 
   if(window.gsap){
     function drawLine(id, duration, delay){
