@@ -480,11 +480,13 @@
       <div>
         <div class="card" style="margin-bottom:14px;">
           <h3>Vistas MapReduce</h3>
-          <p style="font-size:13.5px;">Una función <code class="inline">map</code> en JavaScript recorre cada documento y "emite" pares clave/valor. El resultado se guarda como índice B‑tree, se actualiza en forma incremental y opcionalmente se agrega con <code class="inline">reduce</code> (<code class="inline">_sum</code>, <code class="inline">_count</code>, <code class="inline">_stats</code>).</p>
+          <p style="font-size:13.5px;">Una función <code class="inline">map</code> recorre cada documento y emite pares clave/valor. El resultado es un índice B‑tree incremental, que opcionalmente se agrega con <code class="inline">reduce</code> (<code class="inline">_sum</code>, <code class="inline">_count</code>, <code class="inline">_stats</code>).</p>
+          <p style="font-size:13.5px; margin-top:8px;">Con <b>clave compuesta</b> (<code class="inline">[zona, año, mes]</code>) una sola vista responde varios niveles de agregación: el parámetro <code class="inline">group_level</code> elige cuánto detalle querés. Eso es drill‑down sin escribir una vista por nivel.</p>
         </div>
         <div class="card">
           <h3>Mango (desde 2.0)</h3>
-          <p style="font-size:13.5px;">Consultas declarativas por JSON, sin escribir funciones. Requiere crear un índice (<code class="inline">_index</code>) sobre los campos que se filtran o cae a recorrido completo.</p>
+          <p style="font-size:13.5px;">Consultas declarativas por JSON, estilo MongoDB, sin escribir funciones. Requiere un índice (<code class="inline">_index</code>) sobre los campos que se filtran, o recorre la base entera. <code class="inline">_explain</code> dice cuál eligió el planificador.</p>
+          <p style="font-size:13.5px; margin-top:8px;"><b>Su límite:</b> Mango no agrega. No tiene <code class="inline">reduce</code> ni <code class="inline">group_by</code>. Para "cuántos m³ por zona" hay que usar una vista igual.</p>
         </div>
       </div>
       <div class="code" style="margin:0;">

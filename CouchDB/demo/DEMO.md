@@ -125,6 +125,65 @@ http://localhost:8083 y apretar **"reiniciar datos locales"**.
 > duplicadas, o sea conflictos que no son parte del guion. Pasa de verdad,
 > no es teórico.
 
+## MapReduce y Mango: qué mostrar de cada uno
+
+El panel central tiene tres cosas pensadas para esta parte.
+
+**Drill-down con una sola vista.** El panel de consumo tiene tres botones
+(*por zona* / *+ año* / *+ mes*). No son tres vistas: es **una sola**, que
+emite la clave compuesta `[zona, año, mes]`, y el nivel de agregación lo
+elige el parámetro `group_level` de la consulta. Abajo del gráfico se ve la
+URL exacta que se está llamando. Esto es lo más idiomático de CouchDB y es
+justo lo que Mango **no** puede hacer.
+
+**El plan de la consulta Mango.** Después de buscar, aparece qué índice
+eligió el planificador y qué rango del B-tree recorrió, por ejemplo:
+
+```
+índice: idx-tipo-zona-valor (json)
+rango recorrido: ["lectura_medidor","Florida-Norte","<MAX>"] → ["lectura_medidor","Florida-Norte",0]
+```
+
+El botón *"¿y si filtro por un campo sin índice?"* corre un `_explain` de
+`{"selector": {"inspector": "jperez"}}` y muestra que cae en `_all_docs`,
+o sea que recorre la base entera para filtrar. Ese contraste es la forma de
+mostrar el costo real en vez de afirmarlo.
+
+**El límite de Mango.** Mango no tiene agregación: mandarle un `group_by`
+devuelve `invalid_key`. Así que "cuántos m³ por zona" no se puede resolver
+con Mango, sí o sí es una vista. Esa es la respuesta corta a cuándo usar
+cada uno: Mango para buscar documentos, vistas para contar y sumar.
+
+## Validación en el servidor
+
+El design document trae una función `validate_doc_update` que corre en
+CouchDB en **cada escritura**, venga de donde venga. Rechaza:
+
+- lecturas sin `medidor_id`
+- `valor_m3` que no sea número, o negativo
+- una corrección que haga **retroceder** el medidor (físicamente imposible)
+
+Se prueba desde la terminal:
+```
+curl -X POST http://admin:admin123@localhost:5985/inspecciones   -H "Content-Type: application/json"   -d '{"type":"lectura_medidor","medidor_id":"OSE-4471","zona":"X","valor_m3":-5}'
+# {"error":"forbidden","reason":"un medidor no puede marcar negativo: -5"}
+```
+
+Un detalle que vale la pena contar: esta validación **no** frena la rama en
+conflicto que llega por replicación, aunque tenga un valor menor. Al
+replicar una revisión raíz no hay `oldDoc`, así que la regla de "no
+retrocede" no se aplica. Son dos mecanismos para dos cosas distintas:
+`validate_doc_update` valida escrituras, la resolución de conflictos
+arregla divergencias.
+
+## Join sin JOIN
+
+CouchDB no tiene joins. El panel central tiene una tabla *"Lecturas
+cruzadas con el padrón"* que muestra el truco equivalente: la vista
+`con_padron` emite como valor un `{_id: 'medidor:…'}`, y al consultarla con
+`include_docs=true` el servidor adjunta ese otro documento en la misma
+consulta. Una sola vuelta al servidor, dos tipos de documento.
+
 ## Bajar un master en vivo
 
 Este es el escenario que muestra que tener dos masters sirve para algo.
