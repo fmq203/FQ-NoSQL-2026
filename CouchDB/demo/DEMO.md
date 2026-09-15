@@ -1,8 +1,13 @@
 # Demo en vivo — "OSE Móvil"
 
-Un servidor central y dos tablets de campo, cada una con su inspector.
-Corresponde a las secciones "Ejemplo ficticio" y "Replicación" de
-`presentacion-couchdb.html`.
+**Dos** servidores centrales y dos tablets de campo, cada una con su
+inspector. Corresponde a las secciones "Ejemplo ficticio" y "Replicación"
+de `presentacion-couchdb.html`.
+
+Los dos centrales son **masters de verdad**: los dos aceptan escrituras y
+se replican entre sí de forma continua. No hay un primario y una réplica de
+solo lectura. Eso permite bajar cualquiera de los dos en vivo y mostrar que
+no se pierde nada.
 
 Lo interesante es que **las dos tablets no son iguales**:
 
@@ -24,14 +29,19 @@ replicación con ambas y no las distingue. Esa es justamente la gracia.
 
 ## Direcciones
 
-- **Central** → http://localhost:5984 (Fauxton: http://localhost:5984/_utils)
+- **Central A** → http://localhost:5984 (Fauxton: http://localhost:5984/_utils)
+- **Central B** → http://localhost:5987 (Fauxton: http://localhost:5987/_utils)
 - **Tablet A** → http://localhost:5985 (Fauxton: http://localhost:5985/_utils)
-- Usuario/clave de los dos nodos: `admin` / `admin123`
+- Usuario/clave de todos los nodos: `admin` / `admin123`
 
-Las tres interfaces web (HTML plano, sin build):
+Las cuatro interfaces web (HTML plano, sin build):
 
+- **Monitor** → http://localhost:8084 — estado de todos los nodos, si los
+  masters convergieron, y el estado de la replicación continua entre ellos.
 - **UI Central** → http://localhost:8081 — totales, m³ por zona, buscador
   Mango, "editar valor" y "resolver conflicto". Se actualiza sola cada 4 s.
+  Arriba se elige **contra qué master operar**: si uno se cae, se sigue
+  trabajando con el otro sin tocar nada más.
 - **UI Tablet A** → http://localhost:8082 (acento rojo) — switch de conexión
   y botones de sincronización manual.
 - **UI Tablet B** → http://localhost:8083 (acento azul) — la app PouchDB.
@@ -115,6 +125,39 @@ http://localhost:8083 y apretar **"reiniciar datos locales"**.
 > duplicadas, o sea conflictos que no son parte del guion. Pasa de verdad,
 > no es teórico.
 
+## Bajar un master en vivo
+
+Este es el escenario que muestra que tener dos masters sirve para algo.
+Conviene tener abierto el monitor (http://localhost:8084) proyectado.
+
+1. **Estado de partida**: el monitor dice *"Los dos masters tienen
+   exactamente lo mismo"*. La huella que compara no es el conteo: es el
+   `_id` + revisión de cada documento, ordenado.
+
+2. **Bajar uno**:
+   ```
+   ./node-down.sh central-a
+   ```
+   El monitor lo marca caído y pasa a *"Operando con un solo master"*.
+
+3. **Seguir trabajando igual**. En la UI central, cambiar el selector de
+   arriba a **Central B** y editar el valor de una lectura, o resolver un
+   conflicto. El sistema sigue aceptando escrituras con un master menos.
+
+4. **Levantarlo**:
+   ```
+   ./node-up.sh central-a
+   ```
+   El monitor pasa unos segundos por *"Replicando… todavía no convergen"*
+   (se ve la diferencia de lecturas entre uno y otro) y después vuelve a
+   *"exactamente lo mismo"*. Lo que se escribió mientras A no estaba,
+   aparece solo en A.
+
+Lo importante para contar: **nadie volvió a disparar la replicación a
+mano**. Está definida en la base `_replicator`, que es persistente, así que
+CouchDB la retoma sola cuando el nodo vuelve. En la prueba tardó unos 10
+segundos en converger.
+
 ## Solo terminal
 
 La tablet B no se puede manejar por terminal (corre en el navegador). Para
@@ -125,11 +168,13 @@ el resto:
 ./mango-query.sh           # consulta Mango
 ./conflict-demo-peers.sh   # sincroniza A y reporta el estado de conflictos
 ./conflict-demo.sh         # conflicto central vs tablet A, editando a mano
+./node-down.sh central-a   # baja un master
+./node-up.sh central-a     # lo vuelve a levantar
 ```
 
 ## Si algo falla
 
-- `docker compose ps` — los dos contenedores en `Up`.
+- `docker compose ps` — los tres contenedores en `Up`.
 - **La tablet B no carga**: tiene que existir `ui/tablet-b/pouchdb.min.js`
   (va versionado en el repo, no se baja de internet). Si falta, la página
   lo avisa en rojo.
@@ -138,5 +183,7 @@ el resto:
   origen. PouchDB habla directo desde el navegador al puerto 5984.
 - **Datos viejos en la tablet B** tras un `down -v`: es esperable, borralos
   con "reiniciar datos locales".
-- Si un puerto está ocupado, cambiá `5984`/`5985` en `docker-compose.yml` y
-  la constante `API` / `REMOTA` en `ui/*/index.html`.
+- Si un puerto está ocupado, cambiá `5984`/`5985`/`5987` en `docker-compose.yml`
+  y las constantes `API` / `MASTERS` / `REMOTA_URL` en `ui/*/index.html`.
+- **Los masters no convergen**: mirá el panel de replicación del monitor. Si
+  una réplica figura `crashing`, casi siempre es CORS o credenciales.

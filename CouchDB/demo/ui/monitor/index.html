@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSE · Monitor de nodos</title>
+<style>
+  :root{
+    --bg:#f2f0e7;
+    --surface:#ffffff;
+    --surface-alt:#eae5d5;
+    --ink:#1d1b15;
+    --ink-dim:#5c5748;
+    --accent:#c53a1f;
+    --accent-tint:#f6e2d7;
+    --ok:#2c6e63;
+    --ok-tint:#dcece7;
+    --warn:#b8781a;
+    --warn-tint:#f5e7cf;
+    --crit:#a3261a;
+    --crit-tint:#f7ddd8;
+    --line:#ddd6c2;
+    --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); padding:26px clamp(16px,4vw,40px) 60px;}
+  .wrap{max-width:1060px; margin:0 auto;}
+
+  header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:20px; flex-wrap:wrap; gap:10px;}
+  header h1{font-size:22px; margin:0; font-weight:700;}
+  header p{margin:2px 0 0; font-size:12px; color:var(--ink-dim); font-family:var(--mono);}
+  .live{font-family:var(--mono); font-size:11px; color:var(--ok); display:flex; align-items:center; gap:6px;}
+  .live .dot{width:7px; height:7px; border-radius:50%; background:var(--ok); animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  .verdict{border-radius:14px; padding:16px 20px; margin-bottom:20px; border:1px solid var(--line); background:var(--surface);}
+  .verdict[data-state="ok"]{background:var(--ok-tint); border-color:var(--ok);}
+  .verdict[data-state="sync"]{background:var(--warn-tint); border-color:var(--warn);}
+  .verdict[data-state="split"]{background:var(--crit-tint); border-color:var(--crit);}
+  .verdict h2{font-size:17px; margin:0 0 4px; font-weight:700;}
+  .verdict p{margin:0; font-size:13.5px; line-height:1.55; color:var(--ink-dim);}
+  .verdict[data-state="ok"] h2{color:var(--ok);}
+  .verdict[data-state="sync"] h2{color:var(--warn);}
+  .verdict[data-state="split"] h2{color:var(--crit);}
+
+  .nodes{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-bottom:20px;}
+  .node{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:15px 17px; border-left:4px solid var(--line);}
+  .node[data-up="1"]{border-left-color:var(--ok);}
+  .node[data-up="0"]{border-left-color:var(--crit); background:var(--surface-alt);}
+  .node[data-up="?"]{border-left-color:var(--ink-dim);}
+  .node-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:3px;}
+  .node h3{font-size:14.5px; margin:0; font-weight:700;}
+  .node .role{font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.05em;}
+  .node .addr{font-family:var(--mono); font-size:11px; color:var(--ink-dim); margin-bottom:10px;}
+  .state{display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px;}
+  .state.up{background:var(--ok-tint); color:var(--ok);}
+  .state.down{background:var(--crit-tint); color:var(--crit);}
+  .state.unknown{background:var(--surface-alt); color:var(--ink-dim);}
+
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; margin-top:12px; font-size:12.5px;}
+  .stats .k{color:var(--ink-dim); font-family:var(--mono); font-size:10.5px;}
+  .stats .v{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+  .stats .v.bad{color:var(--crit); font-weight:600;}
+
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:16px;}
+  .panel h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); margin:0 0 12px; font-weight:600;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th,td{text-align:left; padding:7px 9px; border-bottom:1px solid var(--line);}
+  th{font-family:var(--mono); font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:500;}
+  td.mono{font-family:var(--mono);}
+  .pill{font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:999px;}
+  .pill.run{background:var(--ok-tint); color:var(--ok);}
+  .pill.err{background:var(--crit-tint); color:var(--crit);}
+  .pill.idle{background:var(--surface-alt); color:var(--ink-dim);}
+
+  .cmds{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px;}
+  .cmd{background:var(--surface-alt); border:1px solid var(--line); border-radius:9px; padding:10px 12px;}
+  .cmd .lbl{font-size:11.5px; color:var(--ink-dim); margin-bottom:5px;}
+  .cmd code{font-family:var(--mono); font-size:12px; display:block; cursor:pointer; color:var(--accent);}
+  .cmd code:hover{text-decoration:underline;}
+  .copied{font-family:var(--mono); font-size:10px; color:var(--ok);}
+
+  .note{font-size:11.5px; color:var(--ink-dim); font-family:var(--mono); margin-top:10px; line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Monitor de nodos</h1>
+      <p>OSE Móvil · estado del clúster en vivo</p>
+    </div>
+    <div class="live"><span class="dot"></span>sondeando cada 2s</div>
+  </header>
+
+  <div class="verdict" id="verdict" data-state="sync">
+    <h2 id="verdict-title">Consultando nodos…</h2>
+    <p id="verdict-text">Comparando el contenido de cada réplica.</p>
+  </div>
+
+  <div class="nodes" id="nodes"></div>
+
+  <div class="panel">
+    <h2>Replicación continua entre los dos masters</h2>
+    <div id="repl"><p class="note">Consultando <code>_scheduler/docs</code>…</p></div>
+    <p class="note">Estas replicaciones viven en la base <code>_replicator</code>, que es persistente:
+    si un nodo se reinicia, CouchDB las retoma solo. Por eso no hay que volver a dispararlas a mano.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Probar la caída de un nodo</h2>
+    <div class="cmds">
+      <div class="cmd"><div class="lbl">Bajar el central A</div><code data-copy="./node-down.sh central-a">./node-down.sh central-a</code></div>
+      <div class="cmd"><div class="lbl">Bajar el central B</div><code data-copy="./node-down.sh central-b">./node-down.sh central-b</code></div>
+      <div class="cmd"><div class="lbl">Volver a levantarlo</div><code data-copy="./node-up.sh central-a">./node-up.sh central-a</code></div>
+    </div>
+    <p class="note">Con un central caído, el otro sigue aceptando escrituras. Al volver, este panel
+    muestra cómo las dos réplicas vuelven a converger solas — sin perder nada de lo que se escribió mientras tanto.</p>
+  </div>
+</div>
+
+<script>
+const AUTH = 'Basic ' + btoa('admin:admin123');
+const DB = 'inspecciones';
+
+const NODOS = [
+  { id:'central-a', nombre:'Central A', rol:'master', url:'http://localhost:5984', esCentral:true },
+  { id:'central-b', nombre:'Central B', rol:'master', url:'http://localhost:5987', esCentral:true },
+  { id:'tablet-a',  nombre:'Tablet A',  rol:'jperez · nodo CouchDB', url:'http://localhost:5985', esCentral:false },
+  { id:'tablet-b',  nombre:'Tablet B',  rol:'mgonzalez · PouchDB', url:null, esCentral:false }
+];
+
+async function pedir(url, ms = 2000){
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try{
+    const res = await fetch(url, { headers:{ Authorization: AUTH }, signal: ctrl.signal });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } finally { clearTimeout(t); }
+}
+
+// Huella del contenido: id + rev de cada documento, ordenado. Si dos nodos
+// tienen la misma huella, tienen exactamente lo mismo.
+function huella(rows){
+  return rows.filter(r => !r.id.startsWith('_design'))
+             .map(r => r.id + '@' + r.value.rev)
+             .sort().join('|');
+}
+
+async function sondear(nodo){
+  if(!nodo.url) return { ...nodo, estado:'na' };
+  try{
+    const [info, docs, changes] = await Promise.all([
+      pedir(nodo.url + '/' + DB),
+      pedir(nodo.url + '/' + DB + '/_all_docs'),
+      pedir(nodo.url + '/' + DB + '/_changes?include_docs=true&conflicts=true&style=all_docs')
+    ]);
+    const lecturas = changes.results.map(r => r.doc)
+      .filter(d => d && !d._deleted && d.type === 'lectura_medidor');
+    return {
+      ...nodo, estado:'up',
+      docs: info.doc_count,
+      lecturas: lecturas.length,
+      conflictos: lecturas.filter(d => d._conflicts && d._conflicts.length).length,
+      seq: String(info.update_seq).split('-')[0],
+      tam: (info.sizes && info.sizes.file) ? (info.sizes.file/1024).toFixed(0) + ' KB' : '—',
+      huella: huella(docs.rows)
+    };
+  }catch(e){
+    return { ...nodo, estado:'down', error: e.name === 'AbortError' ? 'sin respuesta' : e.message };
+  }
+}
+
+function pintarNodos(res){
+  document.getElementById('nodes').innerHTML = res.map(n => {
+    if(n.estado === 'na'){
+      return `<div class="node" data-up="?">
+        <div class="node-top"><h3>${n.nombre}</h3><span class="role">${n.rol}</span></div>
+        <div class="addr">IndexedDB del navegador</div>
+        <span class="state unknown">no sondeable</span>
+        <p class="note" style="margin-top:10px;">Vive dentro de la pestaña del inspector: desde acá
+        no se puede consultar. Su estado se ve en su propia pantalla.</p>
+      </div>`;
+    }
+    if(n.estado === 'down'){
+      return `<div class="node" data-up="0">
+        <div class="node-top"><h3>${n.nombre}</h3><span class="role">${n.rol}</span></div>
+        <div class="addr">${n.url.replace('http://','')}</div>
+        <span class="state down">caído</span>
+        <p class="note" style="margin-top:10px;">${n.error}</p>
+      </div>`;
+    }
+    return `<div class="node" data-up="1">
+      <div class="node-top"><h3>${n.nombre}</h3><span class="role">${n.rol}</span></div>
+      <div class="addr">${n.url.replace('http://','')}</div>
+      <span class="state up">en línea</span>
+      <div class="stats">
+        <div><div class="k">lecturas</div><div class="v">${n.lecturas}</div></div>
+        <div><div class="k">conflictos</div><div class="v ${n.conflictos?'bad':''}">${n.conflictos}</div></div>
+        <div><div class="k">update_seq</div><div class="v">${n.seq}</div></div>
+        <div><div class="k">tamaño</div><div class="v">${n.tam}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function pintarVeredicto(res){
+  const vivos = res.filter(n => n.estado === 'up');
+  const caidos = res.filter(n => n.estado === 'down');
+  const centrales = vivos.filter(n => n.esCentral);
+  const v = document.getElementById('verdict');
+  const t = document.getElementById('verdict-title');
+  const p = document.getElementById('verdict-text');
+
+  if(centrales.length === 0){
+    v.dataset.state = 'split';
+    t.textContent = 'Los dos masters están caídos';
+    p.textContent = 'Nadie puede atender escrituras del central. Las tablets igual siguen guardando localmente.';
+    return;
+  }
+
+  const huellas = new Set(centrales.map(n => n.huella));
+  const iguales = huellas.size === 1;
+
+  if(caidos.length && iguales && centrales.length === 1){
+    v.dataset.state = 'sync';
+    t.textContent = `Operando con un solo master (${centrales[0].nombre})`;
+    p.textContent = `${caidos.map(n=>n.nombre).join(', ')} está caído, pero el sistema sigue aceptando escrituras. `
+      + 'Nada se pierde: cuando vuelva, la replicación continua le pasa todo lo que se escribió mientras no estaba.';
+    return;
+  }
+  if(iguales){
+    v.dataset.state = 'ok';
+    t.textContent = 'Los dos masters tienen exactamente lo mismo';
+    p.textContent = `Misma huella de contenido (${centrales[0].lecturas} lecturas, id + revisión de cada documento). `
+      + 'Están convergidos.';
+    return;
+  }
+  v.dataset.state = 'sync';
+  const difs = centrales.map(n => `${n.nombre}: ${n.lecturas}`).join(' · ');
+  t.textContent = 'Replicando… todavía no convergen';
+  p.textContent = `Los masters difieren en este momento (${difs}). `
+    + 'Es normal justo después de una escritura o de que un nodo vuelva: en unos segundos deberían igualarse.';
+}
+
+async function pintarReplicacion(res){
+  const cont = document.getElementById('repl');
+  const centrales = res.filter(n => n.esCentral && n.estado === 'up');
+  if(!centrales.length){ cont.innerHTML = '<p class="note">Sin masters en línea.</p>'; return; }
+  const filas = [];
+  for(const n of centrales){
+    try{
+      const d = await pedir(n.url + '/_scheduler/docs');
+      for(const doc of (d.docs || [])){
+        const estado = doc.state || '—';
+        const clase = estado === 'running' ? 'run' : (estado === 'crashing' || estado === 'error' ? 'err' : 'idle');
+        const escritos = doc.info && doc.info.docs_written != null ? doc.info.docs_written : '—';
+        filas.push(`<tr><td>${n.nombre}</td><td class="mono">${doc.doc_id}</td>
+          <td><span class="pill ${clase}">${estado}</span></td><td class="mono">${escritos}</td></tr>`);
+      }
+    }catch(e){
+      filas.push(`<tr><td>${n.nombre}</td><td class="mono">—</td><td><span class="pill err">sin datos</span></td><td>—</td></tr>`);
+    }
+  }
+  cont.innerHTML = `<table><tr><th>Nodo</th><th>Replicación</th><th>Estado</th><th>Docs escritos</th></tr>${filas.join('')}</table>`;
+}
+
+async function refrescar(){
+  const res = await Promise.all(NODOS.map(sondear));
+  pintarNodos(res);
+  pintarVeredicto(res);
+  await pintarReplicacion(res);
+}
+
+document.addEventListener('click', async (e) => {
+  const c = e.target.closest('[data-copy]');
+  if(!c) return;
+  try{
+    await navigator.clipboard.writeText(c.dataset.copy);
+    const aviso = document.createElement('span');
+    aviso.className = 'copied';
+    aviso.textContent = ' copiado';
+    c.after(aviso);
+    setTimeout(() => aviso.remove(), 1200);
+  }catch(err){}
+});
+
+refrescar();
+setInterval(refrescar, 2000);
+</script>
+</body>
+</html>

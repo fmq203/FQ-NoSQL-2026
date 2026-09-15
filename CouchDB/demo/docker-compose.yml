@@ -10,6 +10,20 @@ services:
     volumes:
       - central-data:/opt/couchdb/data
 
+  # Segundo master del central. No es una replica de solo lectura: acepta
+  # escrituras igual que el primero, y los dos se replican entre si de forma
+  # continua. Si uno se cae, el otro sigue atendiendo.
+  couch-central-b:
+    image: couchdb:3.5
+    container_name: ose-central-b
+    ports:
+      - "5987:5984"
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin123
+    volumes:
+      - central-b-data:/opt/couchdb/data
+
   couch-tablet:
     image: couchdb:3.5
     container_name: ose-tablet
@@ -26,4 +40,5 @@ services:
 
 volumes:
   central-data:
+  central-b-data:
   tablet-data:
