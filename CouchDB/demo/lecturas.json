@@ -1,15 +1,107 @@
 {
   "docs": [
     {
+      "_id": "medidor:OSE-4471",
+      "type": "medidor",
+      "medidor_id": "OSE-4471",
+      "zona": "Canelones-Este",
+      "direccion": "Ruta 8 km 32, Barros Blancos",
+      "titular": "Rodríguez, A."
+    },
+    {
+      "_id": "medidor:OSE-4488",
+      "type": "medidor",
+      "medidor_id": "OSE-4488",
+      "zona": "Canelones-Este",
+      "direccion": "Cno. Maldonado 5512",
+      "titular": "Silva, M."
+    },
+    {
+      "_id": "medidor:OSE-5102",
+      "type": "medidor",
+      "medidor_id": "OSE-5102",
+      "zona": "Canelones-Oeste",
+      "direccion": "Ruta 5 km 29, Progreso",
+      "titular": "Fernández, J."
+    },
+    {
+      "_id": "medidor:OSE-5119",
+      "type": "medidor",
+      "medidor_id": "OSE-5119",
+      "zona": "Canelones-Oeste",
+      "direccion": "Bvar. Artigas 1204, Las Piedras",
+      "titular": "Pereyra, C."
+    },
+    {
+      "_id": "medidor:OSE-3390",
+      "type": "medidor",
+      "medidor_id": "OSE-3390",
+      "zona": "Florida-Norte",
+      "direccion": "Ruta 56 km 12, Sarandí Grande",
+      "titular": "Núñez, L."
+    },
+    {
+      "_id": "medidor:OSE-3401",
+      "type": "medidor",
+      "medidor_id": "OSE-3401",
+      "zona": "Florida-Norte",
+      "direccion": "Av. Artigas 830, Florida",
+      "titular": "Cabrera, S."
+    },
+    {
+      "_id": "lectura:2026-07-15:00100",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-4471",
+      "zona": "Canelones-Este",
+      "inspector": "jperez",
+      "fecha": "2026-07-15T14:20:00-03:00",
+      "valor_m3": 18205.8,
+      "consumo_m3": 105.8,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-08-14:00101",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-4471",
+      "zona": "Canelones-Este",
+      "inspector": "jperez",
+      "fecha": "2026-08-14T14:20:00-03:00",
+      "valor_m3": 18322.2,
+      "consumo_m3": 116.4,
+      "sincronizado": false
+    },
+    {
       "_id": "lectura:2026-09-13:00234",
       "type": "lectura_medidor",
       "medidor_id": "OSE-4471",
       "zona": "Canelones-Este",
       "inspector": "jperez",
-      "fecha": "2026-09-13T14:32:00-03:00",
+      "fecha": "2026-09-13T14:20:00-03:00",
       "valor_m3": 18452.7,
-      "sincronizado": false,
-      "geo": { "lat": -34.708, "lon": -55.982 }
+      "consumo_m3": 130.5,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-07-15:00103",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-4488",
+      "zona": "Canelones-Este",
+      "inspector": "jperez",
+      "fecha": "2026-07-15T14:25:00-03:00",
+      "valor_m3": 9128.1,
+      "consumo_m3": 78.1,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-08-14:00104",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-4488",
+      "zona": "Canelones-Este",
+      "inspector": "jperez",
+      "fecha": "2026-08-14T14:25:00-03:00",
+      "valor_m3": 9214.0,
+      "consumo_m3": 85.9,
+      "sincronizado": false
     },
     {
       "_id": "lectura:2026-09-13:00235",
@@ -17,10 +109,32 @@
       "medidor_id": "OSE-4488",
       "zona": "Canelones-Este",
       "inspector": "jperez",
-      "fecha": "2026-09-13T14:47:00-03:00",
+      "fecha": "2026-09-13T14:25:00-03:00",
       "valor_m3": 9310.2,
-      "sincronizado": false,
-      "geo": { "lat": -34.711, "lon": -55.979 }
+      "consumo_m3": 96.3,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-07-15:00106",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-5102",
+      "zona": "Canelones-Oeste",
+      "inspector": "jperez",
+      "fecha": "2026-07-15T14:30:00-03:00",
+      "valor_m3": 21753.0,
+      "consumo_m3": 153.0,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-08-14:00107",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-5102",
+      "zona": "Canelones-Oeste",
+      "inspector": "jperez",
+      "fecha": "2026-08-14T14:30:00-03:00",
+      "valor_m3": 21921.3,
+      "consumo_m3": 168.3,
+      "sincronizado": false
     },
     {
       "_id": "lectura:2026-09-13:00236",
@@ -28,10 +142,32 @@
       "medidor_id": "OSE-5102",
       "zona": "Canelones-Oeste",
       "inspector": "jperez",
-      "fecha": "2026-09-13T15:05:00-03:00",
+      "fecha": "2026-09-13T14:30:00-03:00",
       "valor_m3": 22110.0,
-      "sincronizado": false,
-      "geo": { "lat": -34.72, "lon": -56.01 }
+      "consumo_m3": 188.7,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-07-15:00109",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-5119",
+      "zona": "Canelones-Oeste",
+      "inspector": "jperez",
+      "fecha": "2026-07-15T14:35:00-03:00",
+      "valor_m3": 16496.1,
+      "consumo_m3": 96.1,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-08-14:00110",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-5119",
+      "zona": "Canelones-Oeste",
+      "inspector": "jperez",
+      "fecha": "2026-08-14T14:35:00-03:00",
+      "valor_m3": 16601.8,
+      "consumo_m3": 105.7,
+      "sincronizado": false
     },
     {
       "_id": "lectura:2026-09-13:00237",
@@ -39,10 +175,32 @@
       "medidor_id": "OSE-5119",
       "zona": "Canelones-Oeste",
       "inspector": "jperez",
-      "fecha": "2026-09-13T15:21:00-03:00",
+      "fecha": "2026-09-13T14:35:00-03:00",
       "valor_m3": 16720.4,
-      "sincronizado": false,
-      "geo": { "lat": -34.723, "lon": -56.014 }
+      "consumo_m3": 118.5,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-07-15:00112",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-3390",
+      "zona": "Florida-Norte",
+      "inspector": "jperez",
+      "fecha": "2026-07-15T14:40:00-03:00",
+      "valor_m3": 4867.2,
+      "consumo_m3": 67.2,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-08-14:00113",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-3390",
+      "zona": "Florida-Norte",
+      "inspector": "jperez",
+      "fecha": "2026-08-14T14:40:00-03:00",
+      "valor_m3": 4941.1,
+      "consumo_m3": 73.9,
+      "sincronizado": false
     },
     {
       "_id": "lectura:2026-09-13:00238",
@@ -50,10 +208,32 @@
       "medidor_id": "OSE-3390",
       "zona": "Florida-Norte",
       "inspector": "jperez",
-      "fecha": "2026-09-13T15:44:00-03:00",
+      "fecha": "2026-09-13T14:40:00-03:00",
       "valor_m3": 5023.9,
-      "sincronizado": false,
-      "geo": { "lat": -34.1, "lon": -56.22 }
+      "consumo_m3": 82.8,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-07-15:00115",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-3401",
+      "zona": "Florida-Norte",
+      "inspector": "jperez",
+      "fecha": "2026-07-15T14:45:00-03:00",
+      "valor_m3": 15652.1,
+      "consumo_m3": 102.1,
+      "sincronizado": false
+    },
+    {
+      "_id": "lectura:2026-08-14:00116",
+      "type": "lectura_medidor",
+      "medidor_id": "OSE-3401",
+      "zona": "Florida-Norte",
+      "inspector": "jperez",
+      "fecha": "2026-08-14T14:45:00-03:00",
+      "valor_m3": 15764.5,
+      "consumo_m3": 112.4,
+      "sincronizado": false
     },
     {
       "_id": "lectura:2026-09-13:00239",
@@ -61,10 +241,10 @@
       "medidor_id": "OSE-3401",
       "zona": "Florida-Norte",
       "inspector": "jperez",
-      "fecha": "2026-09-13T16:02:00-03:00",
+      "fecha": "2026-09-13T14:45:00-03:00",
       "valor_m3": 15890.5,
-      "sincronizado": false,
-      "geo": { "lat": -34.104, "lon": -56.225 }
+      "consumo_m3": 126.0,
+      "sincronizado": false
     }
   ]
 }
