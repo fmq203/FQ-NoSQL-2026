@@ -83,6 +83,10 @@
   .btn-mini.save{background:var(--ok); color:#fff;}
   .btn-mini.cancel{background:var(--line); color:var(--ink-dim);}
 
+  .master-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .master-row label{font-family:var(--mono); font-size:10.5px; color:var(--ink-dim); margin:0; flex:none;}
+  .master-row select{flex:1; font:inherit; font-family:var(--mono); font-size:11.5px; padding:5px 7px;
+    border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); cursor:pointer;}
   .btn-secondary{width:100%; background:var(--surface); color:var(--ink); border:1px solid var(--line); margin-top:8px;}
   .btn-secondary:disabled{opacity:.4; cursor:not-allowed;}
 
@@ -143,7 +147,14 @@
     </div>
     <div class="list" id="list"><p class="empty">Cargando…</p></div>
 
-    <button class="btn-sync" id="sync-btn" disabled data-tip="POST /_replicate&#10;source: esta tablet &#8594; target: central">Sincronizar con central</button>
+    <div class="master-row">
+      <label for="master-sel">sincronizar contra</label>
+      <select id="master-sel" data-tip="Los dos centrales son master.&#10;Si uno está caído, se sincroniza contra el otro y después ellos se ponen de acuerdo.">
+        <option value="couch-central">Central A · 5984</option>
+        <option value="couch-central-b">Central B · 5987</option>
+      </select>
+    </div>
+    <button class="btn-sync" id="sync-btn" disabled data-tip="POST /_replicate&#10;source: esta tablet &#8594; target: el central elegido">Sincronizar con central</button>
     <button class="btn-secondary" id="pull-btn" disabled data-tip="POST /_replicate&#10;source: central &#8594; target: esta tablet">↓ Traer cambios del central</button>
     <div class="toast" id="toast" style="margin-top:10px;">Listo.</div>
   </div>
@@ -186,6 +197,11 @@
   const toggle = document.getElementById('toggle');
   const toggleLabel = document.getElementById('toggle-label');
   const syncBtn = document.getElementById('sync-btn');
+  const masterSel = document.getElementById('master-sel');
+  const NOMBRES = { 'couch-central': 'Central A', 'couch-central-b': 'Central B' };
+  let masterHost = localStorage.getItem('ose-tablet-master') || 'couch-central';
+  if(!NOMBRES[masterHost]) masterHost = 'couch-central';
+  const urlCentral = () => 'http://admin:admin123@' + masterHost + ':5984/inspecciones';
   const pullBtn = document.getElementById('pull-btn');
   const toast = document.getElementById('toast');
   const list = document.getElementById('list');
@@ -367,7 +383,7 @@
         method: 'POST',
         body: JSON.stringify({
           source: 'http://admin:admin123@localhost:5984/inspecciones',
-          target: 'http://admin:admin123@couch-central:5984/inspecciones',
+          target: urlCentral(),
           create_target: false
         })
       });
@@ -388,7 +404,7 @@
       setToast('Sincronizado — ' + written + ' documentos enviados al central.', 'ok');
       loadList();
     }catch(e){
-      setToast('Error al sincronizar: ' + e.message, 'err');
+      setToast(explicarError(e, 'sincronizar'), 'err');
     } finally {
       syncBtn.disabled = !online;
     }
@@ -402,7 +418,7 @@
       const rep = await api('/_replicate', {
         method: 'POST',
         body: JSON.stringify({
-          source: 'http://admin:admin123@couch-central:5984/inspecciones',
+          source: urlCentral(),
           target: 'http://admin:admin123@localhost:5984/inspecciones',
           create_target: false
         })
@@ -413,10 +429,29 @@
       setToast('Actualizado — ' + written + ' documentos recibidos del central.', 'ok');
       loadList();
     }catch(e){
-      setToast('Error al traer cambios: ' + e.message, 'err');
+      setToast(explicarError(e, 'traer cambios'), 'err');
     } finally {
       pullBtn.disabled = !online;
     }
+  });
+
+  // Si el central elegido esta apagado, CouchDB devuelve un error de DNS
+  // (nxdomain) que no dice nada: lo traducimos y sugerimos el otro master.
+  function explicarError(e, que){
+    const txt = String(e && e.message || e);
+    const otro = masterHost === 'couch-central' ? 'Central B' : 'Central A';
+    if(txt.includes('nxdomain') || txt.includes('conn_failed') || txt.includes('econnrefused')){
+      return 'No se pudo alcanzar ' + NOMBRES[masterHost] + ': parece estar caído. ' +
+             'Probá cambiando el selector a ' + otro + '.';
+    }
+    return 'Error al ' + que + ': ' + txt;
+  }
+
+  masterSel.value = masterHost;
+  masterSel.addEventListener('change', () => {
+    masterHost = masterSel.value;
+    localStorage.setItem('ose-tablet-master', masterHost);
+    setToast('Ahora sincroniza contra ' + NOMBRES[masterHost] + '.');
   });
 
   setOnline(false);
