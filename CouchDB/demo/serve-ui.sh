@@ -14,7 +14,9 @@ echo $! > .pids/tablet.pid
 nohup python3 -m http.server 8083 --directory ui/tablet-b >/tmp/ose-ui-tablet-b.log 2>&1 &
 echo $! > .pids/tablet-b.pid
 
-nohup python3 -m http.server 8084 --directory ui/monitor >/tmp/ose-ui-monitor.log 2>&1 &
+# El monitor no es estatico: su servidor tambien ejecuta las acciones de
+# docker que disparan los botones (ver control-server.py).
+nohup python3 control-server.py >/tmp/ose-ui-monitor.log 2>&1 &
 echo $! > .pids/monitor.pid
 
 # La presentacion vive un nivel mas arriba; el archivo ya declara
@@ -26,6 +28,6 @@ sleep 1
 echo "UI Central   -> http://localhost:8081"
 echo "UI Tablet A  -> http://localhost:8082"
 echo "UI Tablet B  -> http://localhost:8083"
-echo "Monitor      -> http://localhost:8084"
+echo "Monitor      -> http://localhost:8084  (con botones para encender/apagar)"
 echo "Presentación -> http://localhost:8080/presentacion-couchdb.html"
 echo "(para bajarlas: ./stop-ui.sh)"

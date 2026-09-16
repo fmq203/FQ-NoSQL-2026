@@ -37,7 +37,8 @@ replicación con ambas y no las distingue. Esa es justamente la gracia.
 Las cuatro interfaces web (HTML plano, sin build):
 
 - **Monitor** → http://localhost:8084 — estado de todos los nodos, si los
-  masters convergieron, y el estado de la replicación continua entre ellos.
+  masters convergieron, el estado de la replicación continua, y **botones
+  para encender, apagar y bajar nodos** sin ir a la terminal.
 - **UI Central** → http://localhost:8081 — totales, m³ por zona, buscador
   Mango, "editar valor" y "resolver conflicto". Se actualiza sola cada 4 s.
   Arriba se elige **contra qué master operar**: si uno se cae, se sigue
@@ -184,6 +185,30 @@ cruzadas con el padrón"* que muestra el truco equivalente: la vista
 `include_docs=true` el servidor adjunta ese otro documento en la misma
 consulta. Una sola vuelta al servidor, dos tipos de documento.
 
+## Encender y apagar desde el monitor
+
+El monitor no es una página estática: la sirve `control-server.py`, que
+además ejecuta las acciones de Docker que disparan los botones.
+
+- **Encender todo** — `docker compose up -d` + `setup.sh`. Es lo primero que
+  conviene apretar si venís de otro día: los contenedores no arrancan solos
+  cuando se reinicia la máquina o WSL se suspende.
+- **Apagar todo** — los detiene sin borrar nada.
+- **Reset total** — borra los volúmenes y recarga el escenario. Pide
+  confirmación. No toca la tablet B (IndexedDB del navegador).
+- **bajar este nodo / levantar** — en cada tarjeta, para el escenario de
+  caída sin salir de la pantalla.
+
+Abajo del panel queda la salida de los comandos, así se ve qué corrió.
+
+Sobre la seguridad: el servidor escucha solo en `127.0.0.1` y únicamente
+ejecuta comandos de una lista fija. El navegador manda una clave como
+`down:central-a`, nunca un comando; no se arma ningún string con texto de
+afuera ni se usa `shell=True`.
+
+Si preferís la terminal, los scripts siguen estando: `./node-down.sh`,
+`./node-up.sh`, `./reset.sh`.
+
 ## Bajar un master en vivo
 
 Este es el escenario que muestra que tener dos masters sirve para algo.
@@ -230,6 +255,8 @@ el resto:
 ./node-down.sh central-a   # baja un master
 ./node-up.sh central-a     # lo vuelve a levantar
 ```
+
+Lo mismo se puede hacer con los botones del monitor (http://localhost:8084).
 
 ## Si algo falla
 
