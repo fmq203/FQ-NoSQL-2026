@@ -81,10 +81,6 @@
   .btn-mini.save{background:var(--ok); color:#fff;}
   .btn-mini.cancel{background:var(--line); color:var(--ink-dim);}
 
-  .master-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
-  .master-row label{font-family:var(--mono); font-size:10.5px; color:var(--ink-dim); margin:0; flex:none;}
-  .master-row select{flex:1; font:inherit; font-family:var(--mono); font-size:11.5px; padding:5px 7px;
-    border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); cursor:pointer;}
   .sync-panel{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:11px 13px;}
   .sync-row{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11.5px;}
   .sync-dot{width:8px; height:8px; border-radius:50%; background:var(--ink-dim); flex:none;}
@@ -155,13 +151,6 @@
     </div>
     <div class="list" id="list"><p class="empty">Cargando…</p></div>
 
-    <div class="master-row">
-      <label for="master-sel">replicar contra</label>
-      <select id="master-sel" data-tip="Los dos centrales son master.&#10;Si uno está caído, se replica contra el otro.">
-        <option value="http://localhost:5984">Central A · 5984</option>
-        <option value="http://localhost:5987">Central B · 5987</option>
-      </select>
-    </div>
     <div class="sync-panel" id="sync-panel" data-state="off">
       <div class="sync-row"><span class="sync-dot"></span><span id="sync-state">sin sincronizar</span></div>
       <div class="sync-sub" id="sync-sub">Los cambios quedan en el dispositivo hasta que actives la conexión.</div>
@@ -207,10 +196,10 @@
   // Sin usuario:clave en la URL: los navegadores rechazan construir un
   // fetch() con credenciales embebidas. PouchDB las manda por header con
   // la opcion auth.
-  const MASTERS = { 'http://localhost:5984': 'Central A', 'http://localhost:5987': 'Central B' };
-  let masterBase = localStorage.getItem('ose-tabletb-master') || 'http://localhost:5984';
-  if(!MASTERS[masterBase]) masterBase = 'http://localhost:5984';
-  const remotaUrl = () => masterBase + '/inspecciones';
+  // PouchDB corre en el navegador, asi que necesita una URL alcanzable
+  // desde ahi: el puerto que HAProxy mapea al host (5986), no el nombre de
+  // servicio de docker (ese solo existe dentro de la red de compose).
+  const remotaUrl = () => 'http://localhost:5986/inspecciones';
   const REMOTA_OPTS = { auth: { username: 'admin', password: 'admin123' } };
   const INSPECTOR = 'mgonzalez';
 
@@ -433,7 +422,7 @@
   }
 
   function startSync(){
-    setSync('active', 'conectando…', 'Replicación continua contra ' + MASTERS[masterBase] + ', filtrada: solo baja las lecturas de mgonzalez.');
+    setSync('active', 'conectando…', 'Replicación continua a través del balanceador (:5986), filtrada: solo baja las lecturas de mgonzalez.');
     // Subimos todo lo que generamos, pero bajamos SOLO las lecturas de
     // mgonzalez: un inspector no necesita la ruta de los demás en su
     // dispositivo. El consolidado de todos vive en el central.
@@ -447,9 +436,8 @@
       .on('active', () => setSync('active', 'sincronizando…'))
       .on('paused', async err => {
         if(err){
-          const otro = masterBase.endsWith('5984') ? 'Central B' : 'Central A';
-          setSync('error', 'sin alcanzar ' + MASTERS[masterBase],
-                  '¿Está caído? Probá cambiando el selector a ' + otro + '. Mientras tanto los cambios se siguen guardando acá.');
+          setSync('error', 'sin alcanzar el balanceador',
+                  '¿Están los dos centrales caídos? Mientras tanto los cambios se siguen guardando acá.');
           console.error('[sync paused con error]', err);
         } else {
           setSync('idle', 'al día', 'Replicación continua activa: no hay botón que apretar.');
@@ -485,16 +473,6 @@
     if(v) startSync(); else stopSync();
   }
   toggle.addEventListener('click', () => setOnline(!online));
-
-  const masterSel = document.getElementById('master-sel');
-  masterSel.value = masterBase;
-  masterSel.addEventListener('change', () => {
-    masterBase = masterSel.value;
-    localStorage.setItem('ose-tabletb-master', masterBase);
-    // si estaba replicando, hay que rearrancar contra el nuevo destino
-    if(online){ stopSync(); startSync(); }
-    else setSync('off', 'sin sincronizar', 'Va a replicar contra ' + MASTERS[masterBase] + ' cuando actives la conexión.');
-  });
 
   document.getElementById('reset-btn').addEventListener('click', async () => {
     if(!confirm('Borra la base local de este navegador y vuelve a cargar la ruta de mgonzalez. ¿Seguir?')) return;

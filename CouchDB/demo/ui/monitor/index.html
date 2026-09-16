@@ -117,6 +117,15 @@
     <p id="verdict-text">Comparando el contenido de cada réplica.</p>
   </div>
 
+  <div class="panel" id="balanceador-panel">
+    <h2>Balanceador (HAProxy) · frente a los dos masters</h2>
+    <div class="acciones" style="align-items:center;">
+      <span class="state unknown" id="lb-state">consultando…</span>
+      <span class="note" style="margin:0;">VIP en <code>:5986</code> — es lo único a lo que le hablan las tres UI, ninguna elige master a mano.</span>
+      <a class="btn" href="http://localhost:8404" target="_blank" rel="noopener" style="text-decoration:none; margin-left:auto;">ver dashboard de HAProxy ↗</a>
+    </div>
+  </div>
+
   <div class="nodes" id="nodes"></div>
 
   <div class="panel">
@@ -293,11 +302,24 @@ async function pintarReplicacion(res){
   cont.innerHTML = `<table><tr><th>Nodo</th><th>Replicación</th><th>Estado</th><th>Docs escritos</th></tr>${filas.join('')}</table>`;
 }
 
+async function sondearBalanceador(){
+  const el = document.getElementById('lb-state');
+  try{
+    await pedir('http://localhost:5986/_up', 1500);
+    el.className = 'state up';
+    el.textContent = 'VIP en línea';
+  }catch(e){
+    el.className = 'state down';
+    el.textContent = 'VIP no responde';
+  }
+}
+
 async function refrescar(){
   const res = await Promise.all(NODOS.map(sondear));
   pintarNodos(res);
   pintarVeredicto(res);
   await pintarReplicacion(res);
+  await sondearBalanceador();
 }
 
 const salida = document.getElementById('salida');
