@@ -224,9 +224,19 @@ Conviene tener abierto el monitor (http://localhost:8084) proyectado.
    ```
    El monitor lo marca caído y pasa a *"Operando con un solo master"*.
 
-3. **Seguir trabajando igual**. En la UI central, cambiar el selector de
-   arriba a **Central B** y editar el valor de una lectura, o resolver un
-   conflicto. El sistema sigue aceptando escrituras con un master menos.
+3. **Seguir trabajando igual**. Las tres interfaces tienen un selector de
+   master:
+
+   - En la **UI central**, cambiarlo a *Central B* y editar una lectura o
+     resolver un conflicto.
+   - En las **dos tablets**, el selector «sincronizar contra» elige a qué
+     central replicar. Con A caído se pasa a B y la sincronización anda
+     igual.
+
+   > Si intentás sincronizar contra el central caído, el error que devuelve
+   > CouchDB es `nxdomain` sobre el nombre del contenedor — el nodo no
+   > existe en la red de Docker mientras está apagado. Las tablets lo
+   > traducen a «parece estar caído, probá con el otro».
 
 4. **Levantarlo**:
    ```
@@ -236,6 +246,10 @@ Conviene tener abierto el monitor (http://localhost:8084) proyectado.
    (se ve la diferencia de lecturas entre uno y otro) y después vuelve a
    *"exactamente lo mismo"*. Lo que se escribió mientras A no estaba,
    aparece solo en A.
+
+Probado de punta a punta: con A caído, la tablet sincronizó sus 19 lecturas
+contra B; al levantar A, los dos masters volvieron a tener lo mismo en 8
+segundos, sin que nadie tocara nada.
 
 Lo importante para contar: **nadie volvió a disparar la replicación a
 mano**. Está definida en la base `_replicator`, que es persistente, así que
