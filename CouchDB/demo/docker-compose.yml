@@ -24,6 +24,21 @@ services:
     volumes:
       - central-b-data:/opt/couchdb/data
 
+  # El balanceador de produccion: las tres UI le hablan a esto (5986), nunca
+  # a los masters directamente. Reemplaza al selector manual — el health
+  # check de haproxy hace lo que antes hacia elegir a mano en el navegador.
+  haproxy:
+    image: haproxy:2.9-alpine
+    container_name: ose-haproxy
+    depends_on:
+      - couch-central
+      - couch-central-b
+    ports:
+      - "5986:5984"
+      - "8404:8404"
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
   couch-tablet:
     image: couchdb:3.5
     container_name: ose-tablet

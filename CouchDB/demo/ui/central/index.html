@@ -123,10 +123,7 @@
   <header>
     <div>
       <h1>OSE Central</h1>
-      <p>panel de monitoreo · <select id="master-sel" data-tip="Los dos masters aceptan escrituras y se replican entre si.&#10;Si uno se cae, se sigue operando con el otro.">
-        <option value="http://localhost:5984">Central A · :5984</option>
-        <option value="http://localhost:5987">Central B · :5987</option>
-      </select></p>
+      <p data-tip="Los dos masters aceptan escrituras y se replican entre si.&#10;HAProxy sondea /_up en cada uno y enruta al que este sano — no hay que elegir a mano.">panel de monitoreo · balanceado por HAProxy (:5986)</p>
     </div>
     <div class="live" data-tip="GET /inspecciones/_changes?include_docs=true&#38;conflicts=true&#38;style=all_docs&#10;se repite cada 4 segundos"><span class="dot"></span>actualizando cada 4s</div>
   </header>
@@ -189,9 +186,9 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
-  const MASTERS = { 'http://localhost:5984':'Central A', 'http://localhost:5987':'Central B' };
-  let API = localStorage.getItem('ose-master') || 'http://localhost:5984';
-  if(!MASTERS[API]) API = 'http://localhost:5984';
+  // Habla con el VIP de HAProxy, no con un master directo: el balanceador
+  // decide a cual de los dos mandar segun su propio health check.
+  const API = 'http://localhost:5986';
   const AUTH = 'Basic ' + btoa('admin:admin123');
   const DB = '/inspecciones';
 
@@ -231,7 +228,7 @@
       renderList();
     }catch(e){
       document.getElementById('list').innerHTML =
-        '<p class="empty">No se pudo conectar a ' + MASTERS[API] + '. Si está caído, elegí el otro master arriba.</p>';
+        '<p class="empty">No se pudo conectar al balanceador (:5986). ¿Está corriendo el contenedor haproxy?</p>';
     }
   }
 
@@ -540,16 +537,6 @@
     }catch(e){
       note.textContent = 'Error: ' + e.message;
     }
-  });
-
-  const masterSel = document.getElementById('master-sel');
-  masterSel.value = API;
-  masterSel.addEventListener('change', () => {
-    API = masterSel.value;
-    localStorage.setItem('ose-master', API);
-    lastDocs = []; prevRevs = {}; firstRender = true; barsZonas = [];
-    document.getElementById('list').innerHTML = '<p class="empty">Cambiando de master…</p>';
-    refresh();
   });
 
   function refresh(){ loadDocs(); loadBars(); loadPadron(); }
