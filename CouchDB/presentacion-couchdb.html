@@ -786,77 +786,82 @@ couchrestore --db inspecciones_restaurada --url http://admin:pass@localhost:5984
     </ol>
 
     <figure>
-      <svg viewBox="0 0 640 430" role="img" aria-label="Infraestructura de la demo: tres clientes hablando con un balanceador HAProxy, que enruta a uno de dos masters segun su health check, con replicacion continua entre ambos">
+      <svg viewBox="0 0 700 480" role="img" aria-label="Infraestructura de la demo: tres clientes hablando con un balanceador HAProxy, que enruta a uno de dos masters segun su health check, con replicacion continua entre ambos">
         <defs>
           <marker id="arrDemo" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="currentColor"/></marker>
           <marker id="arrDemoAcc" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="var(--accent)"/></marker>
+          <marker id="arrDemoSec" markerWidth="7" markerHeight="7" refX="4" refY="3.5" orient="auto"><polygon points="0,0 7,3.5 0,7" fill="var(--secondary)"/></marker>
         </defs>
         <g font-family="IBM Plex Mono" font-size="11">
+          <!-- fila 1: las tres interfaces web -->
           <rect x="15" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
           <text x="85" y="54" text-anchor="middle" fill="currentColor">UI Tablet A</text>
           <text x="85" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8082</text>
 
-          <rect x="250" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
-          <text x="320" y="54" text-anchor="middle" fill="currentColor">UI Central</text>
-          <text x="320" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8081</text>
+          <rect x="280" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
+          <text x="350" y="54" text-anchor="middle" fill="currentColor">UI Central</text>
+          <text x="350" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8081</text>
 
-          <rect x="485" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
-          <text x="555" y="54" text-anchor="middle" fill="currentColor">UI Tablet B</text>
-          <text x="555" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8083</text>
+          <rect x="525" y="30" width="140" height="56" rx="6" fill="none" stroke="currentColor"/>
+          <text x="595" y="54" text-anchor="middle" fill="currentColor">UI Tablet B</text>
+          <text x="595" y="71" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">localhost:8083</text>
 
-          <text x="485" y="22" fill="currentColor" opacity="0.6" font-size="9">navegador</text>
-          <rect x="480" y="26" width="150" height="118" rx="8" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
-          <rect x="495" y="96" width="120" height="36" rx="5" fill="none" stroke="currentColor"/>
-          <text x="555" y="112" text-anchor="middle" fill="currentColor" font-size="10">PouchDB</text>
-          <text x="555" y="126" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">IndexedDB</text>
+          <text x="525" y="22" fill="currentColor" opacity="0.6" font-size="9">navegador</text>
+          <rect x="520" y="26" width="150" height="118" rx="8" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
+          <rect x="535" y="96" width="120" height="36" rx="5" fill="none" stroke="currentColor"/>
+          <text x="595" y="112" text-anchor="middle" fill="currentColor" font-size="10">PouchDB</text>
+          <text x="595" y="126" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">IndexedDB</text>
+
+          <!-- todo lo que sigue vive en docker compose: los dos masters, la tablet, y ahora tambien haproxy -->
+          <rect x="5" y="185" width="430" height="278" rx="10" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
+          <text x="20" y="440" fill="currentColor" opacity="0.6" font-size="9">red docker compose · couchdb:3.5 + haproxy</text>
 
           <!-- HAProxy: el unico destino que conocen las tres UI -->
-          <rect x="250" y="178" width="140" height="54" rx="6" fill="var(--secondary-tint)" stroke="var(--secondary)" stroke-width="1.8"/>
-          <text x="320" y="200" text-anchor="middle" fill="var(--secondary)" font-weight="600">HAProxy</text>
-          <text x="320" y="214" text-anchor="middle" fill="var(--secondary)" opacity="0.8" font-size="9">VIP · 5986</text>
-          <text x="320" y="225" text-anchor="middle" fill="var(--secondary)" opacity="0.7" font-size="8">health check GET /_up cada 1s</text>
+          <rect x="280" y="215" width="140" height="54" rx="6" fill="var(--secondary-tint)" stroke="var(--secondary)" stroke-width="1.8"/>
+          <text x="350" y="237" text-anchor="middle" fill="var(--secondary)" font-weight="600">HAProxy</text>
+          <text x="350" y="251" text-anchor="middle" fill="var(--secondary)" opacity="0.8" font-size="9">VIP · 5986</text>
+          <text x="350" y="262" text-anchor="middle" fill="var(--secondary)" opacity="0.7" font-size="8">health check GET /_up cada 1s</text>
 
-          <rect x="5" y="250" width="400" height="170" rx="10" fill="none" stroke="currentColor" stroke-dasharray="5 4" opacity="0.45"/>
-          <text x="20" y="268" fill="currentColor" opacity="0.6" font-size="9">red docker compose · couchdb:3.5</text>
+          <rect x="15" y="310" width="140" height="54" rx="6" fill="none" stroke="currentColor"/>
+          <text x="85" y="332" text-anchor="middle" fill="currentColor">CouchDB</text>
+          <text x="85" y="348" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-tablet · 5985</text>
 
-          <rect x="15" y="278" width="140" height="54" rx="6" fill="none" stroke="currentColor"/>
-          <text x="85" y="300" text-anchor="middle" fill="currentColor">CouchDB</text>
-          <text x="85" y="316" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-tablet · 5985</text>
+          <rect x="280" y="310" width="140" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <text x="350" y="332" text-anchor="middle" fill="currentColor">Central A</text>
+          <text x="350" y="348" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-central · 5984</text>
 
-          <rect x="250" y="278" width="140" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
-          <text x="320" y="300" text-anchor="middle" fill="currentColor">Central A</text>
-          <text x="320" y="316" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-central · 5984</text>
+          <rect x="280" y="396" width="140" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <text x="350" y="418" text-anchor="middle" fill="currentColor">Central B</text>
+          <text x="350" y="434" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-central-b · 5987</text>
 
-          <rect x="250" y="364" width="140" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="1.8"/>
-          <text x="320" y="386" text-anchor="middle" fill="currentColor">Central B</text>
-          <text x="320" y="402" text-anchor="middle" fill="currentColor" opacity="0.6" font-size="9">ose-central-b · 5987</text>
+          <!-- replicacion continua entre los dos masters: un mecanismo aparte del balanceador -->
+          <line x1="300" y1="364" x2="300" y2="396" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
+          <line x1="330" y1="396" x2="330" y2="364" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
+          <text x="270" y="375" text-anchor="end" fill="var(--accent)" font-size="9">los dos son master:</text>
+          <text x="270" y="386" text-anchor="end" fill="var(--accent)" opacity="0.8" font-size="8">replicación continua (_replicator)</text>
 
-          <!-- replicacion continua entre los dos masters, independiente del balanceador -->
-          <line x1="305" y1="332" x2="305" y2="362" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
-          <line x1="335" y1="362" x2="335" y2="332" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
-          <text x="242" y="342" text-anchor="end" fill="var(--accent)" font-size="9">los dos son master:</text>
-          <text x="242" y="354" text-anchor="end" fill="var(--accent)" opacity="0.8" font-size="8">replicación continua (_replicator)</text>
+          <!-- la tablet A habla con su propio nodo para sus datos (alineacion vertical directa, sin etiqueta) -->
+          <line x1="85" y1="86" x2="85" y2="310" stroke="currentColor" opacity="0.5" marker-end="url(#arrDemo)"/>
 
-          <!-- las tres UI hablan con haproxy, nunca con un master directo -->
-          <line x1="85" y1="88" x2="85" y2="274" stroke="currentColor" opacity="0.5" marker-end="url(#arrDemo)"/>
-          <text x="96" y="185" fill="currentColor" opacity="0.6" font-size="8">su propio nodo</text>
-          <line x1="320" y1="88" x2="320" y2="174" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
-          <text x="332" y="145" fill="currentColor" opacity="0.75" font-size="9">fetch HTTP/JSON</text>
+          <!-- el panel central habla con el VIP -->
+          <line x1="350" y1="86" x2="350" y2="215" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <text x="362" y="155" fill="currentColor" opacity="0.75" font-size="9">fetch HTTP/JSON</text>
 
-          <path d="M 495 114 L 458 114 L 458 205 L 394 205" fill="none" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
-          <text x="470" y="104" fill="currentColor" opacity="0.75" font-size="9">db.sync()</text>
+          <!-- pouchdb, en el navegador, tambien habla con el VIP -->
+          <path d="M 535 114 L 480 114 L 480 242 L 420 242" fill="none" stroke="currentColor" opacity="0.55" marker-end="url(#arrDemo)"/>
+          <text x="458" y="100" fill="currentColor" opacity="0.75" font-size="9">db.sync()</text>
 
           <!-- la tablet replica server-a-server contra el VIP, no contra un master fijo -->
-          <path d="M 155 300 L 210 300 L 210 205 L 246 205" fill="none" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
-          <text x="165" y="256" fill="var(--accent)" font-size="9">POST /_replicate</text>
-          <text x="165" y="267" fill="var(--accent)" opacity="0.75" font-size="8">target: haproxy</text>
+          <path d="M 155 337 L 170 337 L 170 242 L 280 242" fill="none" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#arrDemoAcc)"/>
+          <text x="178" y="225" fill="var(--accent)" font-size="9">POST /_replicate</text>
+          <text x="178" y="236" fill="var(--accent)" opacity="0.75" font-size="8">target: haproxy</text>
 
           <!-- haproxy enruta a uno solo de los dos, no reparte parejo -->
-          <line x1="295" y1="232" x2="295" y2="276" stroke="var(--secondary)" stroke-width="1.8" marker-end="url(#arrDemoAcc)"/>
-          <text x="298" y="248" fill="var(--secondary)" font-size="8">activo</text>
-          <path d="M 380 232 L 430 232 L 430 391 L 394 391" fill="none" stroke="var(--secondary)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrDemo)"/>
-          <text x="440" y="300" fill="currentColor" opacity="0.6" font-size="8">backup, sin tráfico</text>
-          <text x="440" y="311" fill="currentColor" opacity="0.6" font-size="8">mientras A esté sano</text>
+          <line x1="320" y1="269" x2="320" y2="310" stroke="var(--secondary)" stroke-width="1.8" marker-end="url(#arrDemoSec)"/>
+          <text x="326" y="292" fill="var(--secondary)" font-size="8">activo</text>
+          <path d="M 400 269 L 445 269 L 445 423 L 420 423" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.5" marker-end="url(#arrDemo)"/>
+          <text x="453" y="340" fill="currentColor" opacity="0.6" font-size="8">backup, sin tráfico</text>
+          <text x="453" y="351" fill="currentColor" opacity="0.6" font-size="8">mientras A esté sano</text>
         </g>
       </svg>
       <figcaption>El balanceador es el único endpoint que conocen las tres interfaces — ninguna elige master a mano. HAProxy sondea <code class="inline">GET /_up</code> en los dos cada 1s y manda todo el tráfico al que esté sano; si es el activo, va directo, si no, conmuta al backup. La replicación entre los dos masters (rojo) es un mecanismo aparte, independiente del balanceador: por eso lo que se escribe en cualquiera de los dos termina en ambos.</figcaption>
