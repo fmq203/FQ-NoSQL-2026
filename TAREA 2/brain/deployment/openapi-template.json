@@ -1,0 +1,351 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "EventFlow - Usuarios Service",
+    "version": "1.0.0",
+    "description": "API para gestión de usuarios y perfiles",
+    "contact": {
+      "name": "Equipo EventFlow"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8001",
+      "description": "Local development"
+    },
+    {
+      "url": "http://usuarios-service:8001",
+      "description": "Docker container"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Usuarios",
+      "description": "Operaciones de usuarios"
+    },
+    {
+      "name": "System",
+      "description": "Endpoints de sistema"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_check",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "Servicio está online",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/usuarios": {
+      "post": {
+        "summary": "Crear nuevo usuario",
+        "operationId": "crear_usuario",
+        "tags": ["Usuarios"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usuario creado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación fallida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email ya existe"
+          }
+        }
+      },
+      "get": {
+        "summary": "Listar usuarios",
+        "operationId": "listar_usuarios",
+        "tags": ["Usuarios"],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de usuarios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Usuario"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/usuarios/{usuario_id}": {
+      "get": {
+        "summary": "Obtener usuario por ID",
+        "operationId": "obtener_usuario",
+        "tags": ["Usuarios"],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usuario encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Usuario no encontrado"
+          }
+        }
+      }
+    },
+    "/api/usuarios/exportar": {
+      "get": {
+        "summary": "Exportar datos de usuarios (anonimizados)",
+        "operationId": "exportar_usuarios",
+        "tags": ["Usuarios"],
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["json", "csv"],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Datos exportados (anonimizados)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "usuarios_anonimizados": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UsuarioAnonimizado"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Usuario": {
+        "type": "object",
+        "properties": {
+          "usuario_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "tipo_documento": {
+            "type": "string",
+            "enum": ["DNI", "Pasaporte"],
+            "example": "DNI"
+          },
+          "nro_documento": {
+            "type": "string",
+            "example": "12345678"
+          },
+          "nombre": {
+            "type": "string",
+            "example": "Juan"
+          },
+          "apellido": {
+            "type": "string",
+            "example": "Pérez"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "juan@example.com"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-09-20T10:00:00Z"
+          },
+          "historial_compras": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Compra"
+            }
+          }
+        },
+        "required": ["usuario_id", "nombre", "email", "creado_en"]
+      },
+      "UsuarioCreate": {
+        "type": "object",
+        "properties": {
+          "tipo_documento": {
+            "type": "string",
+            "example": "DNI"
+          },
+          "nro_documento": {
+            "type": "string",
+            "example": "12345678"
+          },
+          "nombre": {
+            "type": "string",
+            "example": "Juan"
+          },
+          "apellido": {
+            "type": "string",
+            "example": "Pérez"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "juan@example.com"
+          }
+        },
+        "required": ["nombre", "email"]
+      },
+      "Compra": {
+        "type": "object",
+        "properties": {
+          "reserva_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evento_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cantidad": {
+            "type": "integer",
+            "example": 2
+          },
+          "precio_unitario": {
+            "type": "number",
+            "format": "double",
+            "example": 150.00
+          },
+          "precio_total": {
+            "type": "number",
+            "format": "double",
+            "example": 300.00
+          },
+          "fecha_compra": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "estado": {
+            "type": "string",
+            "enum": ["confirmada", "cancelada"]
+          }
+        }
+      },
+      "UsuarioAnonimizado": {
+        "type": "object",
+        "description": "Usuario con datos personales anonimizados (irreversible)",
+        "properties": {
+          "usuario_hash": {
+            "type": "string",
+            "example": "a1b2c3d4e5f6g7h8i9j0k1l2"
+          },
+          "eventos_comprados": {
+            "type": "integer",
+            "example": 5
+          },
+          "gasto_total": {
+            "type": "number",
+            "format": "double",
+            "example": 750.00
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "validation_error"
+          },
+          "detalles": {
+            "type": "string",
+            "example": "Email es requerido"
+          }
+        }
+      }
+    }
+  }
+}
