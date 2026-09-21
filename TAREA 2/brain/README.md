@@ -180,12 +180,49 @@ R: Ver [`deployment/docker-compose.md`](./deployment/docker-compose.md) — `doc
 
 ---
 
-## 📝 Última Actualización
+## 🤖 Registro de Interacciones con IA
 
-- **Brain creado:** 2026-09-20
-- **Próxima revisión:** Después de primera sesión de coding
-- **Mantenedor:** Equipo + Claude
+Para mantener trazabilidad y reproducibilidad, todas las interacciones significativas con IA se registran en el brain:
+
+### Qué Registrar
+| Tipo | Qué Incluir | Dónde |
+|------|-------------|-------|
+| **Decisiones de diseño** | Problema → Opciones → Decisión → Justificación | `decisions/` |
+| **Arquitectura** | Diagramas, flujos, justificaciones | `architecture/` |
+| **Implementación** | Patrones usados, código clave, trade-offs | `patterns/`, `microservices/` |
+| **Problemas/Bloqueos** | Error, diagnóstico, solución, prevención | `learnings.md` |
+| **Decisiones revertidas** | Qué se intentó, por qué falló, alternativa | `learnings.md` |
+
+### Cómo Registrar
+```markdown
+## YYYY-MM-DD — Título breve
+**Contexto:** Qué se estaba haciendo
+**Problema/Decisión:** Qué surgió
+**Análisis:** Opciones consideradas
+**Decisión/Resultado:** Qué se eligió y por qué
+**Próximos pasos:** Acciones pendientes
+```
+
+### Dónde Registrar
+| Contenido | Archivo |
+|-----------|---------|
+| Decisiones arquitectónicas | `decisions/*.md` |
+| Problemas/soluciones | `learnings.md` (append) |
+| Cambios en código | Commit message + PR description |
+| Insights técnicos | `learnings.md` (append) |
+| Actualizaciones docs | Commit message + archivo modificado |
+
+### Formato de Entrada en `learnings.md`
+```markdown
+### YYYY-MM-DD — Título descriptivo
+**Contexto:** ...
+**Problema:** ...
+**Análisis:** ...
+**Decisión:** ...
+**Resultado:** ...
+**Tags:** #tag1 #tag2
+```
 
 ---
 
-**👉 Comienza aquí:** [`CLAUDE.md`](./CLAUDE.md)
+## 📝 Última Actualización
