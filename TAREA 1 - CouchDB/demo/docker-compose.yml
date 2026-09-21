@@ -1,0 +1,59 @@
+services:
+  couch-central:
+    image: couchdb:3.5
+    container_name: ose-central
+    ports:
+      - "5984:5984"
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin123
+    volumes:
+      - central-data:/opt/couchdb/data
+
+  # Segundo master del central. No es una replica de solo lectura: acepta
+  # escrituras igual que el primero, y los dos se replican entre si de forma
+  # continua. Si uno se cae, el otro sigue atendiendo.
+  couch-central-b:
+    image: couchdb:3.5
+    container_name: ose-central-b
+    ports:
+      - "5987:5984"
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin123
+    volumes:
+      - central-b-data:/opt/couchdb/data
+
+  # El balanceador de produccion: las tres UI le hablan a esto (5986), nunca
+  # a los masters directamente. Reemplaza al selector manual — el health
+  # check de haproxy hace lo que antes hacia elegir a mano en el navegador.
+  haproxy:
+    image: haproxy:2.9-alpine
+    container_name: ose-haproxy
+    depends_on:
+      - couch-central
+      - couch-central-b
+    ports:
+      - "5986:5984"
+      - "8404:8404"
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+  couch-tablet:
+    image: couchdb:3.5
+    container_name: ose-tablet
+    ports:
+      - "5985:5984"
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin123
+    volumes:
+      - tablet-data:/opt/couchdb/data
+
+  # La tablet B no tiene contenedor: corre PouchDB dentro del navegador
+  # (ui/tablet-b), guardando en IndexedDB y replicando contra couch-central.
+
+volumes:
+  central-data:
+  central-b-data:
+  tablet-data:

@@ -1,99 +1,154 @@
 ---
 name: reservas-endpoints
-description: Endpoints para Servicio de Reservas y Pagos
+description: Referencia a endpoints de Reservas Service (OpenAPI auto-generado)
 metadata:
   type: specification
-  status: in-progress
+  status: complete
 ---
 
-# Endpoints — Servicio de Reservas y Pagos
+# Endpoints: Reservas & Pagos Service
+
+## Fuente de Verdad
+
+**OpenAPI Spec auto-generado por FastAPI**: http://localhost:8003/openapi.json  
+**Swagger UI**: http://localhost:8003/docs  
+**ReDoc**: http://localhost:8003/redoc
+
+---
+
+## Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/api/reservar` | Iniciar SAGA + Chain of Responsibility |
+
+---
 
 ## POST /api/reservar
 
-Inicia el proceso de compra de entradas (SAGA + Chain of Responsibility).
+**Inicia transacción distribuida SAGA con orquestación y Chain of Responsibility**
 
-**Request:**
+### Request Body (`ReservaRequest`)
 ```json
 {
-  "usuario_id": "65a1b2c3d4e5f6g7h8i9j0k1",
-  "evento_id": "65a1b2c3d4e5f6g7h8i9j0k2",
+  "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
+  "evento_id": "550e8400-e29b-41d4-a716-446655440001",
   "cantidad": 2,
-  "metodo_pago": "tarjeta_credito",
-  "datos_pago": {
-    "numero_tarjeta": "4532xxxxxxxxxxxx",
-    "nombre_titular": "Juan Pérez",
-    "cvv": "123",
-    "fecha_expiracion": "12/28"
-  }
+  "metodo_pago": "tarjeta"
 }
 ```
 
-**Response (201) — Éxito:**
+**Validaciones**:
+- `usuario_id`, `evento_id`: UUID válidos
+- `cantidad`: entero > 0
+- `metodo_pago`: enum ["tarjeta", "transferencia", "efectivo", "mercadopago"]
+
+### Response 201 (`ReservaResponse`)
 ```json
 {
-  "reserva_id": "res_65a1b2c3d4e5f6g7h8i9j0k3",
-  "usuario_id": "65a1b2c3d4e5f6g7h8i9j0k1",
-  "evento_id": "65a1b2c3d4e5f6g7h8i9j0k2",
-  "cantidad": 2,
-  "precio_total": 300.00,
+  "reserva_id": "550e8400-e29b-41d4-a716-446655440002",
   "estado": "confirmada",
-  "confirmado_en": "2026-09-20T10:05:30Z",
-  "numero_confirmacion": "CONF-2026092010053012345"
+  "numero_confirmacion": "CONF-20260920-A1B2C3D4"
 }
 ```
 
-**Response (400) — Validación fallida:**
-```json
-{
-  "error": "validacion_fallida",
-  "detalles": "Usuario no encontrado"
-}
+### Errores Comunes
+
+| Código | Causa | Paso SAGA |
+|--------|-------|-----------|
+| 400 | Datos inválidos (cantidad<=0, método inválido) | 1 |
+| 404 | Usuario no encontrado | 2 |
+| 404 | Evento no encontrado | 3 |
+| 409 | Inventario insuficiente | 3/4 |
+| 500 | Error interno (Redis, MongoDB, PG) | 4/5/6 |
+| 503 | Servicios downstream no disponibles | 2/3 |
+
+---
+
+## Flujo SAGA Interno (6 Pasos)
+
+```
+POST /api/reservar
+    │
+    ▼
+1. ValidadorDeDatos          ──► Validación local
+2. ValidadorInventario       ──► GET /api/usuarios/{id}
+3. ValidadorEvento           ──► GET /api/eventos/{id} + aforo
+4. ProcesadorPago (Lua)      ──► Redis: Pago + DECRBY inventario (ATÓMICO)
+5. ConfirmadorReserva        ──► MongoDB INSERT reserva
+6. Auditor                   ──► PostgreSQL INSERT event_log
+    │
+    ▼
+Compensaciones automáticas si falla Paso 4-5
 ```
 
-**Response (409) — Inventario agotado:**
-```json
-{
-  "error": "inventario_insuficiente",
-  "disponibles": 1,
-  "solicitadas": 2
-}
+### Atomicidad Crítica (Paso 4)
+
+```lua
+-- Redis Lua Script: Verificar + Decrementar + Registrar Pago (ATÓMICO)
+local disponible = tonumber(redis.call('GET', KEYS[1]) or '0')
+if disponible < tonumber(ARGV[1]) then return {0, 'INVENTARIO_INSUFICIENTE'} end
+redis.call('DECRBY', KEYS[1], ARGV[1])
+redis.call('HSET', KEYS[2], 'reserva_id', ARGV[2], ...)
+return {1, 'OK'}
 ```
 
-**Response (500) — Fallo de pago (compensación iniciada):**
-```json
-{
-  "error": "transaccion_fallida",
-  "mensaje": "El pago fue rechazado. Se revertieron los cambios.",
-  "detalles": "Transacción rollback completada"
-}
+### Compensaciones
+
+| Fallo en | Acción |
+|----------|--------|
+| Paso 1-3 | Ninguna (solo lectura) |
+| Paso 4 (Lua) | Rollback interno atómico (0 cambios) |
+| Paso 5 (MongoDB) | DELETE reserva + Lua INCRBY inventario + DEL pago |
+| Paso 6 (PostgreSQL) | Log WARNING only (reserva ya confirmada) |
+
+---
+
+## Idempotencia
+
+- **Clave**: `reserva_id` (UUID v4) generado al inicio
+- **MongoDB**: `_id = reserva_id` (unique)
+- **Redis**: `pago:{reserva_id}` evita doble procesamiento
+- **PostgreSQL**: `aggregate_id` detecta duplicados
+
+---
+
+## Correlation ID
+
+- Generado al inicio: `X-Correlation-ID` header
+- Propagado a: Usuarios Service, Eventos Service, PostgreSQL event_log, Redis keys
+- Permite tracing distribuido completo
+
+---
+
+## Modelos Pydantic (Referencia)
+
+Ver `brain/data-models/reservation-schema.md` para definiciones completas.
+
+- `ReservaRequest` - Input
+- `ReservaResponse` - Output 201
+- `ReservaContext` - Dataclass interno (Chain of Responsibility)
+- `MetodoPago` - Enum: tarjeta, transferencia, efectivo, mercadopago
+- `EstadoReserva` - Enum: pendiente, confirmada, cancelada, fallida
+
+---
+
+## Especificación Completa
+
+```bash
+curl http://localhost:8003/openapi.json | jq '.paths'
+curl http://localhost:8003/openapi.json | jq '.components.schemas'
 ```
 
 ---
 
-## Flujo Interno (Chain of Responsibility + SAGA)
+## Referencias Relacionadas
 
-```
-1. ValidadorDatos → verifica campos obligatorios
-2. ValidadorInventario → verifica aforo disponible
-3. ProcesadorDePago → procesa pago en Redis (atomic)
-4. ConfirmadorTransaccion → registra en MongoDB
-
-Si algún paso falla:
-  → Compensaciones activan (revertir pago, liberar inventario)
-  → Error 500 al cliente
-```
-
----
-
-## Garantías
-
-- **Atomicidad:** Redis Lua scripts garantizan transacción atómica
-- **Consistencia:** Sin dobles ventas
-- **Idempotencia:** Si el cliente reintenta con mismo payload, devuelve resultado anterior (si existe)
-
----
-
-## Tiempos de Respuesta
-
-- **Esperado:** < 500ms (Redis + validaciones rápidas)
-- **Timeout:** 5 segundos (fallback a error)
+- [[microservices/reservas-pagos]] - Spec completa servicio
+- [[architecture/saga-flow]] - Flujo completo 6 pasos + compensaciones
+- [[architecture/chain-of-responsibility]] - 6 handlers Chain of Responsibility
+- [[patterns/saga-pattern]] - SAGA Orchestration
+- [[patterns/event-sourcing-cqrs]] - Event Sourcing + CQRS en PostgreSQL
+- [[data-models/reservation-schema]] - Esquemas MongoDB/Redis/PostgreSQL
+- [[decisions/consistency-strategy]] - Consistencia fuerte en SAGA

@@ -1,120 +1,140 @@
 ---
 name: usuarios-endpoints
-description: Especificación de endpoints para Servicio de Usuarios (spec-kit)
+description: Referencia a endpoints de Usuarios Service (OpenAPI auto-generado)
 metadata:
   type: specification
-  status: draft
+  status: complete
 ---
 
-# Endpoints — Servicio de Usuarios
+# Endpoints: Usuarios Service
 
-## 🔗 Fuente de Verdad: spec-kit
+## Fuente de Verdad
 
-**IMPORTANTE:** Los endpoints se definen en `spec.json` (generado automáticamente desde código).
+**OpenAPI Spec auto-generado por FastAPI**: http://localhost:8001/openapi.json  
+**Swagger UI**: http://localhost:8001/docs  
+**ReDoc**: http://localhost:8001/redoc
 
-Este documento es una **referencia rápida**. Para la spec completa y actualizada:
-
-1. **OpenAPI spec:** `/usuarios-service/spec.json`
-2. **Swagger UI (interactivo):** `http://localhost:8001/docs`
-3. **ReDoc (legible):** `http://localhost:8001/redoc`
+> **Nota**: Los endpoints se definen en código (`src/api/routes.py`) con modelos Pydantic. FastAPI genera la especificación OpenAPI 3.1 automáticamente. Este archivo referencia la especificación generada, no la duplica.
 
 ---
 
-## 🔄 Flujo de spec-kit
+## Endpoints
 
-```
-Code (Python FastAPI + decoradores)
-    ↓ (spec-kit generate)
-spec.json (OpenAPI 3.0.0)
-    ↓
-Swagger UI en /docs (automático)
-```
+| Método | Ruta | Descripción | Consistencia |
+|--------|------|-------------|--------------|
+| GET | `/health` | Health check | — |
+| POST | `/api/usuarios` | Crear usuario | Fuerte (write concern majority) |
+| GET | `/api/usuarios` | Listar usuarios (paginado) | Eventual |
+| GET | `/api/usuarios/{usuario_id}` | Obtener usuario + historial | Eventual |
+| GET | `/api/usuarios/exportar` | Exportar anonimizado (GDPR) | Eventual |
 
-**No duplicamos specs en Markdown** — spec.json es single source of truth.
+---
 
-## ✅ Endpoints Disponibles
-
-Todos estos endpoints están definidos en `spec.json` y se pueden probar en:
-
-- **Swagger UI:** http://localhost:8001/docs
-- **OpenAPI JSON:** http://localhost:8001/spec.json
+## Referencia Rápida (desde OpenAPI)
 
 ### POST /api/usuarios
-Crear nuevo usuario
 
-**Código generador:** [[spec-kit-code-example.py]] línea 62
+**Request Body** (`UsuarioCreate`):
+```json
+{
+  "tipo_documento": "DNI",
+  "nro_documento": "12345678",
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "email": "juan@example.com"
+}
+```
+
+**Response 201** (`Usuario`):
+```json
+{
+  "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
+  "tipo_documento": "DNI",
+  "nro_documento": "12345678",
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "email": "juan@example.com",
+  "creado_en": "2026-09-20T10:00:00Z",
+  "historial_compras": []
+}
+```
+
+**Errores**:
+- 400: Datos inválidos (validación Pydantic)
+- 409: Email o documento ya existe
 
 ---
 
 ### GET /api/usuarios
-Listar usuarios (paginado)
 
-**Query params:** `skip=0&limit=10`
+**Query Parameters**:
+- `skip` (int, default: 0) - Registros a saltar
+- `limit` (int, default: 10, max: 100) - Máximo registros
 
-**Código generador:** [[spec-kit-code-example.py]] línea 90
+**Response 200**: Array de usuarios (sin historial_compras para performance)
 
 ---
 
 ### GET /api/usuarios/{usuario_id}
-Obtener usuario por ID
 
-**Path params:** `usuario_id` (UUID)
+**Path Parameter**: `usuario_id` (UUID)
 
-**Código generador:** [[spec-kit-code-example.py]] línea 108
+**Response 200** (`Usuario`): Usuario completo con `historial_compras[]`
 
----
-
-### GET /api/usuarios/{usuario_id}/historial
-Historial de compras del usuario
-
-**Query params:** `limit=10`
-
-**Código generador:** [[spec-kit-code-example.py]] línea 152
+**Errores**:
+- 404: Usuario no encontrado
+- 422: UUID inválido
 
 ---
 
 ### GET /api/usuarios/exportar
-Exportar usuarios anonimizados (GDPR)
 
-**Query params:** `format=json|csv`
+**Query Parameter**: `format` (string, enum: `json`, `csv`, default: `json`)
 
-**Código generador:** [[spec-kit-code-example.py]] línea 128
+**Response 200** (`UsuarioExport`):
+```json
+{
+  "usuarios_anonimizados": [
+    {
+      "usuario_hash": "a1b2c3d4e5f6...",
+      "eventos_comprados": 5,
+      "gasto_total": 750.00
+    }
+  ]
+}
+```
+
+**Anonimización**: SHA-256 irreversible con salt. Preserva solo `eventos_comprados` (count) y `gasto_total` (sum).
 
 ---
 
-## 🔍 Cómo Probar
+## Modelos Pydantic (Referencia)
+
+Ver `brain/data-models/user-schema.md` para definiciones completas.
+
+- `UsuarioCreate` - Request POST
+- `Usuario` - Response con historial
+- `UsuarioAnonimizado` - Item exportación
+- `UsuarioExport` - Response exportación
+- `TipoDocumento` - Enum: DNI, Pasaporte
+
+---
+
+## Especificación Completa
 
 ```bash
-# 1. Generar spec desde código
-cd usuarios-service
-spec-kit generate --output spec.json
+# Obtener spec completo
+curl http://localhost:8001/openapi.json | jq '.paths'
 
-# 2. Iniciar servidor
-uvicorn src.main:app --reload
-
-# 3. Ir a Swagger UI
-open http://localhost:8001/docs
-
-# 4. Probar endpoints interactivamente en Swagger
+# Ver solo schemas
+curl http://localhost:8001/openapi.json | jq '.components.schemas'
 ```
 
 ---
 
-## 📊 Validación en CI/CD
+## Referencias Relacionadas
 
-```bash
-# En pipeline CI (GitHub Actions, GitLab CI, etc)
-spec-kit validate  # Asegura spec.json es válido
-spec-kit generate  # Regenera desde código
-```
-
-**Beneficio:** Spec siempre sincronizado con código (no hay divergencias)
-
----
-
-## 🎯 Referencia Cruzada
-
-- **Implementación:** [[spec-kit-code-example.py]]
-- **Setup:** [[spec-kit-setup.md]]
-- **Template OpenAPI:** [[openapi-template.json]]
-- **Docker:** spec-kit se integra en Dockerfile (genera spec.json al build)
+- [[microservices/usuarios]] - Spec completa servicio
+- [[data-models/user-schema]] - Modelo de datos MongoDB
+- [[architecture/data-flow]] - Flujo de datos
+- [[decisions/consistency-strategy]] - Consistencia eventual en lecturas

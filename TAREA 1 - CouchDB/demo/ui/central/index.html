@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSE Central</title>
+<style>
+  :root{
+    --bg:#f2f0e7;
+    --surface:#ffffff;
+    --surface-alt:#eae5d5;
+    --ink:#1d1b15;
+    --ink-dim:#5c5748;
+    --accent:#c53a1f;
+    --accent-tint:#f6e2d7;
+    --ok:#2c6e63;
+    --ok-tint:#dcece7;
+    --warn:#b8781a;
+    --warn-tint:#f5e7cf;
+    --crit:#a3261a;
+    --crit-tint:#f7ddd8;
+    --line:#ddd6c2;
+    --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); padding:26px clamp(16px,4vw,40px) 60px;}
+  .wrap{max-width:1000px; margin:0 auto;}
+
+  header{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:20px; flex-wrap:wrap; gap:10px;}
+  header h1{font-size:22px; margin:0; font-weight:700;}
+  header p{margin:2px 0 0; font-size:12px; color:var(--ink-dim); font-family:var(--mono);}
+  .live{font-family:var(--mono); font-size:11px; color:var(--ok); display:flex; align-items:center; gap:6px;}
+  .live .dot{width:7px; height:7px; border-radius:50%; background:var(--ok); animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:20px;}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .stat .n{font-family:var(--mono); font-size:26px; font-weight:600; font-variant-numeric:tabular-nums;}
+  .stat .l{font-size:11px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.05em; margin-top:2px;}
+  .stat.crit .n{color:var(--crit);}
+
+  .cols{display:grid; grid-template-columns:1.1fr 1fr; gap:18px;}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr;} }
+
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:18px;}
+  .panel h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); margin:0 0 12px; font-weight:600;}
+
+  .bar-row{display:grid; grid-template-columns:110px 1fr 90px; align-items:center; gap:10px; font-size:12.5px; margin-bottom:9px;}
+  .bar-row .zona{font-weight:600;}
+  .bar-track{background:var(--surface-alt); border-radius:6px; height:10px; overflow:hidden;}
+  .bar-fill{background:var(--accent); height:100%; border-radius:6px;}
+  .bar-row .figs{font-family:var(--mono); color:var(--ink-dim); text-align:right; white-space:nowrap;}
+
+  .list{display:flex; flex-direction:column; gap:7px; max-height:420px; overflow-y:auto;}
+  .card{background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; align-items:stretch; gap:8px;}
+  .card-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .rev{background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; color:var(--ink-dim); cursor:help;}
+  .rev.win{border-color:var(--ok); color:var(--ok);}
+  .rev.lose{border-color:var(--crit); color:var(--crit);}
+  .card .desc{font-size:13.5px; font-weight:600; margin-top:1px;}
+  .card .val{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); margin-top:1px;}
+  .badges{display:flex; flex-direction:column; gap:4px; align-items:flex-end;}
+  .badge{font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px; white-space:nowrap;}
+  .badge.crit{background:var(--crit-tint); color:var(--crit);}
+  .empty{font-size:12.5px; color:var(--ink-dim); text-align:center; padding:22px 0;}
+
+  .link-row{display:flex; gap:12px;}
+  .link-btn{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-decoration:underline; cursor:pointer;}
+  .link-btn.crit{color:var(--crit);}
+
+  .edit-row{display:flex; gap:6px;}
+  .edit-row input{flex:1;}
+  .btn-mini{padding:6px 10px; font-size:11.5px; border-radius:6px;}
+  .btn-mini.save{background:var(--ok); color:#fff;}
+  .btn-mini.cancel{background:var(--line); color:var(--ink-dim);}
+
+  .conflict-panel{border:1px dashed var(--crit); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; background:var(--crit-tint);}
+  .conflict-opt{display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--surface); border-radius:6px; padding:8px 10px;}
+  .conflict-opt .label{font-size:10.5px; color:var(--ink-dim); font-family:var(--mono);}
+  .conflict-opt .value{font-weight:600; font-family:var(--mono);}
+  .btn-keep{background:var(--crit); color:#fff; padding:6px 10px; font-size:11.5px; border-radius:6px; flex:none;}
+
+  form{display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;}
+  .f{display:flex; flex-direction:column; gap:3px;}
+  label{font-size:10.5px; color:var(--ink-dim); font-family:var(--mono);}
+  input, select{font:inherit; font-size:13px; padding:7px 9px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink);}
+  button{font:inherit; cursor:pointer; border:none; border-radius:8px; padding:8px 14px; font-weight:600; font-size:13px; background:var(--accent); color:#fff8f3;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th,td{text-align:left; padding:6px 8px; border-bottom:1px solid var(--line);}
+  th{font-family:var(--mono); font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:500;}
+  td.num{font-family:var(--mono); text-align:right;}
+
+  .seg{display:flex; gap:0; margin-bottom:12px; border:1px solid var(--line); border-radius:8px; overflow:hidden; width:fit-content;}
+  .seg-btn{background:var(--surface); color:var(--ink-dim); border:none; border-right:1px solid var(--line);
+    padding:5px 12px; font-family:var(--mono); font-size:11px; cursor:pointer; font-weight:500;}
+  .seg-btn:last-child{border-right:none;}
+  .seg-btn.activo{background:var(--accent); color:var(--accent-ink); font-weight:600;}
+  .plan{background:var(--surface-alt); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-top:10px; font-family:var(--mono); font-size:11px; line-height:1.6;}
+  .plan .idx{color:var(--ok); font-weight:600;}
+  .plan .idx.scan{color:var(--crit);}
+  .plan-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10.5px; color:var(--accent); text-decoration:underline; cursor:pointer; margin-top:6px;}
+  header select{font-family:var(--mono); font-size:12px; padding:2px 6px; border:1px solid var(--line);
+    border-radius:6px; background:var(--surface); color:var(--ink); cursor:pointer;}
+  .note{font-size:11.5px; color:var(--ink-dim); font-family:var(--mono); margin-top:2px;}
+
+  [data-tip]{cursor:help;}
+  h2[data-tip], .live[data-tip]{cursor:help; border-bottom:1px dotted var(--ink-dim); width:fit-content;}
+  #tip-float{
+    position:fixed; z-index:9999; pointer-events:none;
+    background:var(--ink); color:var(--bg); font-family:var(--mono); font-size:10.5px; line-height:1.45;
+    padding:7px 10px; border-radius:7px; max-width:280px; white-space:pre-line;
+    box-shadow:0 10px 24px -10px rgba(0,0,0,.5);
+    opacity:0; transform:translateY(2px); transition:opacity .12s ease, transform .12s ease;
+  }
+  #tip-float.show{opacity:1; transform:translateY(0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>OSE Central</h1>
+      <p data-tip="Los dos masters aceptan escrituras y se replican entre si.&#10;HAProxy sondea /_up en cada uno y enruta al que este sano — no hay que elegir a mano.">panel de monitoreo · balanceado por HAProxy (:5986)</p>
+    </div>
+    <div class="live" data-tip="GET /inspecciones/_changes?include_docs=true&#38;conflicts=true&#38;style=all_docs&#10;se repite cada 4 segundos"><span class="dot"></span>actualizando cada 4s</div>
+  </header>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="n">—</div><div class="l">lecturas totales</div></div>
+    <div class="stat"><div class="n">—</div><div class="l">zonas</div></div>
+    <div class="stat"><div class="n">—</div><div class="l">última recibida</div></div>
+    <div class="stat" id="conf-stat"><div class="n">—</div><div class="l">conflictos</div></div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="panel">
+        <h2 data-tip="Una sola vista con clave compuesta [zona, año, mes].&#10;El nivel de agregación lo elige group_level, no otra vista.">Consumo · drill-down MapReduce</h2>
+        <div class="seg" id="seg">
+          <button class="seg-btn activo" data-gl="1">por zona</button>
+          <button class="seg-btn" data-gl="2">+ año</button>
+          <button class="seg-btn" data-gl="3">+ mes</button>
+        </div>
+        <div id="bars"><p class="empty">Cargando…</p></div>
+        <p class="note" id="bars-url"></p>
+      </div>
+      <div class="panel">
+        <h2>Consulta Mango — lecturas por zona / mínimo m³</h2>
+        <form id="mango-form">
+          <div class="f">
+            <label for="mzona">Zona</label>
+            <select id="mzona"></select>
+          </div>
+          <div class="f">
+            <label for="mmin">Mínimo m³</label>
+            <input id="mmin" type="number" value="0" step="100" style="width:100px;">
+          </div>
+          <button type="submit" data-tip="POST /inspecciones/_find&#10;selector + sort, usa el índice Mango creado en setup.sh">Buscar</button>
+        </form>
+        <div id="mango-results"></div>
+        <p class="note" id="mango-note"></p>
+        <div class="plan" id="mango-plan" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Documentos replicados</h2>
+      <div class="list" id="list"><p class="empty">Cargando…</p></div>
+      <p class="note">La sincronización la disparan las tablets (A y B); acá se pueden corregir valores y resolver conflictos.</p>
+    </div>
+
+    <div class="panel">
+      <h2 data-tip="GET .../_view/con_padron?include_docs=true&#10;La vista emite {_id: 'medidor:...'} y CouchDB adjunta ese documento.">Lecturas cruzadas con el padrón</h2>
+      <div class="tabwrap"><div id="padron"><p class="empty">Cargando…</p></div></div>
+      <p class="note">CouchDB no tiene JOIN. Esto es el truco equivalente: la vista emite como valor
+      un <code>{_id: …}</code> apuntando a otro documento, y con <code>include_docs=true</code> el
+      servidor lo adjunta en la misma consulta.</p>
+    </div>
+  </div>
+</div>
+
+<div id="tip-float"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+  // Habla con el VIP de HAProxy, no con un master directo: el balanceador
+  // decide a cual de los dos mandar segun su propio health check.
+  const API = 'http://localhost:5986';
+  const AUTH = 'Basic ' + btoa('admin:admin123');
+  const DB = '/inspecciones';
+
+  function api(path, opts={}){
+    return fetch(API + path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', 'Authorization': AUTH, ...(opts.headers||{}) }
+    });
+  }
+
+  function fmtTime(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function shortRev(rev){
+    if(!rev) return '—';
+    const [gen, hash] = rev.split('-');
+    return gen + '-' + hash.slice(0, 7);
+  }
+
+  let lastDocs = [];
+  let openId = null;      // _id del doc con un panel abierto (editar o resolver)
+  let openMode = null;    // 'edit' | 'resolve'
+  const conflictCache = {}; // _id -> doc de la revision perdedora, ya resuelto
+
+  async function loadDocs(){
+    if(openId) return; // no pisar un panel de edicion/resolucion abierto
+    try{
+      const res = await api(DB + '/_changes?include_docs=true&conflicts=true&style=all_docs');
+      const data = await res.json();
+      lastDocs = data.results
+        .map(r => r.doc)
+        .filter(d => d && !d._deleted && d.type === 'lectura_medidor')
+        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+      renderList();
+    }catch(e){
+      document.getElementById('list').innerHTML =
+        '<p class="empty">No se pudo conectar al balanceador (:5986). ¿Está corriendo el contenedor haproxy?</p>';
+    }
+  }
+
+  function cardTemplate(d){
+    const conflicted = d._conflicts && d._conflicts.length;
+    const top = `
+      <div class="card-top">
+        <div>
+          <div class="id">${d._id}
+            <span class="rev ${conflicted ? 'win' : ''}" data-tip="_rev completo (la revisión que devuelve la app hoy):\n${d._rev}">rev ${shortRev(d._rev)}</span>
+          </div>
+          <div class="desc">${d.medidor_id} · ${d.zona}</div>
+          <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
+        </div>
+        <div class="badges">
+          ${conflicted ? '<span class="badge crit">⚠ conflicto</span>' : ''}
+        </div>
+      </div>`;
+
+    if(openId === d._id && openMode === 'edit'){
+      return `<div class="card" data-cardid="${d._id}">${top}
+        <div class="edit-row">
+          <input id="edit-input" type="number" step="0.1" value="${d.valor_m3}">
+          <button class="btn-mini save" data-save="${d._id}" data-tip="PUT /inspecciones/${d._id}\nActualiza el valor con la _rev actual">Guardar</button>
+          <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
+        </div>
+      </div>`;
+    }
+
+    if(openId === d._id && openMode === 'resolve'){
+      const losing = conflictCache[d._id];
+      const body = losing ? `
+        <div class="conflict-panel">
+          <div class="conflict-opt">
+            <div><div class="label">actual (central) · <span class="rev win" data-tip="_rev completo:\n${d._rev}">${shortRev(d._rev)}</span></div><div class="value">${d.valor_m3} m³</div></div>
+            <button class="btn-keep" data-keep="central" data-id="${d._id}" data-tip="DELETE /inspecciones/${d._id}?rev=${d._conflicts[0]}\nDescarta la revisión perdedora, no toca la actual">Mantener este</button>
+          </div>
+          <div class="conflict-opt">
+            <div><div class="label">en conflicto (llegó de la tablet) · <span class="rev lose" data-tip="_rev completo:\n${d._conflicts[0]}">${shortRev(d._conflicts[0])}</span></div><div class="value">${losing.valor_m3} m³</div></div>
+            <button class="btn-keep" data-keep="tablet" data-id="${d._id}" data-tip="PUT /inspecciones/${d._id}\n+ DELETE ...?rev=${d._conflicts[0]}\nReemplaza el valor y cierra el conflicto">Usar este</button>
+          </div>
+          <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
+        </div>` : '<p class="empty">Cargando revisión en conflicto…</p>';
+      return `<div class="card" data-cardid="${d._id}">${top}${body}</div>`;
+    }
+
+    return `<div class="card" data-cardid="${d._id}">${top}
+      <div class="link-row">
+        <button class="link-btn" data-edit="${d._id}">editar valor</button>
+        ${conflicted ? `<button class="link-btn crit" data-resolve="${d._id}" data-tip="GET /inspecciones/${d._id}?rev=${d._conflicts[0]}\nTrae el contenido de la revisión en conflicto">resolver conflicto</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function animateStat(el, to){
+    if(!window.gsap){ el.textContent = to; return; }
+    const from = parseInt(el.textContent, 10) || 0;
+    if(from === to) return;
+    const obj = { val: from };
+    gsap.to(obj, { val: to, duration: 0.6, ease: 'power1.out', onUpdate: () => { el.textContent = Math.round(obj.val); } });
+  }
+
+  let prevRevs = {};
+  let firstRender = true;
+
+  function renderList(){
+    const docs = lastDocs;
+    const stats = document.querySelectorAll('#stats .n');
+    const zonas = [...new Set(docs.map(d => d.zona))];
+    animateStat(stats[0], docs.length);
+    animateStat(stats[1], zonas.length);
+    stats[2].textContent = docs.length ? fmtTime(docs[0].fecha) : '—';
+
+    const conflicted = docs.filter(d => d._conflicts && d._conflicts.length);
+    const confStat = document.getElementById('conf-stat');
+    animateStat(stats[3], conflicted.length);
+    confStat.classList.toggle('crit', conflicted.length > 0);
+
+    const changedIds = firstRender ? [] : docs.filter(d => prevRevs[d._id] !== d._rev).map(d => d._id);
+    prevRevs = Object.fromEntries(docs.map(d => [d._id, d._rev]));
+
+    const list = document.getElementById('list');
+    list.innerHTML = docs.length ? docs.map(cardTemplate).join('') : '<p class="empty">Todavía no llegó ninguna lectura de la tablet.</p>';
+
+    if(window.gsap && changedIds.length){
+      changedIds.forEach(id => {
+        const el = list.querySelector(`[data-cardid="${CSS.escape(id)}"]`);
+        if(el) gsap.fromTo(el, { backgroundColor: '#dcece7' }, { backgroundColor: '#eae5d5', duration: 1.1, ease: 'power1.out' });
+      });
+    }
+    firstRender = false;
+
+    const zonaSelect = document.getElementById('mzona');
+    const current = zonaSelect.value;
+    zonaSelect.innerHTML = zonas.map(z => `<option ${z===current?'selected':''}>${z}</option>`).join('') || '<option>—</option>';
+  }
+
+  document.getElementById('list').addEventListener('click', async (ev) => {
+    const t = ev.target;
+    if(t.dataset.edit){ openId = t.dataset.edit; openMode = 'edit'; renderList(); return; }
+    if(t.dataset.cancel){ openId = null; openMode = null; renderList(); return; }
+
+    if(t.dataset.resolve){
+      const id = t.dataset.resolve;
+      openId = id; openMode = 'resolve'; renderList();
+      const doc = lastDocs.find(d => d._id === id);
+      const losingRev = doc._conflicts[0];
+      const res = await api(DB + '/' + encodeURIComponent(id) + '?rev=' + losingRev);
+      conflictCache[id] = await res.json();
+      if(openId === id) renderList();
+      return;
+    }
+
+    if(t.dataset.save){
+      const id = t.dataset.save;
+      const valor = parseFloat(document.getElementById('edit-input').value);
+      const doc = lastDocs.find(d => d._id === id);
+      if(!doc || Number.isNaN(valor)) return;
+      const clean = { ...doc, valor_m3: valor };
+      delete clean._conflicts;
+      await api(DB + '/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(clean) });
+      openId = null; openMode = null;
+      loadDocs();
+      return;
+    }
+
+    if(t.dataset.keep){
+      const id = t.dataset.id;
+      const doc = lastDocs.find(d => d._id === id);
+      const losingRev = doc._conflicts[0];
+      if(t.dataset.keep === 'tablet'){
+        const losing = conflictCache[id];
+        const merged = { ...doc, valor_m3: losing.valor_m3, sincronizado: losing.sincronizado, fecha: losing.fecha };
+        delete merged._conflicts;
+        await api(DB + '/' + encodeURIComponent(id), { method: 'PUT', body: JSON.stringify(merged) });
+      }
+      // en los dos casos hay que borrar explicitamente la revision perdedora
+      // para cerrar el conflicto: CouchDB nunca lo hace solo.
+      await api(DB + '/' + encodeURIComponent(id) + '?rev=' + losingRev, { method: 'DELETE' });
+      delete conflictCache[id];
+      openId = null; openMode = null;
+      loadDocs();
+      return;
+    }
+  });
+
+  let barsZonas = [];
+  let groupLevel = 1;
+
+  function etiquetaClave(k){
+    if(!Array.isArray(k)) return String(k);
+    if(k.length === 1) return k[0];
+    if(k.length === 2) return k[0] + ' · ' + k[1];
+    return k[0] + ' · ' + k[1] + '-' + k[2];
+  }
+
+  async function loadBars(){
+    const bars = document.getElementById('bars');
+    const url = DB + '/_design/lecturas/_view/consumo_zona_mes?group_level=' + groupLevel;
+    document.getElementById('bars-url').textContent = 'GET ' + url;
+    try{
+      const res = await api(url);
+      const data = await res.json();
+      const rows = data.rows || [];
+      if(!rows.length){
+        bars.innerHTML = '<p class="empty">Sin datos todavía.</p>';
+        barsZonas = [];
+        return;
+      }
+      const max = Math.max(1, ...rows.map(r => r.value));
+      const claves = rows.map(r => etiquetaClave(r.key));
+      const mismaForma = claves.length === barsZonas.length && claves.every((z,i) => z === barsZonas[i]);
+
+      if(!mismaForma){
+        bars.innerHTML = rows.map(r => {
+          const et = etiquetaClave(r.key);
+          return `
+          <div class="bar-row">
+            <div class="zona">${et}</div>
+            <div class="bar-track"><div class="bar-fill" data-k="${et}" style="width:0%"></div></div>
+            <div class="figs" data-f="${et}">${r.value.toFixed(1)} m³</div>
+          </div>`;
+        }).join('');
+        barsZonas = claves;
+      }
+
+      rows.forEach(r => {
+        const et = etiquetaClave(r.key);
+        const pct = (r.value / max * 100).toFixed(1) + '%';
+        const fill = bars.querySelector(`.bar-fill[data-k="${CSS.escape(et)}"]`);
+        const figs = bars.querySelector(`[data-f="${CSS.escape(et)}"]`);
+        if(figs) figs.textContent = r.value.toFixed(1) + ' m³';
+        if(fill){
+          if(window.gsap) gsap.to(fill, { width: pct, duration: 0.7, ease: 'power2.out' });
+          else fill.style.width = pct;
+        }
+      });
+    }catch(e){
+      bars.innerHTML = '<p class="empty">Sin datos todavía.</p>';
+      barsZonas = [];
+    }
+  }
+
+  document.getElementById('seg').addEventListener('click', (ev) => {
+    const b = ev.target.closest('.seg-btn');
+    if(!b) return;
+    groupLevel = parseInt(b.dataset.gl, 10);
+    document.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('activo', x === b));
+    barsZonas = [];
+    loadBars();
+  });
+
+  // Join de vistas: la vista emite {_id: 'medidor:...'} y con include_docs
+  // CouchDB adjunta el documento del padron en la misma consulta.
+  async function loadPadron(){
+    const cont = document.getElementById('padron');
+    try{
+      const res = await api(DB + '/_design/lecturas/_view/con_padron?include_docs=true');
+      const data = await res.json();
+      // la clave es [medidor_id, fecha], asi que la ultima fila de cada
+      // medidor es su lectura mas reciente
+      const ultima = new Map();
+      for(const r of (data.rows || [])) ultima.set(r.key[0], r);
+      const rows = [...ultima.values()];
+      if(!rows.length){ cont.innerHTML = '<p class="empty">Sin lecturas todavía.</p>'; return; }
+      cont.innerHTML = `<table>
+        <tr><th>Medidor</th><th>Titular</th><th>Dirección</th><th>Lectura</th><th>Consumo</th></tr>
+        ${rows.map(r => {
+          const d = r.doc || {};
+          const v = r.value || {};
+          return `<tr>
+            <td class="num">${r.key[0]}</td>
+            <td>${d.titular || '—'}</td>
+            <td>${d.direccion || '—'}</td>
+            <td class="num">${v.valor_m3 != null ? v.valor_m3 : '—'}</td>
+            <td class="num">${v.consumo_m3 != null ? v.consumo_m3 + ' m³' : '—'}</td>
+          </tr>`;
+        }).join('')}
+      </table>`;
+    }catch(e){
+      cont.innerHTML = '<p class="empty">No se pudo consultar el padrón.</p>';
+    }
+  }
+
+  // _explain muestra que indice eligio el planificador. Es la forma de ver
+  // si Mango esta usando el indice o escaneando la base entera.
+  async function explicar(consulta){
+    const res = await api(DB + '/_explain', { method:'POST', body: JSON.stringify(consulta) });
+    const d = await res.json();
+    const nombre = d.index ? d.index.name : '?';
+    const tipo = d.index ? d.index.type : '?';
+    const mr = d.mrargs || {};
+    return { nombre, tipo, escaneo: tipo === 'special',
+             desde: JSON.stringify(mr.start_key), hasta: JSON.stringify(mr.end_key) };
+  }
+
+  async function mostrarPlan(consulta){
+    const cont = document.getElementById('mango-plan');
+    cont.style.display = 'block';
+    try{
+      const p = await explicar(consulta);
+      cont.innerHTML =
+        `índice: <span class="idx ${p.escaneo?'scan':''}">${p.nombre}</span> (${p.tipo})<br>` +
+        `rango recorrido: ${p.desde} → ${p.hasta}` +
+        `<button class="plan-link" id="plan-sin-indice">¿y si filtro por un campo sin índice?</button>`;
+      document.getElementById('plan-sin-indice').addEventListener('click', async () => {
+        const sinIndice = { selector: { inspector: 'jperez' }, limit: 20 };
+        const q = await explicar(sinIndice);
+        cont.innerHTML +=
+          `<br><br><b>{"selector": {"inspector": "jperez"}}</b><br>` +
+          `índice: <span class="idx ${q.escaneo?'scan':''}">${q.nombre}</span> (${q.tipo})<br>` +
+          (q.escaneo
+            ? 'no hay índice por inspector: recorre la base entera para filtrar'
+            : 'usa un índice');
+      });
+    }catch(e){
+      cont.textContent = 'No se pudo obtener el plan: ' + e.message;
+    }
+  }
+
+  document.getElementById('mango-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const zona = document.getElementById('mzona').value;
+    const min = parseFloat(document.getElementById('mmin').value) || 0;
+    const note = document.getElementById('mango-note');
+    const out = document.getElementById('mango-results');
+    if(!zona || zona === '—'){ out.innerHTML = ''; note.textContent = 'Todavía no hay zonas replicadas.'; return; }
+
+    try{
+      const consulta = {
+        selector: { type: 'lectura_medidor', zona, valor_m3: { '$gte': min } },
+        fields: ['_id','medidor_id','valor_m3','fecha'],
+        sort: [{ valor_m3: 'desc' }],
+        limit: 20
+      };
+      const res = await api(DB + '/_find', { method: 'POST', body: JSON.stringify(consulta) });
+      const data = await res.json();
+      if(!res.ok){ note.textContent = data.reason || 'Error en la consulta.'; out.innerHTML = ''; return; }
+      note.textContent = data.docs.length + ' resultado(s).';
+      mostrarPlan(consulta);
+      out.innerHTML = data.docs.length ? `
+        <table>
+          <tr><th>Medidor</th><th>m³</th><th>Hora</th></tr>
+          ${data.docs.map(d => `<tr><td>${d.medidor_id}</td><td class="num">${d.valor_m3}</td><td class="num">${fmtTime(d.fecha)}</td></tr>`).join('')}
+        </table>` : '';
+    }catch(e){
+      note.textContent = 'Error: ' + e.message;
+    }
+  });
+
+  function refresh(){ loadDocs(); loadBars(); loadPadron(); }
+  refresh();
+  setInterval(refresh, 4000);
+
+  (function(){
+    const tip = document.getElementById('tip-float');
+    let active = null;
+    function place(e){
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top = (e.clientY + 14) + 'px';
+      requestAnimationFrame(() => {
+        const r = tip.getBoundingClientRect();
+        if(r.right > innerWidth - 8) tip.style.left = (innerWidth - r.width - 8) + 'px';
+        if(r.bottom > innerHeight - 8) tip.style.top = (e.clientY - r.height - 14) + 'px';
+      });
+    }
+    document.addEventListener('mouseover', (e) => {
+      const el = e.target.closest('[data-tip]');
+      if(!el) return;
+      active = el;
+      tip.textContent = el.dataset.tip;
+      tip.classList.add('show');
+      place(e);
+    });
+    document.addEventListener('mousemove', (e) => { if(active) place(e); });
+    document.addEventListener('mouseout', (e) => {
+      if(e.target.closest('[data-tip]') === active){ active = null; tip.classList.remove('show'); }
+    });
+  })();
+</script>
+</body>
+</html>
