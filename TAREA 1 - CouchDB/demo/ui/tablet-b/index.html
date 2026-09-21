@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSE Móvil — Tablet B (PouchDB)</title>
+<style>
+  :root{
+    --bg:#eae6d9;
+    --device:#f2f0e7;
+    --surface:#ffffff;
+    --ink:#1d1b15;
+    --ink-dim:#5c5748;
+    --accent:#2f5f8a;
+    --accent-tint:#dde6ee;
+    --ok:#2c6e63;
+    --ok-tint:#dcece7;
+    --warn:#b8781a;
+    --warn-tint:#f5e7cf;
+    --crit:#a3261a;
+    --crit-tint:#f7ddd8;
+    --line:#ddd6c2;
+    --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font); display:flex; justify-content:center; padding:28px 14px;}
+
+  .device{
+    width:100%; max-width:420px; background:var(--device);
+    border:1px solid var(--line); border-radius:26px;
+    padding:18px 18px 22px; box-shadow:0 20px 40px -24px rgba(0,0,0,.35);
+  }
+  .cam{width:8px; height:8px; border-radius:50%; background:var(--line); margin:0 auto 14px;}
+
+  header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;}
+  header h1{font-size:17px; margin:0 0 2px; font-weight:700;}
+  header p{margin:0; font-size:11.5px; color:var(--ink-dim); font-family:var(--mono);}
+
+  .toggle{display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 10px 6px 6px; cursor:pointer; user-select:none;}
+  .dot{width:9px; height:9px; border-radius:50%; background:#b23a2f; flex:none; transition:background .2s;}
+  .device[data-online="1"] .dot{background:var(--ok);}
+  .toggle span{font-size:11.5px; font-weight:600; font-family:var(--mono);}
+
+  form{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:9px; margin-bottom:14px;}
+  form h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); margin:0 0 2px; font-weight:600;}
+  .row{display:flex; gap:8px;}
+  .row > *{flex:1;}
+  label{font-size:10.5px; color:var(--ink-dim); font-family:var(--mono); display:block; margin-bottom:3px;}
+  input, select{width:100%; font:inherit; font-size:13.5px; padding:8px 9px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink);}
+  input:focus, select:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  button{font:inherit; cursor:pointer; border:none; border-radius:8px; padding:10px 14px; font-weight:600; font-size:13.5px;}
+  .btn-primary{background:var(--accent); color:#fff8f3;}
+  .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
+
+  .section-title{display:flex; justify-content:space-between; align-items:baseline; margin:0 0 8px;}
+  .section-title h2{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-dim); margin:0; font-weight:600;}
+  .pending-count{font-family:var(--mono); font-size:11px; color:var(--warn);}
+
+  .list{display:flex; flex-direction:column; gap:7px; max-height:320px; overflow-y:auto; margin-bottom:14px;}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; align-items:stretch; gap:8px;}
+  .card-top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .card .meta{min-width:0;}
+  .card .id{font-family:var(--mono); font-size:11px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .rev{background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:10px; color:var(--ink-dim); cursor:help;}
+  .rev.conf{border-color:var(--crit); color:var(--crit);}
+  .card .desc{font-size:13.5px; font-weight:600; margin-top:1px;}
+  .card .val{font-family:var(--mono); font-size:12.5px; color:var(--ink-dim); margin-top:1px;}
+  .badges{display:flex; flex-direction:column; gap:4px; align-items:flex-end;}
+  .badge{font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px; white-space:nowrap; flex:none;}
+  .badge.pend{background:var(--warn-tint); color:var(--warn);}
+  .badge.sync{background:var(--ok-tint); color:var(--ok);}
+  .badge.conf{background:var(--crit-tint); color:var(--crit);}
+  .badge.otro{background:var(--bg); color:var(--ink-dim); border:1px solid var(--line);}
+  .empty{font-size:12.5px; color:var(--ink-dim); text-align:center; padding:18px 0;}
+
+  .edit-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--ink-dim); text-decoration:underline; cursor:pointer; align-self:flex-start;}
+  .edit-row{display:flex; gap:6px;}
+  .edit-row input{flex:1;}
+  .btn-mini{padding:6px 10px; font-size:11.5px; border-radius:6px;}
+  .btn-mini.save{background:var(--ok); color:#fff;}
+  .btn-mini.cancel{background:var(--line); color:var(--ink-dim);}
+
+  .sync-panel{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:11px 13px;}
+  .sync-row{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11.5px;}
+  .sync-dot{width:8px; height:8px; border-radius:50%; background:var(--ink-dim); flex:none;}
+  .sync-panel[data-state="off"] .sync-dot{background:var(--warn);}
+  .sync-panel[data-state="active"] .sync-dot{background:var(--accent); animation:blink 1s infinite;}
+  .sync-panel[data-state="idle"] .sync-dot{background:var(--ok);}
+  .sync-panel[data-state="error"] .sync-dot{background:var(--crit);}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .sync-sub{font-size:10.5px; color:var(--ink-dim); font-family:var(--mono); margin-top:6px; line-height:1.5;}
+
+  .storage{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; font-family:var(--mono); font-size:10px; color:var(--ink-dim);}
+  .reset-link{background:none; border:none; padding:0; font-family:var(--mono); font-size:10px; color:var(--crit); text-decoration:underline; cursor:pointer;}
+
+  #tip-float{
+    position:fixed; z-index:9999; pointer-events:none;
+    background:var(--ink); color:var(--device); font-family:var(--mono); font-size:10.5px; line-height:1.45;
+    padding:7px 10px; border-radius:7px; max-width:250px; white-space:pre-line;
+    box-shadow:0 10px 24px -10px rgba(0,0,0,.5);
+    opacity:0; transform:translateY(2px); transition:opacity .12s ease, transform .12s ease;
+  }
+  #tip-float.show{opacity:1; transform:translateY(0);}
+
+  .fatal{background:var(--crit-tint); border:1px solid var(--crit); color:var(--crit); border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.5;}
+</style>
+</head>
+<body>
+  <div class="device" id="device" data-online="0">
+    <div class="cam"></div>
+    <header>
+      <div>
+        <h1>OSE Móvil — B</h1>
+        <p>mgonzalez · PouchDB en el navegador</p>
+      </div>
+      <div class="toggle" id="toggle" data-tip="db.sync(remoto, {live:true, retry:true,&#10;  pull:{selector:{inspector:'mgonzalez'}}})&#10;Solo baja lo propio. La escritura local anda siempre.">
+        <span class="dot"></span>
+        <span id="toggle-label">SIN CONEXIÓN</span>
+      </div>
+    </header>
+
+    <div id="fatal" class="fatal" style="display:none;"></div>
+
+    <form id="form">
+      <h2>Nueva lectura</h2>
+      <div class="row">
+        <div>
+          <label for="medidor">Medidor</label>
+          <input id="medidor" placeholder="OSE-6210" required>
+        </div>
+        <div>
+          <label for="zona">Zona</label>
+          <select id="zona">
+            <option>Canelones-Este</option>
+            <option>Canelones-Oeste</option>
+            <option>Florida-Norte</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="valor">Valor (m³)</label>
+        <input id="valor" type="number" step="0.1" placeholder="12480.6" required>
+      </div>
+      <button class="btn-primary" type="submit" data-tip="db.put({...})&#10;Escribe en el IndexedDB del navegador. No toca la red.">Guardar lectura (local)</button>
+    </form>
+
+    <div class="section-title">
+      <h2>Lecturas en este dispositivo</h2>
+      <span class="pending-count" id="pending-count">—</span>
+    </div>
+    <div class="list" id="list"><p class="empty">Cargando…</p></div>
+
+    <div class="sync-panel" id="sync-panel" data-state="off">
+      <div class="sync-row"><span class="sync-dot"></span><span id="sync-state">sin sincronizar</span></div>
+      <div class="sync-sub" id="sync-sub">Los cambios quedan en el dispositivo hasta que actives la conexión.</div>
+    </div>
+
+    <div class="storage">
+      <span id="storage-info">IndexedDB · base local "inspecciones"</span>
+      <button class="reset-link" id="reset-btn" data-tip="db.destroy() y vuelve a sembrar&#10;Sirve para dejar la demo como al principio">reiniciar datos locales</button>
+    </div>
+  </div>
+
+  <div id="tip-float"></div>
+
+<script src="pouchdb.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+  (function(){
+    const tip = document.getElementById('tip-float');
+    let active = null;
+    function place(e){
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top = (e.clientY + 14) + 'px';
+      requestAnimationFrame(() => {
+        const r = tip.getBoundingClientRect();
+        if(r.right > innerWidth - 8) tip.style.left = (innerWidth - r.width - 8) + 'px';
+        if(r.bottom > innerHeight - 8) tip.style.top = (e.clientY - r.height - 14) + 'px';
+      });
+    }
+    document.addEventListener('mouseover', (e) => {
+      const el = e.target.closest('[data-tip]');
+      if(!el) return;
+      active = el;
+      tip.textContent = el.dataset.tip;
+      tip.classList.add('show');
+      place(e);
+    });
+    document.addEventListener('mousemove', (e) => { if(active) place(e); });
+    document.addEventListener('mouseout', (e) => {
+      if(e.target.closest('[data-tip]') === active){ active = null; tip.classList.remove('show'); }
+    });
+  })();
+
+  // Sin usuario:clave en la URL: los navegadores rechazan construir un
+  // fetch() con credenciales embebidas. PouchDB las manda por header con
+  // la opcion auth.
+  // PouchDB corre en el navegador, asi que necesita una URL alcanzable
+  // desde ahi: el puerto que HAProxy mapea al host (5986), no el nombre de
+  // servicio de docker (ese solo existe dentro de la red de compose).
+  const remotaUrl = () => 'http://localhost:5986/inspecciones';
+  const REMOTA_OPTS = { auth: { username: 'admin', password: 'admin123' } };
+  const INSPECTOR = 'mgonzalez';
+
+  // Ruta de mgonzalez. Las dos primeras comparten _id con lecturas que ya
+  // cargó jperez en la tablet A: cuando las dos repliquen al central, esos
+  // documentos van a quedar en conflicto.
+  const SEMILLA = [
+    { _id:'lectura:2026-09-13:00238', type:'lectura_medidor', medidor_id:'OSE-3390', zona:'Florida-Norte',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:10:00-03:00', valor_m3:5087.4, consumo_m3:146.8, sincronizado:false,
+      geo:{lat:-34.101, lon:-56.221} },
+    { _id:'lectura:2026-09-13:00235', type:'lectura_medidor', medidor_id:'OSE-4488', zona:'Canelones-Este',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:22:00-03:00', valor_m3:9265.0, consumo_m3:51.1, sincronizado:false,
+      geo:{lat:-34.712, lon:-55.978} },
+    { _id:'lectura:2026-09-13:00301', type:'lectura_medidor', medidor_id:'OSE-6210', zona:'Canelones-Oeste',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:35:00-03:00', valor_m3:12480.6, consumo_m3:94.2, sincronizado:false,
+      geo:{lat:-34.725, lon:-56.018} },
+    { _id:'lectura:2026-09-13:00302', type:'lectura_medidor', medidor_id:'OSE-6233', zona:'Florida-Norte',
+      inspector:'mgonzalez', fecha:'2026-09-13T16:48:00-03:00', valor_m3:7710.2, consumo_m3:61.5, sincronizado:false,
+      geo:{lat:-34.108, lon:-56.231} }
+  ];
+
+  const device = document.getElementById('device');
+  const toggle = document.getElementById('toggle');
+  const toggleLabel = document.getElementById('toggle-label');
+  const list = document.getElementById('list');
+  const pendingCount = document.getElementById('pending-count');
+  const syncPanel = document.getElementById('sync-panel');
+  const syncState = document.getElementById('sync-state');
+  const syncSub = document.getElementById('sync-sub');
+  const storageInfo = document.getElementById('storage-info');
+  const fatal = document.getElementById('fatal');
+
+  if(typeof PouchDB === 'undefined'){
+    fatal.style.display = 'block';
+    fatal.textContent = 'No se pudo cargar pouchdb.min.js. Verificá que el archivo esté junto a index.html en ui/tablet-b/.';
+    throw new Error('PouchDB no disponible');
+  }
+
+  let local = new PouchDB('inspecciones');
+  let syncHandler = null;
+  let changesHandler = null;
+  let editingId = null;
+  let lastDocs = [];
+  let changedIds = [];
+  let prevRevs = {};
+  let firstLoad = true;
+
+  function shortRev(rev){
+    if(!rev) return '—';
+    const [gen, hash] = rev.split('-');
+    return gen + '-' + hash.slice(0, 7);
+  }
+
+  function fmtTime(iso){
+    const d = new Date(iso);
+    return d.toLocaleTimeString('es-UY', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function setSync(state, texto, sub){
+    syncPanel.dataset.state = state;
+    syncState.textContent = texto;
+    if(sub) syncSub.textContent = sub;
+  }
+
+  async function sembrarSiVacia(){
+    const info = await local.info();
+    if(info.doc_count > 0) return false;
+    await local.bulkDocs(SEMILLA);
+    return true;
+  }
+
+  async function loadList(){
+    if(editingId) return; // no pisar un formulario de edicion abierto
+    try{
+      const res = await local.allDocs({ include_docs:true, conflicts:true });
+      const docs = res.rows
+        .map(r => r.doc)
+        .filter(d => d && d.type === 'lectura_medidor')
+        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+      lastDocs = docs;
+      changedIds = firstLoad ? [] : docs.filter(d => prevRevs[d._id] !== d._rev).map(d => d._id);
+      prevRevs = Object.fromEntries(docs.map(d => [d._id, d._rev]));
+      firstLoad = false;
+      render();
+    }catch(e){
+      list.innerHTML = '<p class="empty">Error leyendo la base local: ' + e.message + '</p>';
+    }
+  }
+
+  function render(){
+    const docs = lastDocs;
+    if(!docs.length){
+      list.innerHTML = '<p class="empty">No hay lecturas en este dispositivo.</p>';
+    } else {
+      list.innerHTML = docs.map(d => {
+        const conflicted = d._conflicts && d._conflicts.length;
+        if(d._id === editingId){
+          return `
+            <div class="card" data-cardid="${d._id}">
+              <div class="card-top">
+                <div class="meta">
+                  <div class="id">${d._id} <span class="rev" data-tip="_rev completo:\n${d._rev}">rev ${shortRev(d._rev)}</span></div>
+                  <div class="desc">${d.medidor_id} · ${d.zona}</div>
+                </div>
+              </div>
+              <div class="edit-row">
+                <input id="edit-input" type="number" step="0.1" value="${d.valor_m3}">
+                <button class="btn-mini save" data-save="${d._id}" data-tip="db.put({...doc, _rev})\nNueva revisión en IndexedDB">Guardar</button>
+                <button class="btn-mini cancel" data-cancel="1">Cancelar</button>
+              </div>
+            </div>`;
+        }
+        return `
+          <div class="card" data-cardid="${d._id}">
+            <div class="card-top">
+              <div class="meta">
+                <div class="id">${d._id} <span class="rev ${conflicted ? 'conf' : ''}" data-tip="_rev completo:\n${d._rev}">rev ${shortRev(d._rev)}</span></div>
+                <div class="desc">${d.medidor_id} · ${d.zona}</div>
+                <div class="val">${d.valor_m3} m³ · ${fmtTime(d.fecha)}</div>
+              </div>
+              <div class="badges">
+                ${conflicted ? '<span class="badge conf">⚠ conflicto</span>' : ''}
+                ${d.inspector === INSPECTOR
+                  ? `<span class="badge ${d.sincronizado ? 'sync' : 'pend'}">${d.sincronizado ? 'sincronizada' : 'pendiente'}</span>`
+                  : `<span class="badge otro">de ${d.inspector}</span>`}
+              </div>
+            </div>
+            <button class="edit-link" data-edit="${d._id}">editar valor</button>
+          </div>`;
+      }).join('');
+    }
+    const propias = docs.filter(d => d.inspector === INSPECTOR);
+    const pending = propias.filter(d => !d.sincronizado).length;
+    const ajenas = docs.length - propias.length;
+    pendingCount.textContent = pending + (pending === 1 ? ' pendiente' : ' pendientes')
+      + (ajenas ? ' · ' + ajenas + ' recibidas' : '');
+
+    if(window.gsap && changedIds.length){
+      changedIds.forEach(id => {
+        const el = list.querySelector(`[data-cardid="${CSS.escape(id)}"]`);
+        if(el) gsap.fromTo(el, { backgroundColor:'#dcece7' }, { backgroundColor:'#ffffff', duration:1.1, ease:'power1.out' });
+      });
+    }
+  }
+
+  list.addEventListener('click', async (ev) => {
+    const t = ev.target;
+    if(t.dataset.edit){ editingId = t.dataset.edit; render(); return; }
+    if(t.dataset.cancel){ editingId = null; render(); return; }
+    if(t.dataset.save){
+      const id = t.dataset.save;
+      const valor = parseFloat(document.getElementById('edit-input').value);
+      const doc = lastDocs.find(d => d._id === id);
+      if(!doc || Number.isNaN(valor)) return;
+      const limpio = { ...doc, valor_m3: valor, sincronizado: false };
+      delete limpio._conflicts;
+      try{
+        await local.put(limpio);
+      }catch(e){
+        alert('No se pudo guardar: ' + e.message);
+      }
+      editingId = null;
+      loadList();
+    }
+  });
+
+  document.getElementById('form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const medidor = document.getElementById('medidor').value.trim();
+    const zona = document.getElementById('zona').value;
+    const valor = parseFloat(document.getElementById('valor').value);
+    if(!medidor || Number.isNaN(valor)) return;
+
+    const ahora = new Date();
+    const id = 'lectura:' + ahora.toISOString().slice(0,10) + ':' + String(Date.now()).slice(-6);
+    try{
+      await local.put({
+        _id: id,
+        type: 'lectura_medidor',
+        medidor_id: medidor,
+        zona,
+        inspector: INSPECTOR,
+        fecha: ahora.toISOString(),
+        valor_m3: valor,
+        sincronizado: false,
+        geo: { lat: -34.1 + Math.random()*0.05, lon: -56.22 - Math.random()*0.05 }
+      });
+      ev.target.reset();
+      loadList();
+    }catch(e){
+      alert('No se pudo guardar: ' + e.message);
+    }
+  });
+
+  // Cuando la replicación queda "paused" sin error significa que terminó de
+  // subir todo lo que había. Recién ahí marcamos como sincronizadas, y solo
+  // las lecturas propias: las que llegaron de otra tablet no son nuestras
+  // para andar reescribiéndolas. El flag de single-flight evita que dos
+  // "paused" seguidos corran a la vez y se pisen generando conflictos.
+  let marcando = false;
+  async function marcarPropiasSincronizadas(){
+    if(marcando) return 0;
+    marcando = true;
+    try{
+      const res = await local.allDocs({ include_docs: true });
+      const updates = res.rows
+        .map(r => r.doc)
+        .filter(d => d && d.type === 'lectura_medidor'
+                     && d.inspector === INSPECTOR
+                     && d.sincronizado === false)
+        .map(d => ({ ...d, sincronizado: true }));
+      if(!updates.length) return 0;
+      const resultados = await local.bulkDocs(updates);
+      const fallidos = resultados.filter(r => r.error);
+      if(fallidos.length) console.warn('[marcar] no se pudieron marcar', fallidos);
+      return updates.length - fallidos.length;
+    } finally {
+      marcando = false;
+    }
+  }
+
+  function startSync(){
+    setSync('active', 'conectando…', 'Replicación continua a través del balanceador (:5986), filtrada: solo baja las lecturas de mgonzalez.');
+    // Subimos todo lo que generamos, pero bajamos SOLO las lecturas de
+    // mgonzalez: un inspector no necesita la ruta de los demás en su
+    // dispositivo. El consolidado de todos vive en el central.
+    syncHandler = local.sync(remotaUrl(), {
+        ...REMOTA_OPTS,
+        live: true,
+        retry: true,
+        pull: { selector: { inspector: INSPECTOR } }
+      })
+      .on('change', () => { setSync('active', 'sincronizando…'); loadList(); })
+      .on('active', () => setSync('active', 'sincronizando…'))
+      .on('paused', async err => {
+        if(err){
+          setSync('error', 'sin alcanzar el balanceador',
+                  '¿Están los dos centrales caídos? Mientras tanto los cambios se siguen guardando acá.');
+          console.error('[sync paused con error]', err);
+        } else {
+          setSync('idle', 'al día', 'Replicación continua activa: no hay botón que apretar.');
+          try{
+            await marcarPropiasSincronizadas();
+          }catch(e){
+            setSync('error', 'no se pudo marcar como sincronizado', e.message);
+            console.error('[marcarPropiasSincronizadas]', e);
+          }
+        }
+        loadList();
+      })
+      .on('denied', err => {
+        setSync('error', 'acceso denegado por el central', String(err && err.message || err));
+        console.error('[sync denied]', err);
+      })
+      .on('error', err => {
+        setSync('error', 'error de sincronización', String(err && err.message || err));
+        console.error('[sync error]', err);
+      });
+  }
+
+  function stopSync(){
+    if(syncHandler){ syncHandler.cancel(); syncHandler = null; }
+    setSync('off', 'sin sincronizar', 'Los cambios quedan en el dispositivo hasta que actives la conexión.');
+  }
+
+  let online = false;
+  function setOnline(v){
+    online = v;
+    device.dataset.online = v ? '1' : '0';
+    toggleLabel.textContent = v ? 'EN LÍNEA' : 'SIN CONEXIÓN';
+    if(v) startSync(); else stopSync();
+  }
+  toggle.addEventListener('click', () => setOnline(!online));
+
+  document.getElementById('reset-btn').addEventListener('click', async () => {
+    if(!confirm('Borra la base local de este navegador y vuelve a cargar la ruta de mgonzalez. ¿Seguir?')) return;
+    stopSync();
+    setOnline(false);
+    if(changesHandler) changesHandler.cancel();
+    await local.destroy();
+    local = new PouchDB('inspecciones');
+    prevRevs = {};
+    firstLoad = true;
+    await sembrarSiVacia();
+    escucharCambios();
+    loadList();
+  });
+
+  function escucharCambios(){
+    changesHandler = local.changes({ since:'now', live:true })
+      .on('change', () => loadList());
+  }
+
+  async function mostrarAlmacenamiento(){
+    if(!navigator.storage || !navigator.storage.estimate) return;
+    try{
+      const est = await navigator.storage.estimate();
+      const usado = (est.usage / 1024).toFixed(0);
+      storageInfo.textContent = `IndexedDB · ${usado} KB usados`;
+    }catch(e){}
+  }
+
+  (async function init(){
+    try{
+      const sembrada = await sembrarSiVacia();
+      escucharCambios();
+      await loadList();
+      await mostrarAlmacenamiento();
+      stopSync();
+      if(sembrada) setSync('off', 'sin sincronizar', 'Ruta de mgonzalez cargada en este navegador. Nadie la vio todavía.');
+    }catch(e){
+      fatal.style.display = 'block';
+      fatal.textContent = 'Error inicializando PouchDB: ' + e.message;
+    }
+  })();
+</script>
+</body>
+</html>

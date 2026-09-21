@@ -1,106 +1,68 @@
 ---
 name: docker-setup
-description: Configuración de Docker y Dockerfiles
+description: Configuración Docker para cada microservicio
 metadata:
-  type: specification
-  status: draft
+  type: deployment
+  status: complete
 ---
 
-# Docker Setup
+# Docker Setup - Configuración por Servicio
 
-## Estructura de Directorios
+## Estructura de Dockerfiles
 
 ```
-eventflow/
-├── docker-compose.yml
-├── usuarios-service/
-│   ├── Dockerfile
-│   ├── src/
-│   └── requirements.txt (Python) o package.json
-├── eventos-service/
-│   ├── Dockerfile
-│   ├── src/
-│   └── ...
-├── reservas-service/
-│   ├── Dockerfile
-│   ├── src/
-│   └── ...
-└── .env (variables de entorno)
+usuarios-service/
+├── Dockerfile
+├── requirements.txt
+└── src/
+
+eventos-service/
+├── Dockerfile
+├── requirements.txt
+└── src/
+
+reservas-service/
+├── Dockerfile
+├── requirements.txt
+└── src/
 ```
 
 ---
 
-## Dockerfile Base (Python FastAPI)
+## Usuarios Service - Dockerfile
 
 ```dockerfile
 FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# Instalar curl para healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
+# Instalar dependencias
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código
 COPY src/ .
 
-EXPOSE 8000
+EXPOSE 8001
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
 ```
 
----
-
-## docker-compose.yml
-
-Ver [[docker-compose-config]]
-
----
-
-## Variables de Entorno (.env)
-
-```
+**Variables de Entorno**:
+```bash
 MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow
-REDIS_URL=redis://redis:6379
-REDIS_PASSWORD=
-
-SERVICE_USUARIOS_PORT=8001
-SERVICE_EVENTOS_PORT=8002
-SERVICE_RESERVAS_PORT=8003
+SERVICE_PORT=8001
+ANONYMIZATION_SALT=eventflow-salt-2026-change-in-production
 ```
 
----
-
-## Comandos Útiles
-
-```bash
-# Construir imágenes
-docker-compose build
-
-# Iniciar servicios
-docker-compose up -d
-
-# Ver logs
-docker-compose logs -f
-
-# Parar servicios
-docker-compose down
-
-# Ejecutar comando en container
-docker-compose exec usuarios-service python -c "..."
-
-# Recrear volumenes (reset BD)
-docker-compose down -v && docker-compose up -d
-```
-
----
-
-## Health Checks
-
-Agregar a cada servicio en docker-compose.yml:
-
+**Healthcheck**:
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
   interval: 10s
   timeout: 5s
   retries: 3
@@ -108,37 +70,158 @@ healthcheck:
 
 ---
 
-## Redes Docker
+## Eventos Service - Dockerfile
 
-Los servicios se comunican por nombre de servicio:
-```python
-# En usuarios-service
-response = requests.get("http://eventos-service:8002/api/eventos/123")
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ .
+
+EXPOSE 8002
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
 ```
 
----
+**Variables de Entorno**:
+```bash
+MONGODB_URI=mongodb://mongodb:27017
+MONGODB_DB=eventflow
+REDIS_URL=redis://redis:6379
+SERVICE_PORT=8002
+```
 
-## Volúmenes Persistentes
-
+**Healthcheck**:
 ```yaml
-services:
-  mongodb:
-    volumes:
-      - mongodb_data:/data/db
-  redis:
-    volumes:
-      - redis_data:/data
-
-volumes:
-  mongodb_data:
-  redis_data:
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+  interval: 10s
+  timeout: 5s
+  retries: 3
 ```
 
 ---
 
-## Próximos Pasos
+## Reservas Service - Dockerfile
 
-- [ ] Dockerfile optimizado para cada servicio
-- [ ] docker-compose.yml funcional
-- [ ] Health checks configurados
-- [ ] Testeo de conexiones entre servicios
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ .
+
+EXPOSE 8003
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
+```
+
+**Variables de Entorno**:
+```bash
+MONGODB_URI=mongodb://mongodb:27017
+MONGODB_DB=eventflow
+REDIS_URL=redis://redis:6379
+POSTGRESQL_URI=postgresql://eventflow_user:eventflow_password@postgresql:5432/eventflow
+USUARIOS_SERVICE_URL=http://usuarios-service:8001
+EVENTOS_SERVICE_URL=http://eventos-service:8002
+SERVICE_PORT=8003
+```
+
+**Healthcheck**:
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+  interval: 10s
+  timeout: 5s
+  retries: 3
+```
+
+---
+
+## Requirements.txt Común (Base)
+
+```txt
+# Core
+fastapi==0.104.0
+uvicorn==0.24.0
+pydantic>=2.0.0,<3.0.0
+pydantic-extra-types==2.0.0
+email-validator==2.1.0
+
+# Databases
+pymongo==4.5.0
+redis==5.0.0
+psycopg[binary]==3.2.6
+sqlalchemy==2.0.0
+
+# Utilities
+python-dotenv==1.0.0
+python-multipart==0.0.6
+httpx==0.25.0
+requests==2.31.0
+```
+
+### Adicionales por Servicio
+
+**usuarios-service**: Base only
+
+**eventos-service**: Base + redis
+
+**reservas-service**: Base + redis + psycopg + sqlalchemy + httpx
+
+---
+
+## Build y Run
+
+```bash
+# Build individual
+docker build -t eventflow-usuarios ./usuarios-service
+docker build -t eventflow-eventos ./eventos-service
+docker build -t eventflow-reservas ./reservas-service
+
+# Run individual (requiere BDs corriendo)
+docker run -d -p 8001:8001 --name usuarios \
+  -e MONGODB_URI=mongodb://host.docker.internal:27017 \
+  eventflow-usuarios
+```
+
+---
+
+## Multi-stage Build (Producción)
+
+```dockerfile
+# Builder stage
+FROM python:3.11-slim as builder
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Runtime stage
+FROM python:3.11-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+COPY src/ .
+EXPOSE 8001
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+---
+
+## Referencias
+
+- [[deployment/docker-compose]] - docker-compose.yml completo
+- [[deployment/deployment-checklist]] - Checklist pre-producción
+- [[decisions/deployment-strategy]] - Estrategia completa

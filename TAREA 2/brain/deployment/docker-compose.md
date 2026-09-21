@@ -1,15 +1,18 @@
 ---
-name: docker-compose-config
-description: Plantilla de docker-compose.yml
+name: docker-compose
+description: docker-compose.yml completo para desarrollo local
 metadata:
-  type: specification
-  status: draft
+  type: deployment
+  status: complete
 ---
 
-# docker-compose.yml Template
+# Docker Compose - Desarrollo Local
+
+## Archivo Completo
 
 ```yaml
-version: '3.9'
+# docker-compose.yml
+# Ubicación: /home/fqueirolo/TECNOLOGO/NoSQL/TAREA 2/docker-compose.yml
 
 services:
   # ============ MONGODB ============
@@ -23,7 +26,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.admin.ping()"]
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ping: 1})"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -77,6 +80,7 @@ services:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DB: eventflow
       SERVICE_PORT: 8001
+      ANONYMIZATION_SALT: eventflow-salt-2026-change-in-production
     ports:
       - "8001:8001"
     depends_on:
@@ -99,11 +103,14 @@ services:
     environment:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DB: eventflow
+      REDIS_URL: redis://redis:6379
       SERVICE_PORT: 8002
     ports:
       - "8002:8002"
     depends_on:
       mongodb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
@@ -163,30 +170,130 @@ volumes:
 
 ---
 
-## Notas
+## Comandos de Ejecución
 
-- **Orden de inicio:** Docker Compose espera a `depends_on` + `healthcheck`
-- **Redes:** Los servicios se comunican por nombre (eg. `http://usuarios-service:8001`)
-- **Volúmenes:** `mongodb_data` y `redis_data` persisten datos entre reinicios
-- **Puertos:** Mapeados para pruebas locales
+```bash
+# Construir y levantar todo
+docker compose up -d --build
+
+# Ver estado
+docker compose ps
+
+# Ver logs
+docker compose logs -f usuarios-service
+docker compose logs -f reservas-service
+
+# Ver logs de BDs
+docker compose logs mongodb
+docker compose logs redis
+docker compose logs postgresql
+
+# Detener
+docker compose down
+
+# Detener + limpiar volúmenes (CUIDADO: borra datos)
+docker compose down -v
+
+# Reconstruir un servicio
+docker compose build usuarios-service
+docker compose up -d usuarios-service
+
+# Ejecutar tests dentro de contenedor
+docker compose exec usuarios-service pytest -v
+docker compose exec reservas-service pytest -v
+```
 
 ---
 
-## Comandos
+## Puertos Expuestos (Host)
 
+| Servicio | Puerto Contenedor | Puerto Host | Uso |
+|----------|------------------|-------------|-----|
+| MongoDB | 27017 | 27017 | Cliente MongoDB, debugging |
+| Redis | 6379 | 6379 | Cliente Redis, debugging |
+| PostgreSQL | 5432 | 5432 | pgAdmin, reportes |
+| Usuarios | 8001 | 8001 | API + Swagger `/docs` |
+| Eventos | 8002 | 8002 | API + Swagger `/docs` |
+| Reservas | 8003 | 8003 | API + Swagger `/docs` |
+
+---
+
+## Variables de Entorno por Servicio
+
+### Usuarios Service
 ```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f reservas-service
-
-# Test usuarios service
-curl http://localhost:8001/health
-
-# Restart specific service
-docker-compose restart reservas-service
-
-# Remove everything
-docker-compose down -v
+MONGODB_URI=mongodb://mongodb:27017
+MONGODB_DB=eventflow
+SERVICE_PORT=8001
+ANONYMIZATION_SALT=eventflow-salt-2026-change-in-production
 ```
+
+### Eventos Service
+```bash
+MONGODB_URI=mongodb://mongodb:27017
+MONGODB_DB=eventflow
+REDIS_URL=redis://redis:6379
+SERVICE_PORT=8002
+```
+
+### Reservas Service
+```bash
+MONGODB_URI=mongodb://mongodb:27017
+MONGODB_DB=eventflow
+REDIS_URL=redis://redis:6379
+POSTGRESQL_URI=postgresql://eventflow_user:eventflow_password@postgresql:5432/eventflow
+USUARIOS_SERVICE_URL=http://usuarios-service:8001
+EVENTOS_SERVICE_URL=http://eventos-service:8002
+SERVICE_PORT=8003
+```
+
+---
+
+## Health Checks
+
+| Servicio | Comando | Intervalo | Timeout | Reintentos |
+|----------|---------|-----------|---------|------------|
+| MongoDB | `mongosh --eval "db.runCommand({ping:1})"` | 10s | 5s | 3 |
+| Redis | `redis-cli ping` | 10s | 5s | 3 |
+| PostgreSQL | `pg_isready -U eventflow_user` | 10s | 5s | 3 |
+| Usuarios | `curl -f http://localhost:8001/health` | 10s | 5s | 3 |
+| Eventos | `curl -f http://localhost:8002/health` | 10s | 5s | 3 |
+| Reservas | `curl -f http://localhost:8003/health` | 10s | 5s | 3 |
+
+---
+
+## Red y Volúmenes
+
+```yaml
+networks:
+  eventflow_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  postgresql_data:
+    driver: local
+```
+
+---
+
+## Troubleshooting
+
+| Problema | Solución |
+|----------|----------|
+| MongoDB unhealthy | Verificar `mongosh --eval "db.runCommand({ping:1})"` funciona |
+| Servicios no inician | `docker compose logs <servicio>` - revisar dependencias |
+| Puerto ocupado | Cambiar puerto host en `ports:` o detener proceso local |
+| Permisos volúmenes | `docker compose down -v` y reconstruir |
+| Redis connection refused | Verificar `redis-cli ping` en contenedor redis |
+
+---
+
+## Referencias
+
+- [[deployment/docker-setup]] - Dockerfiles por servicio
+- [[deployment/deployment-checklist]] - Checklist pre-producción
+- [[decisions/deployment-strategy]] - Estrategia completa

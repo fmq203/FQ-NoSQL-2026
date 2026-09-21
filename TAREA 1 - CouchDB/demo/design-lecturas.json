@@ -1,0 +1,24 @@
+{
+  "_id": "_design/lecturas",
+  "views": {
+    "por_zona": {
+      "map": "function(doc){ if(doc.type==='lectura_medidor'){ emit(doc.zona, doc.valor_m3); } }",
+      "reduce": "_stats"
+    },
+    "pendientes_sync": {
+      "map": "function(doc){ if(doc.type==='lectura_medidor' && !doc.sincronizado){ emit(doc._id, null); } }"
+    },
+    "consumo_zona_mes": {
+      "map": "function(doc){ if(doc.type==='lectura_medidor' && typeof doc.consumo_m3 === 'number'){ var f = doc.fecha.split('-'); emit([doc.zona, f[0], f[1]], doc.consumo_m3); } }",
+      "reduce": "_sum"
+    },
+    "medidores_distintos": {
+      "map": "function(doc){ if(doc.type==='lectura_medidor'){ emit([doc.zona, doc.medidor_id], null); } }",
+      "reduce": "_approx_count_distinct"
+    },
+    "con_padron": {
+      "map": "function(doc){ if(doc.type==='lectura_medidor'){ emit([doc.medidor_id, doc.fecha], { _id: 'medidor:' + doc.medidor_id, valor_m3: doc.valor_m3, consumo_m3: doc.consumo_m3 }); } }"
+    }
+  },
+  "validate_doc_update": "function(newDoc, oldDoc, userCtx){\n  if (newDoc._deleted) { return; }\n  if (newDoc.type !== 'lectura_medidor') { return; }\n  if (!newDoc.medidor_id) {\n    throw({forbidden: 'falta medidor_id'});\n  }\n  if (typeof newDoc.valor_m3 !== 'number' || isNaN(newDoc.valor_m3)) {\n    throw({forbidden: 'valor_m3 tiene que ser un número'});\n  }\n  if (newDoc.valor_m3 < 0) {\n    throw({forbidden: 'un medidor no puede marcar negativo: ' + newDoc.valor_m3});\n  }\n  if (oldDoc && typeof oldDoc.valor_m3 === 'number' && newDoc.valor_m3 < oldDoc.valor_m3) {\n    throw({forbidden: 'un medidor no retrocede: ya marcaba ' + oldDoc.valor_m3 + ' y querés grabar ' + newDoc.valor_m3});\n  }\n}"
+}

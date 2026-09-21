@@ -1,206 +1,205 @@
 ---
 name: saga-pattern
-description: Implementación del patrón SAGA con Orquestación para Reservas
+description: Implementación del patrón SAGA con Orquestación en EventFlow
 metadata:
   type: pattern
-  status: in-progress
+  status: complete
 ---
 
-# Patrón SAGA — Orquestación
+# SAGA Pattern con Orquestación - EventFlow
 
-## Objetivo
+## Visión General
 
-Garantizar consistencia en una transacción distribuida (compra de entrada) que involucra múltiples microservicios y bases de datos.
-
----
-
-## Arquitectura: Orquestador Central
-
-```
-┌──────────────────────────────┐
-│ Reservas Service (Orch)      │
-│ - Coordina los pasos         │
-│ - Maneja compensaciones      │
-└──────────┬───────────────────┘
-           │
-     ┌─────┴──────────────────────────────┐
-     │                                    │
-     ▼                                    ▼
-┌─────────────────┐             ┌──────────────────┐
-│ Usuarios Service│             │ Eventos Service  │
-│ (Validación)    │             │ (Inventario)     │
-└─────────────────┘             └──────────────────┘
-                                         │
-                                         ▼
-                                  ┌──────────────────┐
-                                  │ Redis (Pagos)    │
-                                  │ (Atomic Txn)     │
-                                  └──────────────────┘
-```
+El **Servicio de Reservas y Pagos** actúa como **Orquestador Central** del patrón SAGA. Coordina la transacción distribuida de compra de entradas garantizando atomicidad mediante compensaciones.
 
 ---
 
-## Flujo de Transacción Exitosa
+## Arquitectura SAGA
 
 ```
-POST /api/reservar
-  │
-  ├─ SAGA Step 1: Validar Usuario
-  │  └─ GET /usuarios/{usuario_id} ✅
-  │
-  ├─ SAGA Step 2: Validar Evento + Inventario
-  │  └─ GET /eventos/{evento_id} (entradas disponibles) ✅
-  │
-  ├─ SAGA Step 3: Procesar Pago (Redis Atomic)
-  │  └─ Redis Lua Script: transferencia de fondos ✅
-  │
-  ├─ SAGA Step 4: Decrementar Inventario
-  │  └─ POST /eventos/{evento_id}/decrement-tickets ✅
-  │
-  └─ SAGA Step 5: Registrar en MongoDB
-     └─ Crear documento de reserva confirmada ✅
-
-Result: 201 Created { reserva_id, confirmacion, ... }
+┌─────────────────────────────────────────────────────────────────────┐
+│                    RESERVAS SERVICE (Orquestador)                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  POST /api/reservar                                                 │
+│       │                                                             │
+│       ▼                                                             │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │           CHAIN OF RESPONSIBILITY (6 Handlers)               │   │
+│  ├─────────────────────────────────────────────────────────────┤   │
+│  │ 1. ValidadorDeDatos      ──► Validación local               │   │
+│  │ 2. ValidadorInventario   ──► HTTP GET Usuarios Service      │   │
+│  │ 3. ValidadorEvento       ──► HTTP GET Eventos Service       │   │
+│  │ 4. ProcesadorPago        ──► Redis Lua (ATÓMICO)            │   │
+│  │ 5. ConfirmadorReserva    ──► MongoDB INSERT                 │   │
+│  │ 6. Auditor               ──► PostgreSQL INSERT (Event Log)  │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│       │                                                             │
+│       ▼                                                             │
+│  COMPENSACIONES AUTOMÁTICAS si falla Paso 4-5                      │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Flujo de Compensación (Fallo en Step 3 - Pago)
+## 6 Pasos de la Transacción Exitosa
 
+| Paso | Handler | Acción | Servicio/BD | Tipo Consistencia |
+|------|---------|--------|-------------|-------------------|
+| 1 | **ValidadorDeDatos** | Validar UUIDs, cantidad>0, método pago enum | Local | - |
+| 2 | **ValidadorInventario** | GET `/api/usuarios/{id}` | Usuarios Service | Eventual (read) |
+| 3 | **ValidadorEvento** | GET `/api/eventos/{id}` + aforo | Eventos Service | Eventual (read) |
+| 4 | **ProcesadorPago** | **Lua Redis**: Pago + DECRBY inventario | Redis | **Fuerte (Atómico)** |
+| 5 | **ConfirmadorReserva** | INSERT MongoDB reserva + saga_log | MongoDB | **Fuerte (Majority)** |
+| 6 | **Auditor** | INSERT PostgreSQL event_log | PostgreSQL | **Fuerte (ACID)** |
+
+---
+
+## Atomicidad Crítica: Paso 4 (Redis Lua Script)
+
+```lua
+-- KEYS[1] = inventario:evento_id
+-- KEYS[2] = pago:reserva_id
+-- ARGV[1] = cantidad, ARGV[2] = reserva_id, ARGV[3] = usuario_id
+-- ARGV[4] = monto, ARGV[5] = metodo_pago
+
+local disponible = tonumber(redis.call('GET', KEYS[1]) or '0')
+if disponible < tonumber(ARGV[1]) then
+    return {0, 'INVENTARIO_INSUFICIENTE'}
+end
+
+-- TRANSACCIÓN ATÓMICA: Verificar + Decrementar + Registrar Pago
+redis.call('DECRBY', KEYS[1], ARGV[1])
+redis.call('HSET', KEYS[2], 
+    'reserva_id', ARGV[2], 'usuario_id', ARGV[3],
+    'monto', ARGV[4], 'metodo_pago', ARGV[5],
+    'estado', 'confirmado', 'timestamp', os.date('!%Y-%m-%dT%H:%M:%SZ')
+)
+redis.call('EXPIRE', KEYS[2], 86400)
+
+return {1, 'OK'}
 ```
-POST /api/reservar
-  │
-  ├─ Step 1: Validar Usuario ✅
-  ├─ Step 2: Validar Evento ✅
-  ├─ Step 3: Procesar Pago ❌ FALLO
-  │
-  └─ COMPENSACIONES (Rollback):
-     │
-     ├─ Compensación Step 3: Revertir Pago (Crédito)
-     │  └─ Redis: liberar fondos bloqueados ✅
-     │
-     └─ Fin: Error 500 al cliente
 
-Result: 500 Error { "transaccion_fallida": true }
+**Por qué Lua en Redis:**
+- ✅ Atomicidad garantizada (single-threaded Redis)
+- ✅ < 1ms latencia
+- ✅ Verificación + Decremento + Registro en UNA operación
+- ✅ Rollback interno si falla verificación (0 cambios)
+
+---
+
+## Compensaciones (Rollback) Automáticas
+
+```mermaid
+flowchart TD
+    Fail[Fallo en Paso N] --> Check{N <= 3?}
+    
+    Check -->|Sí: Validaciones| NoComp[Sin compensación\n(Solo lectura HTTP)]
+    Check -->|Paso 4: Lua| LuaRollback[Rollback interno Lua\n(Atómico, 0 cambios)]
+    Check -->|Paso 5: MongoDB| MongoRollback[1. DELETE reserva\n2. Lua compensación\n   INCRBY + DEL]
+    Check -->|Paso 6: PostgreSQL| PgWarn[Log WARNING only\nReserva YA confirmada]
+    
+    NoComp --> End[Fin]
+    LuaRollback --> End
+    MongoRollback --> End
+    PgWarn --> End
+```
+
+### Detalle por Paso
+
+| Fallo en | Compensación | Implementación |
+|----------|--------------|----------------|
+| **Paso 1-3** (Validaciones) | Ninguna | Solo lectura HTTP, sin side effects |
+| **Paso 4** (Lua Pago) | Automática en Lua | Si `disponible < cantidad`: retorna error, 0 cambios |
+| **Paso 5** (MongoDB) | **SÍ - Crítica** | 1. `DELETE reserva` (si insertó)<br>2. `EVAL compensar_pago_inventario.lua` (INCRBY inventario + DEL pago) |
+| **Paso 6** (PostgreSQL) | **NO** | Log `WARNING`, reserva ya confirmada, cliente notificado 201 |
+
+### Lua Compensación (Paso 5 Fallo)
+
+```lua
+-- KEYS[1] = inventario:evento_id
+-- KEYS[2] = pago:reserva_id
+-- ARGV[1] = cantidad
+
+redis.call('INCRBY', KEYS[1], ARGV[1])  -- Restaurar inventario
+redis.call('DEL', KEYS[2])               -- Eliminar registro pago
+return {1, 'COMPENSACION_OK'}
 ```
 
 ---
 
-## Flujo de Compensación (Fallo en Step 4 - Inventario)
+## Estados de la SAGA
 
-```
-POST /api/reservar
-  │
-  ├─ Step 1: Validar Usuario ✅
-  ├─ Step 2: Validar Evento ✅
-  ├─ Step 3: Procesar Pago ✅
-  ├─ Step 4: Decrementar Inventario ❌ FALLO (race condition)
-  │
-  └─ COMPENSACIONES:
-     │
-     ├─ Compensación Step 3: Revertir Pago
-     │  └─ Redis: crédito al usuario ✅
-     │
-     └─ Fin: Error 500, cliente reintenta
-
-Result: 500 Error { "inventario_race_condition": true }
-```
+| Estado | Descripción | Transición |
+|--------|-------------|------------|
+| `STARTED` | SAGA iniciada | → `USUARIO_VALIDADO` |
+| `USUARIO_VALIDADO` | Usuario existe | → `EVENTO_VALIDADO` |
+| `EVENTO_VALIDADO` | Evento existe + aforo | → `PAGO_PROCESADO` |
+| `PAGO_PROCESADO` | Pago + inventario OK | → `RESERVA_CONFIRMADA` |
+| `RESERVA_CONFIRMADA` | Reserva en MongoDB | → `SAGA_COMPLETED` |
+| `SAGA_COMPLETED` | Todo OK + Audit log | **FINAL** |
+| `SAGA_FAILED` | Fallo + compensaciones | **FINAL** |
+| `COMPENSATING` | Ejecutando rollback | → `SAGA_FAILED` |
 
 ---
 
-## Implementación: Pseudocódigo
+## Manejo de Errores por Tipo
+
+| Error | HTTP Status | Paso | Compensación | Reintento |
+|-------|-------------|------|--------------|-----------|
+| Usuario no encontrado | 404 | 2 | Ninguna | No |
+| Evento no encontrado | 404 | 3 | Ninguna | No |
+| Inventario insuficiente | 409 | 3/4 | Lua interna / 409 | No (manual) |
+| Pago falla (Redis) | 500 | 4 | Automática Lua | Sí (idempotente) |
+| MongoDB error | 500 | 5 | Lua compensación + DELETE | Sí |
+| PostgreSQL error | 500 | 6 | Log warning only | Sí (async retry) |
+
+---
+
+## Idempotencia
+
+- **Clave**: `reserva_id` (UUID v4) generado al inicio
+- **Redis**: `pago:{reserva_id}` evita doble procesamiento
+- **MongoDB**: `_id = reserva_id` (unique index)
+- **PostgreSQL**: `aggregate_id` permite detectar duplicados
 
 ```python
-class ReservasOrchestrator:
-    def procesar_reserva(self, solicitud):
-        try:
-            # Step 1
-            usuario = self.usuarios_service.get(solicitud.usuario_id)
-            if not usuario:
-                raise ValidationError("Usuario no existe")
-            
-            # Step 2
-            evento = self.eventos_service.get(solicitud.evento_id)
-            if evento.entradas_disponibles < solicitud.cantidad:
-                raise ValidationError("Inventario insuficiente")
-            
-            # Step 3 (ATÓMICO en Redis)
-            pago = self.redis.execute_lua_script(
-                script=PROCESAR_PAGO_SCRIPT,
-                args=[
-                    solicitud.usuario_id,
-                    solicitud.evento_id,
-                    solicitud.cantidad,
-                    evento.precio
-                ]
-            )
-            
-            if not pago['ok']:
-                raise PaymentError(pago['err'])
-            
-            # Step 4
-            evento_actualizado = self.eventos_service.decrement_tickets(
-                solicitud.evento_id,
-                solicitud.cantidad
-            )
-            
-            # Step 5
-            reserva = self.mongodb.reservas.insert_one({
-                'usuario_id': solicitud.usuario_id,
-                'evento_id': solicitud.evento_id,
-                'cantidad': solicitud.cantidad,
-                'estado': 'confirmada'
-            })
-            
-            return { 'reserva_id': reserva.id, 'estado': 'confirmada' }
-        
-        except Exception as e:
-            # COMPENSACIONES
-            self.compensar(solicitud, e)
-            raise SagaFailure("Transacción fallida", detalles=str(e))
-    
-    def compensar(self, solicitud, error):
-        # Revertir pago (Step 3)
-        self.redis.revertir_pago(solicitud.usuario_id)
-        # Liberar inventario (si ya se decrementó)
-        self.eventos_service.increment_tickets(solicitud.evento_id, solicitud.cantidad)
+# Verificación idempotencia al inicio
+async def verificar_idempotencia(reserva_id: UUID) -> bool:
+    # Check MongoDB
+    if await mongo.reservas.find_one({"_id": reserva_id}):
+        return True
+    # Check Redis
+    if await redis.exists(f"pago:{reserva_id}"):
+        return True
+    # Check PostgreSQL
+    if await pg.fetchval("SELECT 1 FROM event_log WHERE aggregate_id = $1", reserva_id):
+        return True
+    return False
 ```
 
 ---
 
-## Garantías
+## Correlation ID para Tracing
 
-| Garantía | SAGA Orchestration |
-|----------|-------------------|
-| Atomicidad | ⚠️ No garantizada (es distribuida) |
-| Consistencia | ✅ Eventual (con compensaciones) |
-| Isolation | ⚠️ Limitada (pueden haber reads dirty) |
-| Durabilidad | ✅ MongoDB + Redis persistence |
+```python
+# Generado al inicio
+correlation_id = uuid4()
 
----
-
-## Comparación: SAGA vs Transacción Tradicional
-
-| Aspecto | SAGA | Transacción SQL |
-|--------|------|-----------------|
-| Coordinación | Orquestador explícito | DBMS automatiza |
-| Microservicios | ✅ Soporta | ❌ No (BD única) |
-| Consistencia | Eventual + compensaciones | Strong ACID |
-| Complejidad | Alta | Media |
+# Propagado en:
+# 1. Logs: logger.info(..., correlation_id=correlation_id)
+# 2. HTTP Headers: X-Correlation-ID
+# 3. PG event_log: metadata.correlation_id
+# 4. Redis: HSET pago:{id} correlation_id
+```
 
 ---
 
-## Casos de Uso en EventFlow
+## Referencias
 
-- **Compra de Entrada:** SAGA principal
-- **Cancelación:** SAGA inversa (compensación)
-- **Reembolso:** SAGA parcial
-
----
-
-## Próximos Pasos
-
-- [ ] Implementar Lua script de pagos
-- [ ] Testing de compensaciones
-- [ ] Monitoring de SAGA states
-- [ ] Documentar timeouts y retries
+- `brain/architecture/saga-flow.md` - Diagrama completo + Lua scripts
+- `brain/architecture/chain-of-responsibility.md` - Handlers implementados
+- `brain/data-models/reservation-schema.md` - Esquemas MongoDB/Redis/PG
+- `brain/patterns/event-sourcing-cqrs.md` - Event Sourcing + CQRS
+- `brain/decisions/consistency-strategy.md` - Consistencia fuerte en SAGA
