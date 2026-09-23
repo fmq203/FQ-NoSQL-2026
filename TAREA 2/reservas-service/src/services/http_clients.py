@@ -93,9 +93,9 @@ async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[Dic
 
     start_time = time.perf_counter()
     try:
-        response = await client.get(f"/api/v1/usuarios/{usuario_id}", headers=headers)
+        response = await client.get(f"/api/usuarios/{usuario_id}", headers=headers)
         duration = time.perf_counter() - start_time
-        record_http_request_duration("GET", "/api/v1/usuarios/{usuario_id}", response.status_code, duration)
+        record_http_request_duration("GET", "/api/usuarios/{usuario_id}", response.status_code, duration)
         if response.status_code == 200:
             _record_success("usuarios")
             return response.json()
@@ -107,7 +107,7 @@ async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[Dic
             return None
     except Exception as e:
         duration = time.perf_counter() - start_time
-        record_http_request_duration("GET", "/api/v1/usuarios/{usuario_id}", 500, duration)
+        record_http_request_duration("GET", "/api/usuarios/{usuario_id}", 500, duration)
         _record_failure("usuarios")
         logger.error(f"Error calling Usuarios Service: {e}")
         raise
@@ -123,9 +123,9 @@ async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[Dict]
 
     start_time = time.perf_counter()
     try:
-        response = await client.get(f"/api/v1/eventos/{evento_id}", headers=headers)
+        response = await client.get(f"/api/eventos/{evento_id}", headers=headers)
         duration = time.perf_counter() - start_time
-        record_http_request_duration("GET", "/api/v1/eventos/{evento_id}", response.status_code, duration)
+        record_http_request_duration("GET", "/api/eventos/{evento_id}", response.status_code, duration)
         if response.status_code == 200:
             _record_success("eventos")
             return response.json()
@@ -137,7 +137,7 @@ async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[Dict]
             return None
     except Exception as e:
         duration = time.perf_counter() - start_time
-        record_http_request_duration("GET", "/api/v1/eventos/{evento_id}", 500, duration)
+        record_http_request_duration("GET", "/api/eventos/{evento_id}", 500, duration)
         _record_failure("eventos")
         logger.error(f"Error calling Eventos Service: {e}")
         raise
