@@ -19,7 +19,7 @@ if disponible < tonumber(ARGV[1]) then
     return {0, 'INVENTARIO_INSUFICIENTE'}
 end
 redis.call('DECRBY', KEYS[1], ARGV[1])
-redis.call('HSET', KEYS[2], 
+redis.call('HSET', KEYS[2],
     'reserva_id', ARGV[2], 'usuario_id', ARGV[3],
     'monto', ARGV[4], 'metodo_pago', ARGV[5],
     'estado', 'confirmado', 'timestamp', os.date('!%Y-%m-%dT%H:%M:%SZ')
@@ -75,14 +75,14 @@ async def ejecutar_pagar_y_decrementar(
 ) -> Dict[str, Any]:
     """
     Ejecuta pago + decremento inventario atómicamente via Lua script.
-    
+
     Returns:
         Dict con 'success': bool, 'message': str
     """
     client = await get_redis_client()
     keys = [f"inventario:{evento_id}", f"pago:{reserva_id}"]
     args = [cantidad, reserva_id, usuario_id, str(monto), metodo_pago]
-    
+
     try:
         result = await client.evalsha(
             _pagar_y_decrementar_sha, 2, *keys, *args
@@ -104,14 +104,14 @@ async def ejecutar_compensar_pago_inventario(
 ) -> Dict[str, Any]:
     """
     Ejecuta compensación: INCRBY inventario + DEL pago.
-    
+
     Returns:
         Dict con 'success': bool, 'message': str
     """
     client = await get_redis_client()
     keys = [f"inventario:{evento_id}", f"pago:{reserva_id}"]
     args = [cantidad]
-    
+
     try:
         result = await client.evalsha(
             _compensar_pago_inventario_sha, 2, *keys, *args
@@ -175,3 +175,20 @@ async def close_redis_connection() -> None:
     if _redis_client:
         await _redis_client.close()
         _redis_client = None
+
+# Alias for Spanish name
+registrar_lua_scripts = register_lua_scripts
+
+# Export both names for compatibility
+__all__ = [
+    "get_redis_client",
+    "register_lua_scripts",
+    "registrar_lua_scripts",  # alias for Spanish name
+    "ejecutar_pagar_y_decrementar",
+    "ejecutar_compensar_pago_inventario",
+    "inicializar_inventario",
+    "obtener_inventario",
+    "obtener_pago",
+    "invalidar_cache_disponibilidad",
+    "close_redis_connection",
+]

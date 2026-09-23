@@ -5,18 +5,19 @@ and triggers compensations for failed steps.
 """
 import logging
 from typing import Dict, Callable, Awaitable, Optional
-from src.chain.handler import Handler
-from src.models.reserva import ReservaContext, SagaStep
-from src.services.redis_pago import ejecutar_compensar_pago_inventario
-from src.services.postgresql import insert_event_log
-from src.models.reserva import EventType
+from ..chain.handler import Handler
+from ..models.reserva import ReservaContext, SagaStep
+from ..services.redis_pago import ejecutar_compensar_pago_inventario
+from ..services.postgresql import insert_event_log
+from ..services.metrics import record_saga_total
+from ..models.reserva import EventType
 
 logger = logging.getLogger(__name__)
 
 
 class SagaOrchestrator:
     """Orchestrates SAGA execution with compensation handling."""
-    
+
     def __init__(
         self,
         chain: Handler,
@@ -32,7 +33,7 @@ class SagaOrchestrator:
             5: SagaStep.CONFIRMAR_RESERVA,
             6: SagaStep.AUDITAR,
         }
-    
+
     async def execute(self, context: ReservaContext) -> ReservaContext:
         """Execute the complete SAGA chain with error handling and compensations."""
         logger.info(
@@ -43,13 +44,27 @@ class SagaOrchestrator:
                 "operation": "saga_execute",
             }
         )
-        
+
+        # Emit SAGA_STARTED event
+        await insert_event_log(
+            event_type=EventType.SAGA_STARTED,
+            aggregate_id=context.reserva_id,
+            payload={
+                "usuario_id": str(context.usuario_id),
+                "evento_id": str(context.evento_id),
+                "cantidad": context.cantidad,
+                "metodo_pago": context.metodo_pago,
+            },
+            correlation_id=context.correlation_id
+        )
+
         try:
             # Execute the chain
             context = await self.chain.handle(context)
-            
+
             if context.error:
                 await self._handle_error(context)
+                record_saga_total("failed")
             else:
                 logger.info(
                     "SAGA completed successfully",
@@ -59,9 +74,10 @@ class SagaOrchestrator:
                         "operation": "saga_execute",
                     }
                 )
-            
+                record_saga_total("success")
+
             return context
-            
+
         except Exception as e:
             logger.exception(
                 "Unexpected error in SAGA execution",
@@ -73,8 +89,9 @@ class SagaOrchestrator:
             context.error = f"Error inesperado en SAGA: {e}"
             context.status_code = 500
             await self._handle_error(context)
+            record_saga_total("error")
             return context
-    
+
     async def _handle_error(self, context: ReservaContext) -> None:
         """Handle error by executing compensations in reverse order."""
         failed_step = self._identify_failed_step(context)
@@ -87,10 +104,21 @@ class SagaOrchestrator:
                 "operation": "saga_compensation",
             }
         )
-        
+
+        # Emit SAGA_FAILED event
+        await insert_event_log(
+            event_type=EventType.SAGA_FAILED,
+            aggregate_id=context.reserva_id,
+            payload={
+                "error": context.error,
+                "failed_step": failed_step,
+            },
+            correlation_id=context.correlation_id
+        )
+
         # Execute compensations in reverse order (only for mutating steps 4-5)
         compensation_steps = self._get_compensation_steps(failed_step)
-        
+
         for step in compensation_steps:
             handler = self.compensation_handlers.get(step)
             if handler:
@@ -104,7 +132,7 @@ class SagaOrchestrator:
                         }
                     )
                     await handler(context)
-                    
+
                     # Log compensation event
                     await insert_event_log(
                         event_type="COMPENSACION_EJECUTADA",
@@ -116,6 +144,7 @@ class SagaOrchestrator:
                         },
                         correlation_id=context.correlation_id
                     )
+                    record_saga_compensation(self._step_names.get(step, f"STEP_{step}"))
                 except Exception as e:
                     logger.error(
                         f"Compensation failed for step {step}: {e}",
@@ -125,7 +154,7 @@ class SagaOrchestrator:
                             "compensation_step": step,
                         }
                     )
-    
+
     def _identify_failed_step(self, context: ReservaContext) -> int:
         """Identify which step failed based on context."""
         # Check saga_log for the last failed step
@@ -138,7 +167,7 @@ class SagaOrchestrator:
                         return num
         # Default to step 5 if we can't determine
         return 5
-    
+
     def _get_compensation_steps(self, failed_step: int) -> list:
         """Get list of steps to compensate in reverse order."""
         # Only steps 4 and 5 have compensations (mutating steps)
@@ -147,7 +176,7 @@ class SagaOrchestrator:
             if step in [4, 5]:
                 compensation_steps.append(step)
         return compensation_steps
-    
+
     _step_names = {
         1: SagaStep.VALIDAR_DATOS,
         2: SagaStep.VALIDAR_USUARIO,
@@ -174,15 +203,15 @@ async def compensate_step_5_reservation(context: ReservaContext) -> None:
     if not context.evento_id or not context.reserva_id:
         logger.warning("Missing evento_id or reserva_id for compensation")
         return
-    
-    from src.services.redis_pago import ejecutar_compensar_pago_inventario
-    
+
+    from ..services.redis_pago import ejecutar_compensar_pago_inventario
+
     result = await ejecutar_compensar_pago_inventario(
         evento_id=str(context.evento_id),
         reserva_id=str(context.reserva_id),
         cantidad=context.cantidad
     )
-    
+
     if result["success"]:
         logger.info(
             f"Step 5 compensation executed: INCRBY inventory + DEL pago for reserva {context.reserva_id}",

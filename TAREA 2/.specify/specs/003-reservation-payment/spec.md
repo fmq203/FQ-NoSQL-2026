@@ -36,7 +36,7 @@ Estructura de validaciones secuenciales: Datos → Usuario → Evento → Pago �
 
 **Acceptance Scenarios**:
 1. **Given** Request inválido (cantidad<=0), **When** ValidadorDeDatos, **Then** Error 400, cadena se detiene
-2. **Given** Usuario inexistente, **When** ValidadorInventario, **Then** Error 404, cadena se detiene
+2. **Given** Usuario inexistente, **When** ValidadorUsuario, **Then** Error 404, cadena se detiene
 3. **Given** Evento inexistente, **When** ValidadorEvento, **Then** Error 404
 4. **Given** Aforo insuficiente, **When** ValidadorEvento, **Then** Error 409
 5. **Given** Pago falla (Redis), **When** ProcesadorPago, **Then** Error 500, compensación automática en Lua
@@ -74,7 +74,8 @@ Registro inmutable de todos los pasos SAGA en PostgreSQL para compliance y debug
 
 ### Edge Cases
 - Idempotencia: Mismo reserva_id reenviado → **200 OK** con datos de reserva existente (idempotente, no doble cobro)
-- Timeout HTTP a Usuarios/Eventos: Retry 3x con backoff, luego 504
+- Timeout HTTP a Usuarios/Eventos: Retry 3x con backoff (0.5s, 1s, 2s), luego 504
+- Degraded dependency (health check "degraded"): Retry 1x con timeout extendido (10s), luego 504 si persiste
 - Redis unavailable: Circuit breaker, 503 service unavailable
 - Pago parcial (monto incorrecto): Validación en Lua script
 - Concurrencia extrema: Lua script serializa, Redis single-threaded
@@ -83,15 +84,14 @@ Registro inmutable de todos los pasos SAGA en PostgreSQL para compliance y debug
 
 ### Functional Requirements
 
-- **RP-FR-001**: System MUST orquestar SAGA con 6 pasos: ValidarDatos → ValidarUsuario → ValidarEvento → ProcesarPago → ConfirmarReserva → Auditar
-- **RP-FR-002**: System MUST implementar Chain of Responsibility con 6 handlers encadenados
-- **RP-FR-003**: System MUST ejecutar pago + decremento inventario ATÓMICAMENTE via Lua script en Redis
-- **RP-FR-004**: System MUST compensar automáticamente: Fallo paso 5 → Rollback Redis + MongoDB; Fallo paso 4 → Rollback atómico Lua
-- **RP-FR-005**: System MUST registrar TODOS los pasos SAGA en PostgreSQL event_log (Event Sourcing)
-- **RP-FR-006**: System MUST separar lectura/escritura (CQRS): Escritura→PostgreSQL, Lectura operativa→MongoDB, Analítica→SQL views
-- **RP-FR-007**: System MUST generar numero_confirmacion formato CONF-YYYYMMDD-XXXXXXXX
-- **RP-FR-008**: System MUST validar idempotencia via reserva_id (UUID v4)
-- **RP-FR-009**: System MUST responder health check en `/health` con latencia < 10ms, verificando conectividad MongoDB + Redis + PostgreSQL + HTTP clients (Usuarios/Eventos services), reportando degradación por dependencia
+- **RP-FR-001**: System MUST orquestar SAGA con 6 pasos via Chain of Responsibility: ValidarDatos → ValidarUsuario → ValidarEvento → ProcesarPago → ConfirmarReserva → Auditar
+- **RP-FR-002**: System MUST ejecutar pago + decremento inventario ATÓMICAMENTE via Lua script en Redis
+- **RP-FR-003**: System MUST compensar automáticamente: Fallo paso 5 → Rollback Redis + MongoDB; Fallo paso 4 → Rollback atómico Lua
+- **RP-FR-004**: System MUST registrar TODOS los pasos SAGA en PostgreSQL event_log (Event Sourcing)
+- **RP-FR-005**: System MUST separar lectura/escritura (CQRS): Escritura→PostgreSQL, Lectura operativa→MongoDB, Analítica→SQL views
+- **RP-FR-006**: System MUST generar numero_confirmacion formato CONF-YYYYMMDD-XXXXXXXX
+- **RP-FR-007**: System MUST validar idempotencia via reserva_id (UUID v4)
+- **RP-FR-008**: System MUST responder health check en `/health` con latencia < 10ms, verificando conectividad MongoDB + Redis + PostgreSQL + HTTP clients (Usuarios/Eventos services), reportando degradación por dependencia
 
 ### Key Entities
 
@@ -99,6 +99,66 @@ Registro inmutable de todos los pasos SAGA en PostgreSQL para compliance y debug
 - **PagoRedis**: Hash efímero en Redis con reserva_id, usuario_id, monto, metodo_pago, estado, timestamp (TTL 24h)
 - **InventarioRedis**: String contador `inventario:{evento_id}` (TTL renovado)
 - **EventLog**: Tabla PostgreSQL append-only con event_type, aggregate_id, payload JSONB, metadata JSONB
+
+### MongoDB Read Model (Operational CQRS)
+
+**Colección `reservas` - Document Structure:**
+```javascript
+{
+  "_id": UUID("..."),                    // reserva_id (PK, idempotency key)
+  "usuario_id": UUID("..."),
+  "evento_id": UUID("..."),
+  "categoria": "platea",                 // selected category
+  "cantidad": 2,
+  "metodo_pago": "tarjeta",
+  "precio_unitario": 1500.00,
+  "monto_total": 3000.00,
+  "estado": "confirmada",                // pendiente | confirmada | fallida | compensada
+  "numero_confirmacion": "CONF-20260920-A1B2C3D4",
+  "creado_en": ISODate("2026-09-20T10:00:00.000Z"),
+  "actualizado_en": ISODate("2026-09-20T10:00:05.000Z"),
+  "saga_log": [                          // Embedded for debugging (denormalized)
+    { "paso": 1, "handler": "ValidadorDeDatos", "estado": "ok", "timestamp": "...", "duracion_ms": 2 },
+    { "paso": 2, "handler": "ValidadorUsuario", "estado": "ok", "timestamp": "...", "duracion_ms": 45 },
+    { "paso": 3, "handler": "ValidadorEvento", "estado": "ok", "timestamp": "...", "duracion_ms": 38 },
+    { "paso": 4, "handler": "ProcesadorPago", "estado": "ok", "timestamp": "...", "duracion_ms": 12 },
+    { "paso": 5, "handler": "ConfirmadorReserva", "estado": "ok", "timestamp": "...", "duracion_ms": 8 },
+    { "paso": 6, "handler": "Auditor", "estado": "ok", "timestamp": "...", "duracion_ms": 15 }
+  ],
+  "correlation_id": UUID("..."),
+  "metadata": {
+    "ip_cliente": "192.168.1.1",
+    "user_agent": "..."
+  }
+}
+```
+
+**Optimized Indexes for Read Patterns:**
+```javascript
+// Query: Reservas por usuario (historial)
+db.reservas.createIndex({ "usuario_id": 1, "creado_en": -1 })
+
+// Query: Reservas por evento + estado (operaciones de boletería)
+db.reservas.createIndex({ "evento_id": 1, "estado": 1 })
+
+// Query: Lookup por numero_confirmacion (atención al cliente)
+db.reservas.createIndex({ "numero_confirmacion": 1 }, { unique: true })
+
+// Query: Reservas por estado + fecha (dashboard admin)
+db.reservas.createIndex({ "estado": 1, "creado_en": -1 })
+
+// TTL: Auto-limpieza de reservas pendientes/fallidas > 24h
+db.reservas.createIndex(
+  { "creado_en": 1 },
+  { expireAfterSeconds: 86400, partialFilterExpression: { "estado": { "$in": ["pendiente", "fallida"] } } }
+)
+```
+
+**Read Queries (Operational):**
+- `GET /api/v1/reservar/{reserva_id}` → find by `_id`
+- `GET /api/v1/reservar?usuario_id=...` → find by `usuario_id` + sort `creado_en DESC`
+- `GET /api/v1/reservar?evento_id=...&estado=confirmada` → find by `evento_id` + `estado`
+```
 
 ## Success Criteria
 
@@ -116,7 +176,7 @@ Registro inmutable de todos los pasos SAGA en PostgreSQL para compliance y debug
 ## Assumptions
 
 - Usuarios Service y Eventos Service disponibles (health checks passing)
-- Redis single-threaded garantiza atomicidad Lua
+- Redis single-threaded garantiza atomicidad Lua (justificación completa en `brain/decisions/db-selection.md`: MongoDB para documentos anidados Usuarios/Eventos/Reservas; Redis para atomicidad pago+inventario via Lua; PostgreSQL para ACID auditoría/Event Sourcing)
 - PostgreSQL ACID para auditoría inmutable
 - No autenticación en MVP (usuario_id en request body)
 - Métodos de pago: tarjeta, transferencia, efectivo, mercadopago
@@ -438,8 +498,9 @@ El campo `monto_total` en la reserva se calcula como: `precio_unitario * cantida
 - Response incluye `precios[]` con `categoria`, `precio`, `disponibles`
 - El `ValidadorEvento` obtiene y almacena `evento_data.precios` en `ReservaContext`
 - El `ProcesadorPago` calcula: `monto_total = precio_categoria_seleccionada * cantidad`
-- Si hay múltiples categorías, el cliente debe especificar `categoria` en request (extensión futura)
+- **MVP (v1)**: Se usa la primera categoría disponible; campo `categoria` en request es opcional
+- **Post-MVP (v2+)**: Cliente especifica `categoria` en request para selección explícita
+  - **Acceptance Criteria v2**: POST `/api/v1/reservar` acepta campo opcional `categoria`; si se provee, validar que existe en `precios[]` del evento; si no, usar primera categoría; rechazar con 400 si categoría no existe
+  - **Requerimiento**: Endpoint Eventos Service actualizado para incluir `categoria` en response (ya incluido)
 
 **Validación**: El `ProcesadorPago` verifica que `monto_total` coincida con `precio * cantidad` antes de ejecutar Lua script.
-
-## Structured Logging Schema (Mandatory per Constitution Principle IV)

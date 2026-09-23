@@ -1,11 +1,15 @@
 """SQL Views and partitioning for Event Sourcing CQRS."""
 import asyncio
+import asyncpg
 from src.services.postgresql import get_pg_pool, init_pg_schema
 import os
 
 
 async def create_cqrs_views():
     """Create CQRS analytical views in PostgreSQL."""
+    # First initialize the schema (creates event_log table if not exists)
+    await init_pg_schema()
+    
     pg_uri = os.getenv("POSTGRESQL_URI", "postgresql://eventflow_user:eventflow_password@localhost:5432/eventflow")
     pool = await asyncpg.create_pool(pg_uri, min_size=1, max_size=5)
     

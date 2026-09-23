@@ -53,28 +53,28 @@ Implementar **Reservas & Pagos Service** como **Orquestador SAGA** con **Chain o
 
 | Spec Requirement | Plan Section | Tasks |
 |------------------|--------------|-------|
-| RP-FR-001 | Phase 3 (US1) | T023-T028, T031-T033, T036 |
-| RP-FR-002 | Phase 3/5 | T023-T028, T031-T033, T050-T052 |
-| RP-FR-003 | Phase 3 | T018, T026, T044 |
-| RP-FR-004 | Phase 4 (US2) | T044-T048 |
-| RP-FR-005 | Phase 6 (US4) | T059-T063 |
-| RP-FR-006 | Phase 6 (US4) | T059-T063 |
-| RP-FR-007 | Phase 3 | T034 |
-| RP-FR-008 | Phase 2/3 | T015, T035 |
-| RP-FR-009 | Phase 2 | T014, T071 |
-| RP-SC-001 | Performance Goals | T019, T020 |
-| RP-SC-002 | Phase 3 | T015, T021 |
-| RP-SC-003 | Phase 3 | T018, T022 |
-| RP-SC-004 | Phase 4 | T043 |
-| RP-SC-005 | Phase 6 | T056, T057 |
-| RP-SC-006 | Phase 6 | T058 |
-| RP-SC-007 | Performance Goals | T020 |
-| RP-SC-008 | Phase 2 | T014, T071 |
+| RP-FR-001 | Phase 3-4 (US1) | T023-T028, T031-T033, T036, T076, T078 |
+| RP-FR-002 | Phase 3-4, 5-6 (US1, US2) | T018, T026, T044, T079, T110 |
+| RP-FR-003 | Phase 5-6 (US2) | T044-T048, T084-T087, T125, T126 |
+| RP-FR-004 | Phase 9-10 (US4) | T059-T063, T089-T094, T128, T129 |
+| RP-FR-005 | Phase 9-10 (US4) | T059-T063, T095-T099, T130, T131 |
+| RP-FR-006 | Phase 4 (US1) | T034 |
+| RP-FR-007 | Phase 2, 4 (US1) | T015, T035, T074, T109 |
+| RP-FR-008 | Phase 2, 11 (US1) | T014, T071, T100-T103 |
+| RP-SC-001 | Performance Goals | T019, T080 |
+| RP-SC-002 | Phase 3-4, 12 | T021, T082, T113 |
+| RP-SC-003 | Phase 3-4, 12 | T022, T083, T114 |
+| RP-SC-004 | Phase 5-6, 12 | T043, T087 |
+| RP-SC-005 | Phase 9-10, 12 | T056, T057, T092, T093, T115 |
+| RP-SC-006 | Phase 9-10, 12 | T058, T094 |
+| RP-SC-007 | Performance Goals | T020, T081 |
+| RP-SC-008 | Phase 2, 11 | T014, T071, T101 |
 
 ## Project Structure
 
 ```
 reservas-service/
+├── docker-compose.yml          # Local dev stack: MongoDB, Redis, PostgreSQL, Usuarios, Eventos
 ├── Dockerfile
 ├── requirements.txt
 ├── src/
@@ -87,7 +87,7 @@ reservas-service/
 │   ├── chain/
 │   │   ├── __init__.py
 │   │   ├── handler.py           # Base Handler abstracto + ReservaContext
-│   │   ├── validators.py        # 6 handlers: ValidadorDatos, ValidadorInventario, ValidadorEvento, ProcesadorPago, ConfirmadorReserva, Auditor
+│   │   ├── validators.py        # 6 handlers: ValidadorDatos, ValidadorUsuario, ValidadorEvento, ProcesadorPago, ConfirmadorReserva, Auditor
 │   │   └── builder.py           # Construir cadena encadenada
 │   ├── services/
 │   │   ├── __init__.py
@@ -135,7 +135,7 @@ reservas-service/
 
 ### Data Models
 
-Ver `brain/data-models/reservation-schema.md`.
+Data models defined inline below. External reference removed.
 
 **MongoDB - Colección `reservas`**:
 ```javascript
@@ -252,7 +252,7 @@ CREATE INDEX idx_event_log_payload_gin ON event_log USING GIN(payload);
 | Orden | Handler | Responsabilidad | Dependencia Externa |
 |-------|---------|-----------------|---------------------|
 | 1 | ValidadorDeDatos | Validar UUIDs, cantidad>0, metodo_pago válido | Local |
-| 2 | ValidadorInventario | GET /api/usuarios/{id} | Usuarios Service (HTTP) |
+| 2 | ValidadorUsuario | GET /api/usuarios/{id} | Usuarios Service (HTTP) |
 | 3 | ValidadorEvento | GET /api/eventos/{id} + aforo | Eventos Service (HTTP) |
 | 4 | ProcesadorPago | Lua Redis: pago + DECRBY inventario | Redis (Lua atómico) |
 | 5 | ConfirmadorReserva | INSERT MongoDB reserva + saga_log | MongoDB |

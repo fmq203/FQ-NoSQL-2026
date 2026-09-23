@@ -35,28 +35,28 @@ ERROR_TITLES = {
 
 class RFC7807Middleware(BaseHTTPMiddleware):
     """Middleware to format all errors as RFC 7807 Problem Details."""
-    
+
     async def dispatch(self, request: Request, call_next):
         try:
             response = await call_next(request)
             return response
         except Exception as e:
             return self._format_error(request, e)
-    
+
     def _format_error(self, request: Request, exc: Exception) -> JSONResponse:
         """Format exception as RFC 7807 Problem Details."""
         # Get correlation_id from request headers or generate new
         correlation_id = request.headers.get("X-Correlation-ID", str(uuid4()))
-        
+
         # Determine status code and error code
         status_code = getattr(exc, "status_code", 500)
         error_code = getattr(exc, "error_code", ERROR_CODES.get(status_code, "INTERNAL_ERROR"))
-        
+
         # Get detail message
         detail = str(exc)
         if hasattr(exc, "detail"):
             detail = exc.detail
-        
+
         # Build RFC 7807 response
         problem = {
             "type": f"https://eventflow.example.com/errors/{error_code.lower()}",
@@ -66,7 +66,7 @@ class RFC7807Middleware(BaseHTTPMiddleware):
             "instance": str(request.url.path),
             "correlation_id": correlation_id,
         }
-        
+
         # Log error
         logger.error(
             f"RFC7807 Error: {error_code} - {detail}",
@@ -77,7 +77,7 @@ class RFC7807Middleware(BaseHTTPMiddleware):
                 "error_code": error_code,
             }
         )
-        
+
         response = JSONResponse(
             content=problem,
             status_code=status_code,
@@ -89,7 +89,7 @@ class RFC7807Middleware(BaseHTTPMiddleware):
 # Custom exception classes for specific error codes
 class RFC7807Exception(Exception):
     """Base exception with RFC 7807 properties."""
-    
+
     def __init__(self, detail: str, status_code: int = 500, error_code: str = None):
         super().__init__(detail)
         self.detail = detail

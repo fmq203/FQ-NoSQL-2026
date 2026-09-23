@@ -39,21 +39,25 @@ description: "Task list for Reservation & Payment feature implementation"
 - [ ] T014c Configure API versioning in FastAPI: prefix `/api/v1` for all routes, accept header parsing
 - [ ] T014d Implement distributed tracing middleware: X-Correlation-ID extraction, propagation, logging
 - [ ] T014e Implement circuit breaker for HTTP clients: closed/open/half-open states, threshold 5 failures, 30s half-open
+- [ ] T014f Implement Prometheus metrics endpoint `/metrics` in `src/api/metrics.py`:
+    - `saga_duration_seconds` histogram (step, status)
+    - `saga_total` counter (status)
+    - `saga_compensation_total` counter (step)
+    - `http_request_duration_seconds` histogram (method, path, status)
+    - `db_operation_duration_seconds` histogram (db, operation, status)
+    - `circuit_breaker_state` gauge (service, state)
+    - `idempotency_hit_total` counter
+    - Histogram buckets: 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10
+- [ ] T014g Implement Accept header versioning middleware: parse `Accept: application/vnd.eventflow.v1+json`, default to v1
 - [ ] T015 Create idempotency helper (`src/utils/idempotency.py`): check reserva_id exists in MongoDB/Redis/PostgreSQL
 
 **Checkpoint**: Foundation ready - SAGA orchestration can begin
 
 ---
 
-## Phase 3: User Story 1 - SAGA Completa Happy Path (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 - TESTS ONLY (TDD Red Phase)
 
-**Goal**: POST `/api/reservar` ejecuta 6 pasos SAGA exitosamente: ValidaDatos → Usuario → Evento → PagoRedis → ReservaMongo → AuditPG
-
-**Independent Test**: Request válido → 201 con reserva_id, estado=confirmada, numero_confirmacion. Verificar: MongoDB reserva, Redis pago, PG event_log (7 eventos), inventario decrementado.
-
-### Tests for US1 (Write FIRST, must FAIL)
-
-> **NOTE: TDD mandatory - tests written → fail → then implement**
+**Goal**: Write ALL tests for US1, run them, verify they FAIL before any implementation
 
 - [ ] T016 [P] [US1] Contract test: POST `/api/reservar` OpenAPI validation en `tests/contract/test_reservas_openapi.py`
 - [ ] T017 [P] [US1] Integration test: SAGA happy path completo en `tests/integration/test_saga_happy_path.py`
@@ -65,14 +69,19 @@ description: "Task list for Reservation & Payment feature implementation"
 - [ ] T020 [P] [US1] Performance test: P99 < 1s under load (RP-SC-007) in `tests/performance/test_saga_p99.py`
 - [ ] T021 [P] [US1] Test: Zero double bookings (RP-SC-002) in `tests/integration/test_double_booking.py`
 - [ ] T022 [P] [US1] Test: Zero negative inventory (RP-SC-003) in `tests/integration/test_negative_inventory.py`
+- [ ] **CHECKPOINT**: Run `pytest tests/` - ALL US1 tests must FAIL before proceeding to Phase 4
 
-### Implementation for US1
+---
 
-**Chain Handlers (implement in order, each depends on previous):**
+## Phase 4: User Story 1 - IMPLEMENTATION (TDD Green Phase)
 
-- [ ] T023 [P] [US1] Handler 1: `ValidadorDeDatos` en `src/chain/validators.py` - valida UUIDs, cantidad>0, metodo_pago en enum
-- [ ] T024 [P] [US1] Handler 2: `ValidadorInventario` - GET Usuarios Service, verifica usuario existe
-- [ ] T025 [P] [US1] Handler 3: `ValidadorEvento` - GET Eventos Service, verifica existe + aforo>=cantidad
+**Goal**: Make all Phase 3 tests pass
+
+**Chain Handlers (implement in order, each depends on previous - NO parallel):**
+
+- [ ] T023 [US1] Handler 1: `ValidadorDeDatos` en `src/chain/validators.py` - valida UUIDs, cantidad>0, metodo_pago en enum
+- [ ] T024 [US1] Handler 2: `ValidadorUsuario` - GET Usuarios Service, verifica usuario existe
+- [ ] T025 [US1] Handler 3: `ValidadorEvento` - GET Eventos Service, verifica existe + aforo>=cantidad
 - [ ] T026 [US1] Handler 4: `ProcesadorPago` - Ejecuta Lua script `pagar_y_decrementar.lua` en Redis
 - [ ] T027 [US1] Handler 5: `ConfirmadorReserva` - INSERT MongoDB reserva con saga_log parcial
 - [ ] T028 [US1] Handler 6: `Auditor` - INSERT PostgreSQL event_log (SAGA_COMPLETED + pasos previos)
@@ -85,63 +94,62 @@ description: "Task list for Reservation & Payment feature implementation"
 - [ ] T034 [US1] Generar `numero_confirmacion`: `CONF-{YYYYMMDD}-{reserva_id[:8].upper()}`
 - [ ] T035 [US1] Idempotencia: check reserva_id existe antes de iniciar SAGA
 - [ ] T036 [US1] Correlation ID: propagar en logs, HTTP headers, PG event_log
+- [ ] **CHECKPOINT**: Run `pytest tests/` - ALL US1 tests must PASS
 
 ---
 
-## Phase 4: User Story 2 - Compensaciones Automáticas (Priority: P1)
+## Phase 5: User Story 2 - TESTS ONLY (TDD Red Phase)
 
-**Goal**: Rollback automático en fallos paso 4 (Lua interno) y paso 5 (MongoDB → compensar Redis)
-
-**Independent Test**: Simular fallo MongoDB → compensación Redis ejecutada (INCRBY + DEL). Fallo Lua → 0 cambios.
-
-### Tests for US2 (MANDATORY)
+**Goal**: Write ALL tests for US2, run them, verify they FAIL
 
 - [ ] T040 [P] [US2] Integration test: Fallo Paso 5 (MongoDB down) → compensación Redis en `tests/integration/test_saga_compensations.py`
 - [ ] T041 [P] [US2] Integration test: Fallo Paso 4 (inventario insuficiente Lua) → 0 cambios
 - [ ] T042 [P] [US2] Unit test: Lua compensación `compensar_pago_inventario.lua` en `tests/unit/test_lua_scripts.py`
 - [ ] T043 [P] [US2] Test: Compensación 100% success en fallos simulados paso 4-5 (RP-SC-004) in `tests/integration/test_compensation_success.py`
+- [ ] **CHECKPOINT**: Run `pytest tests/` - ALL US2 tests must FAIL before proceeding to Phase 6
 
-### Implementation for US2
+---
+
+## Phase 6: User Story 2 - IMPLEMENTATION (TDD Green Phase)
+
+**Goal**: Make all Phase 5 tests pass
 
 - [ ] T044 [US2] En `ProcesadorPago`: Lua script maneja rollback interno si DECRBY falla (transacción atómica)
 - [ ] T045 [US2] En `ConfirmadorReserva`: try/except en INSERT MongoDB → si falla, ejecutar Lua compensación `compensar_pago_inventario.lua` (INCRBY inventario + DEL pago)
 - [ ] T046 [US2] En `SagaOrchestrator`: catch exceptions por paso, ejecutar compensaciones en orden inverso (5→4)
 - [ ] T047 [US2] Registrar eventos compensación en PG: `COMPENSACION_EJECUTADA` con paso y acción
 - [ ] T048 [US2] Fallo Paso 6 (PostgreSQL): Log warning ONLY, NO compensación (reserva ya confirmada)
+- [ ] **CHECKPOINT**: Run `pytest tests/` - ALL US2 tests must PASS
 
 ---
 
-## Phase 5: User Story 3 - Chain of Responsibility Testing (Priority: P1)
+## Phase 7: User Story 3 - TESTS ONLY (TDD Red Phase)
 
-**Goal**: Cada handler testeable independientemente, cadena completa integrable
-
-**Independent Test**: Unit test cada handler con ReservaContext mock. Integration test cadena completa.
-
-### Tests for US3 (MANDATORY)
+**Goal**: Write ALL handler unit tests, run them, verify they FAIL
 
 - [ ] T049 [P] [US3] Unit tests each handler en `tests/unit/test_handlers.py`:
   - ValidadorDeDatos: cantidad=0 → error, cantidad>0 → pass
-  - ValidadorInventario: usuario existe → pass, no existe → 404
+  - ValidadorUsuario: usuario existe → pass, no existe → 404
   - ValidadorEvento: aforo ok → pass, insuficiente → 409
   - ProcesadorPago: mock Redis, verificar Lua llamado
   - ConfirmadorReserva: mock MongoDB, verificar insert
   - Auditor: mock PG, verificar insert event_log
+- [ ] **CHECKPOINT**: Run `pytest tests/unit/test_handlers.py` - ALL tests must FAIL before proceeding to Phase 8
 
-### Implementation for US3
+---
+
+## Phase 8: User Story 3 - IMPLEMENTATION (TDD Green Phase)
+
+**Goal**: Make all Phase 7 tests pass
 
 - [ ] T050 [US3] Asegurar handlers sin side effects en `__init__` (solo config)
 - [ ] T051 [US3] Dependency injection: handlers reciben clientes (http, redis, mongo, pg) por constructor
 - [ ] T052 [US3] ReservaContext inmutable entre handlers (dataclass frozen o copy)
+- [ ] **CHECKPOINT**: Run `pytest tests/unit/test_handlers.py` - ALL tests must PASS
 
----
+## Phase 9: User Story 4 - TESTS ONLY (TDD Red Phase)
 
-## Phase 6: User Story 4 - Event Sourcing + CQRS Auditoría (Priority: P2)
-
-**Goal**: Event log completo en PostgreSQL para compliance y analytics
-
-**Independent Test**: Reserva exitosa → 7 eventos en PG ordenados. Fallo → SAGA_FAILED + COMPENSACION. Query analítica ventas funciona.
-
-### Tests for US4 (MANDATORY)
+**Goal**: Write ALL tests for US4, run them, verify they FAIL
 
 - [ ] T053 [P] [US4] Integration test: Verificar 7 eventos ordenados en PG tras reserva exitosa
 - [ ] T054 [P] [US4] Integration test: Verificar SAGA_FAILED + COMPENSACION en PG tras fallo
@@ -149,8 +157,13 @@ description: "Task list for Reservation & Payment feature implementation"
 - [ ] T056 [P] [US4] Integration test: Verificar TODOS los event types (SAGA_STARTED, USUARIO_VALIDADO, EVENTO_VALIDADO, PAGO_PROCESADO, INVENTARIO_DECREMENTADO, RESERVA_CONFIRMADA, SAGA_COMPLETED, SAGA_FAILED, COMPENSACION_EJECUTADA) en `tests/integration/test_all_event_types.py`
 - [ ] T057 [P] [US4] Test: Audit log 100% completo (RP-SC-005) in `tests/integration/test_audit_completeness.py`
 - [ ] T058 [P] [US4] Test: SAGA success rate > 99.9% measurement (RP-SC-006) in `tests/performance/test_saga_success_rate.py`
+- [ ] **CHECKPOINT**: Run `pytest tests/` - ALL US4 tests must FAIL before proceeding to Phase 10
 
-### Implementation for US4
+---
+
+## Phase 10: User Story 4 - IMPLEMENTATION (TDD Green Phase)
+
+**Goal**: Make all Phase 9 tests pass
 
 - [ ] T059 [US4] En `Auditor`: insert event_log por cada paso SAGA (no solo al final)
   - SAGA_STARTED, USUARIO_VALIDADO, EVENTO_VALIDADO, PAGO_PROCESADO, INVENTARIO_DECREMENTADO, RESERVA_CONFIRMADA, SAGA_COMPLETED
@@ -158,10 +171,9 @@ description: "Task list for Reservation & Payment feature implementation"
 - [ ] T061 [US4] Metadata: correlation_id, service name, timestamp
 - [ ] T062 [US4] Vista materializada / query analítica: `ventas_por_evento`, `tasa_exito_saga`, `compensaciones_por_tipo` (ver plan.md SQL)
 - [ ] T063 [US4] Particionamiento mensual event_log (opcional, activar si >10M eventos/mes o latencia analítica >500ms)
+- [ ] **CHECKPOINT**: Run `pytest tests/` - ALL US4 tests must PASS
 
----
-
-## Phase 7: Polish & Cross-Cutting
+## Phase 11: Polish & Cross-Cutting
 
 - [ ] T064 [P] OpenAPI descriptions + examples + error responses
 - [ ] T065 [P] Quickstart validation: docker compose up full stack, test SAGA end-to-end
@@ -169,7 +181,6 @@ description: "Task list for Reservation & Payment feature implementation"
 - [ ] T067 [P] Load test: 100 req/s concurrentes, verificar 0 doble ventas, 0 inventario negativo
 - [ ] T068 Circuit breaker verification: test closed/open/half-open transitions
 - [ ] T069 Security: validación estricta inputs, no PII en logs, correlation_id tracking
-- [ ] T070 [P] Metrics endpoint: `/metrics` Prometheus exposition (latency, error rate, throughput)
 - [ ] T071 [P] Health check three-state per dependency: healthy/degraded/unhealthy
 - [ ] T072 [P] Docker build verification: `docker compose build reservas-service` succeeds, no critical vulnerabilities
 - [ ] T073 [P] Dependency vulnerability scan: `pip-audit` or `safety` check, zero critical/high
@@ -181,8 +192,8 @@ description: "Task list for Reservation & Payment feature implementation"
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
-- Setup (1) → Foundational (2) → US1 SAGA Happy (3) → US2 Compensaciones (4) → US3 Chain Test (5) → US4 Event Sourcing (6) → Polish (7)
-- Polish (Phase 7): Depends on all stories complete (T064-T075)
+- Setup (1) → Foundational (2) → US1 Tests (3) → US1 Impl (4) → US2 Tests (5) → US2 Impl (6) → US3 Tests (7) → US3 Impl (8) → US4 Tests (9) → US4 Impl (10) → Polish (11)
+- Polish (Phase 11): Depends on all stories complete (T064-T075)
 
 ### Within Each User Story
 - Tests FIRST (must fail) → Implementation
@@ -225,74 +236,130 @@ description: "Task list for Reservation & Payment feature implementation"
 
 ---
 
-## Phase 8: Convergence
+## Phase 12: Convergence & Gap Closure
 
 **Purpose**: Close gaps between specification, plan, tasks, and implementation identified during convergence analysis.
 
 ### Critical - Missing Core Components
 
-- [ ] T076 [US1] Implement `SagaOrchestrator` in `src/services/saga_orchestrator.py`: execute chain, handle errors, trigger compensations per `plan.md:T032` (missing)
-- [ ] T077 [US1] Implement contract test: POST `/api/v1/reservar` OpenAPI validation in `tests/contract/test_reservas_openapi.py` per `tasks.md:T016` (missing)
-- [ ] T078 [US1] Implement integration test: SAGA happy path completo in `tests/integration/test_saga_happy_path.py` per `tasks.md:T017` (missing)
-- [ ] T079 [US1] Implement unit test: Lua script pago+decremento atómico in `tests/unit/test_lua_scripts.py` per `tasks.md:T018` (missing)
-- [ ] T080 [US1] Implement performance test: SAGA completa < 500ms p95 (RP-SC-001) in `tests/performance/test_saga_performance.py` per `tasks.md:T019` (missing)
-- [ ] T081 [US1] Implement performance test: P99 < 1s under load (RP-SC-007) in `tests/performance/test_saga_p99.py` per `tasks.md:T020` (missing)
-- [ ] T082 [US1] Implement test: Zero double bookings (RP-SC-002) in `tests/integration/test_double_booking.py` per `tasks.md:T021` (missing)
-- [ ] T083 [US1] Implement test: Zero negative inventory (RP-SC-003) in `tests/integration/test_negative_inventory.py` per `tasks.md:T022` (missing)
+- [ ] T076 [US1] Implement `SagaOrchestrator` in `src/services/saga_orchestrator.py`: execute chain, handle errors, trigger compensations per `plan.md:T032`
+- [ ] T077 [US1] Implement contract test: POST `/api/v1/reservar` OpenAPI validation in `tests/contract/test_reservas_openapi.py`
+- [ ] T078 [US1] Implement integration test: SAGA happy path completo in `tests/integration/test_saga_happy_path.py`
+- [ ] T079 [US1] Implement unit test: Lua script pago+decremento atómico in `tests/unit/test_lua_scripts.py`
+- [ ] T080 [US1] Implement performance test: SAGA < 500ms p95 (RP-SC-001) in `tests/performance/test_saga_performance.py`
+- [ ] T081 [US1] Implement performance test: P99 < 1s under load (RP-SC-007) in `tests/performance/test_saga_p99.py`
+- [ ] T082 [US1] Implement test: Zero double bookings (RP-SC-002) in `tests/integration/test_double_booking.py`
+- [ ] T083 [US1] Implement test: Zero negative inventory (RP-SC-003) in `tests/integration/test_negative_inventory.py`
 
 ### Critical - US2 Compensations Tests
 
-- [ ] T084 [US2] Integration test: Fallo Paso 5 (MongoDB down) → compensación Redis in `tests/integration/test_saga_compensations.py` per `tasks.md:T040` (missing)
-- [ ] T085 [US2] Integration test: Fallo Paso 4 (inventario insuficiente Lua) → 0 cambios in `tests/integration/test_saga_compensations.py` per `tasks.md:T041` (missing)
-- [ ] T086 [US2] Unit test: Lua compensación `compensar_pago_inventario.lua` in `tests/unit/test_lua_scripts.py` per `tasks.md:T042` (missing)
-- [ ] T087 [US2] Test: Compensación 100% success en fallos simulados paso 4-5 (RP-SC-004) in `tests/integration/test_compensation_success.py` per `tasks.md:T043` (missing)
+- [ ] T084 [US2] Integration test: Fallo Paso 5 (MongoDB down) → compensación Redis in `tests/integration/test_saga_compensations.py`
+- [ ] T085 [US2] Integration test: Fallo Paso 4 (Lua) → 0 cambios
+- [ ] T086 [US2] Unit test: Lua compensación `compensar_pago_inventario.lua` in `tests/unit/test_lua_scripts.py`
+- [ ] T087 [US2] Test: Compensación 100% success (RP-SC-004) in `tests/integration/test_compensation_success.py`
 
 ### Critical - US3 Chain Testing
 
-- [ ] T088 [US3] Unit tests each handler in `tests/unit/test_handlers.py` per `tasks.md:T049` (missing)
+- [ ] T088 [US3] Unit tests each handler in `tests/unit/test_handlers.py`
 
 ### Critical - US4 Event Sourcing Tests
 
-- [ ] T089 [US4] Integration test: Verificar 7 eventos ordenados en PG tras reserva exitosa per `tasks.md:T053` (missing)
-- [ ] T089 [US4] Integration test: Verificar SAGA_FAILED + COMPENSACION en PG tras fallo per `tasks.md:T054` (missing)
-- [ ] T091 [US4] Unit test: Query analítica `ventas_por_evento` retorna agregados correctos per `tasks.md:T055` (missing)
-- [ ] T092 [US4] Integration test: Verificar TODOS los event types en `tests/integration/test_all_event_types.py` per `tasks.md:T056` (missing)
-- [ ] T093 [US4] Test: Audit log 100% completo (RP-SC-005) in `tests/integration/test_audit_completeness.py` per `tasks.md:T057` (missing)
-- [ ] T094 [US4] Test: SAGA success rate > 99.9% measurement (RP-SC-006) in `tests/performance/test_saga_success_rate.py` per `tasks.md:T058` (missing)
+- [ ] T089 [US4] Integration test: 7 eventos ordenados en PG tras reserva exitosa
+- [ ] T090 [US4] Integration test: SAGA_FAILED + COMPENSACION en PG tras fallo
+- [ ] T091 [US4] Unit test: Query analítica `ventas_por_evento` retorna agregados correctos
+- [ ] T092 [US4] Integration test: TODOS los event types in `tests/integration/test_all_event_types.py`
+- [ ] T093 [US4] Test: Audit log 100% completo (RP-SC-005) in `tests/integration/test_audit_completeness.py`
+- [ ] T094 [US4] Test: SAGA success rate > 99.9% (RP-SC-006) in `tests/performance/test_saga_success_rate.py`
 
 ### High - Missing SQL Views & Partitioning
 
-- [ ] T095 [US4] Create SQL view `ventas_por_evento` (Últimos 30 días) in PostgreSQL per `spec.md` CQRS section (missing)
-- [ ] T096 [US4] Create SQL view `tasa_exito_saga` (Últimos 7 días rolling) in PostgreSQL per `spec.md` CQRS section (missing)
-- [ ] T097 [US4] Create SQL view `compensaciones_por_tipo` (Últimas 24h) in PostgreSQL per `spec.md` CQRS section (missing)
-- [ ] T097 [US4] Create GIN index `idx_event_log_payload_gin` on `event_log.payload` per `plan.md` (missing)
-- [ ] T098 [US4] Implement monthly partitioning for `event_log` (activar si >10M eventos/mes o latencia analítica >500ms) per `plan.md` (partial)
+- [ ] T095 [US4] Create SQL view `ventas_por_evento` in PostgreSQL `init_pg_schema()`
+- [ ] T096 [US4] Create SQL view `tasa_exito_saga` in PostgreSQL `init_pg_schema()`
+- [ ] T097 [US4] Create SQL view `compensaciones_por_tipo` in PostgreSQL `init_pg_schema()`
+- [ ] T098 [US4] Create GIN index `idx_event_log_payload_gin` on `event_log.payload`
+- [ ] T099 [US4] Implement monthly partitioning activation logic for `event_log`
 
-### High - Health Check & Circuit Breaker Improvements
+### High - Health Check & Circuit Breaker
 
-- [ ] T099 [US1] Add `degraded` state for HTTP clients in health check per `spec.md` Health Check States (partial)
-- [ ] T100 [US1] Add `half-open` state to circuit breaker health check per `spec.md` Circuit Breaker (partial)
-- [ ] T101 [US1] Add HTTP client timeout to health check timeouts table per `spec.md` (partial)
-- [ ] T102 [US1] Add circuit breaker state transition tests per `tasks.md:T068` (missing)
+- [ ] T100 [US1] Add circuit breaker state transition tests (closed→open→half-open→closed)
+- [ ] T101 [US1] Add HTTP client timeout to health check timeouts table
+- [ ] T102 [US1] Add `degraded` state for HTTP clients in health check
+- [ ] T103 [US1] Add `half-open` state to circuit breaker health check
 
-### High - Missing Tests & Documentation
+### High - OpenAPI & Documentation
 
-- [ ] T103 [US4] Create OpenAPI descriptions + examples + error responses per `tasks.md:T064` (missing)
-- [ ] T104 [US1] Quickstart validation test: docker compose up full stack, test SAGA end-to-end per `tasks.md:T065` (missing)
-- [ ] T105 [US1] Code cleanup: type hints, remove unused, docstrings per `tasks.md:T066` (missing)
-- [ ] T106 [US1] Load test: 100 req/s concurrentes, verificar 0 doble ventas, 0 inventario negativo per `tasks.md:T067` (missing)
-- [ ] T107 [US1] Docker build verification test per `tasks.md:T072` (missing)
-- [ ] T108 [US1] Dependency vulnerability scan test per `tasks.md:T073` (missing)
-- [ ] T109 [US1] Idempotency behavior verification test per `tasks.md:T074` (missing)
-- [ ] T110 [US1] Verify all contract/integration/unit tests pass per `tasks.md:T075` (missing)
-- [ ] T111 [US1] Security hardening: input validation/sanitization per `tasks.md:T069` (partial)
-- [ ] T112 [US1] Docker build verification: `docker compose build reservas-service` succeeds, no critical vulnerabilities per `tasks.md:T072` (missing)
-- [ ] T112 [US1] Dependency vulnerability scan: `pip-audit` or `safety` check per `tasks.md:T073` (missing)
+- [ ] T104 [US1] Fix OpenAPI contract: add all error responses to POST `/api/v1/reservar`
+- [ ] T105 [US1] Add OpenAPI examples for request/response bodies
+- [ ] T106 [US1] Add GET `/api/v1/reservar/{reserva_id}` 404 response to OpenAPI
+- [ ] T107 [US1] Add GET `/api/v1/reservar` 200 response with array schema
+- [ ] T108 [US1] Document RFC 7807 error response format in OpenAPI
 
-### Medium - SagaOrchestrator Compensation Handlers
+### High - Test Infrastructure Fixes
 
-- [ ] T113 [US2] Implement compensation handlers in `SagaOrchestrator` for steps 4-5 per `tasks.md:T046` (missing)
+- [ ] T109 [US1] Fix idempotency test: resolve "Event loop is closed" error
+- [ ] T110 [US1] Fix Lua script test: resolve "Event loop is closed" with fakeredis
+- [ ] T111 [US2] Fix compensation test: resolve "Event loop is closed"
+- [ ] T112 [US4] Fix integration test: resolve "Event loop is closed" in saga tests
 
-### Medium - Health Check HTTP Clients Timeout
+### High - Missing Core Functionality
 
-- [ ] T114 [US1] Add HTTP client timeout to health check timeouts table per `spec.md` (partial)
+- [ ] T113 [US1] Implement double booking prevention under concurrency
+- [ ] T114 [US1] Fix Lua script atomicity under concurrency
+- [ ] T115 [US4] Implement comprehensive event type verification test
+- [ ] T116 [US1] Fix SAGA happy path integration test: complete MongoDB/Redis/PG verification
+
+### Medium - Code Quality & Observability
+
+- [ ] T117 [US1] Fix unused imports in `tests/quality/test_code_quality.py`
+- [ ] T118 [US1] Add correlation_id propagation to ALL downstream HTTP calls
+- [ ] T119 [US1] Verify all contract/integration/unit tests pass
+- [ ] T120 [US1] Security hardening: sanitize PII from logs
+- [ ] T121 [US1] Quickstart validation: docker compose up full stack, test SAGA end-to-end
+- [ ] T122 [US1] Load test: 100 req/s concurrent, verify 0 double ventas, 0 inventario negativo
+- [ ] T123 [US1] Docker build verification test
+- [ ] T124 [US1] Dependency vulnerability scan test (`pip-audit`/`safety`)
+- [ ] T125 [US2] Implement compensation handler for step 4 in `SagaOrchestrator`
+- [ ] T126 [US2] Verify step 5 compensation: INCRBY inventory + DEL payment executed correctly
+- [ ] T127 [US4] Add PostgreSQL event_log correlation_id index verification
+- [ ] T128 [US4] Implement SAGA_STARTED event emission at SAGA start
+- [ ] T129 [US4] Implement SAGA_FAILED event emission on SAGA failure
+- [ ] T130 [US4] Verify SQL views created and queryable
+- [ ] T131 [US4] Verify GIN index created on event_log.payload
+
+---
+
+## Phase 13: Convergence
+
+**Purpose**: Close remaining gaps between specification, plan, tasks, and implementation identified during convergence analysis.
+
+### Critical - Prometheus Metrics Instrumentation (RP-FR-009, RP-SC-001, RP-SC-007, Constitution IV)
+
+- [ ] T132 [US1] Instrument Prometheus metrics in saga steps: add `record_saga_step_duration`, `record_saga_total`, `record_saga_compensation` calls in `src/chain/validators.py` handlers per `metrics.py` functions
+- [ ] T133 [US1] Instrument Prometheus metrics in HTTP layer: add `record_http_request_duration` calls in `src/api/routes.py` and `src/services/http_clients.py` per `metrics.py` functions
+- [ ] T134 [US1] Instrument Prometheus metrics in DB operations: add `record_db_operation_duration` calls in `src/services/mongo.py`, `src/services/redis_pago.py`, `src/services/postgresql.py` per `metrics.py` functions
+- [ ] T135 [US1] Instrument circuit breaker metrics: add `set_circuit_breaker_state` calls in `src/api/circuit_breaker.py` state transitions per `metrics.py` functions
+- [ ] T136 [US1] Instrument idempotency metrics: add `record_idempotency_hit` call in `src/utils/idempotency.py` per `metrics.py` functions
+
+### High - OpenAPI Documentation Compliance (RP-FR-001, Constitution II)
+
+- [ ] T137 [US1] Add OpenAPI request/response examples to POST `/api/v1/reservar` in `src/api/routes.py`
+- [ ] T138 [US1] Add OpenAPI 404 response schema for GET `/api/v1/reservar/{reserva_id}` in `src/api/routes.py`
+- [ ] T139 [US1] Add OpenAPI 200 response with array schema for GET `/api/v1/reservar` in `src/api/routes.py`
+- [ ] T140 [US1] Document RFC 7807 error response format in OpenAPI schema (all error codes) in `src/main.py` or `src/api/middleware.py`
+
+### High - PostgreSQL Partitioning Activation (RP-FR-004, RP-FR-005, plan.md:192)
+
+- [ ] T141 [US4] Implement monthly partitioning activation logic for `event_log`: monitor event count and analytical query latency, auto-create partitions when >10M events/month or latency >500ms in `src/services/postgresql.py`
+
+### High - PII Sanitization (Constitution VII, T120)
+
+- [ ] T142 [US1] Add PII sanitization logging filter: remove user data (emails, names, documents) from structured logs, retain only correlation_id and operational fields in `src/services/logging_config.py`
+
+### Medium - Test Infrastructure (T117)
+
+- [ ] T143 [US1] Add `testcontainers` to `requirements.txt` for real integration tests with MongoDB/Redis/PostgreSQL
+- [ ] T144 [US1] Add code quality checks (ruff/flake8) and dependency vulnerability scan (pip-audit/safety) to CI pipeline
+
+### Medium - Correlation ID Index Verification (T127)
+
+- [ ] T145 [US4] Add test verifying `idx_event_log_correlation` index exists and is used for correlation_id queries in `tests/integration/test_audit_completeness.py`

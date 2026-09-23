@@ -2,20 +2,21 @@
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator
 from dataclasses import dataclass, field
 
 from .enums import MetodoPago, EstadoReserva
 
 
-class ReservaRequest(BaseModel):
+class ReservaCreateRequest(BaseModel):
     """Request para crear una reserva."""
     usuario_id: UUID
     evento_id: UUID
     cantidad: int = Field(..., gt=0, description="Cantidad de entradas (>0)")
     metodo_pago: MetodoPago
-    
+    reserva_id: Optional[UUID] = Field(default_factory=uuid4, description="Idempotency key (UUID v4). If provided, used for idempotency check.")
+
     @field_validator("cantidad")
     @classmethod
     def validate_cantidad(cls, v: int) -> int:
@@ -52,8 +53,8 @@ class ReservaContext:
     evento_id: UUID
     cantidad: int
     metodo_pago: str
-    reserva_id: UUID = field(default_factory=UUID)
-    correlation_id: UUID = field(default_factory=UUID)
+    reserva_id: UUID = field(default_factory=uuid4)
+    correlation_id: UUID = field(default_factory=uuid4)
     evento_data: Optional[Dict] = None
     usuario_data: Optional[Dict] = None
     pago_data: Optional[Dict] = None

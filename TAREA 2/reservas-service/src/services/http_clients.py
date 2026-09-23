@@ -1,9 +1,12 @@
 """HTTP clients for external services (Usuarios, Eventos)."""
 import os
+import time
 from typing import Optional, Dict, Any
 import httpx
-from httpx import AsyncClient, Response
+from httpx import AsyncClient
 import logging
+
+from ..services.metrics import record_http_request_duration
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +59,7 @@ def _check_circuit_breaker(service: str) -> bool:
         # Check if half-open timeout has passed
         import time
         if _cb_state[service]["last_failure"]:
-            import time
-            if time.time() - _cb_state[service]["last_failure"] > 30:  # 30s half-open
+            if time.time() - _cb_state[service]["last_failure"] > CB_HALF_OPEN_TIMEOUT:
                 _cb_state[service]["state"] = "half-open"
                 return True
         return False
@@ -85,12 +87,15 @@ async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[Dic
     """Get usuario by ID from Usuarios Service."""
     client = await get_usuarios_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
-    
+
     if not _check_circuit_breaker("usuarios"):
         raise Exception("Usuarios Service circuit breaker open")
-    
+
+    start_time = time.perf_counter()
     try:
         response = await client.get(f"/api/v1/usuarios/{usuario_id}", headers=headers)
+        duration = time.perf_counter() - start_time
+        record_http_request_duration("GET", "/api/v1/usuarios/{usuario_id}", response.status_code, duration)
         if response.status_code == 200:
             _record_success("usuarios")
             return response.json()
@@ -101,6 +106,8 @@ async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[Dic
             _record_failure("usuarios")
             return None
     except Exception as e:
+        duration = time.perf_counter() - start_time
+        record_http_request_duration("GET", "/api/v1/usuarios/{usuario_id}", 500, duration)
         _record_failure("usuarios")
         logger.error(f"Error calling Usuarios Service: {e}")
         raise
@@ -110,12 +117,15 @@ async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[Dict]
     """Get evento by ID from Eventos Service."""
     client = await get_eventos_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
-    
+
     if not _check_circuit_breaker("eventos"):
         raise Exception("Eventos Service circuit breaker open")
-    
+
+    start_time = time.perf_counter()
     try:
         response = await client.get(f"/api/v1/eventos/{evento_id}", headers=headers)
+        duration = time.perf_counter() - start_time
+        record_http_request_duration("GET", "/api/v1/eventos/{evento_id}", response.status_code, duration)
         if response.status_code == 200:
             _record_success("eventos")
             return response.json()
@@ -126,6 +136,8 @@ async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[Dict]
             _record_failure("eventos")
             return None
     except Exception as e:
+        duration = time.perf_counter() - start_time
+        record_http_request_duration("GET", "/api/v1/eventos/{evento_id}", 500, duration)
         _record_failure("eventos")
         logger.error(f"Error calling Eventos Service: {e}")
         raise
