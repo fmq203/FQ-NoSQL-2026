@@ -90,7 +90,7 @@ class TestValidadorInventario:
     @pytest.mark.unit
     async def test_existing_user_passes(self, handler, valid_context):
         """Existing user should pass validation."""
-        with patch("src.chain.validators.get_usuario") as mock_get:
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = {
                 "usuario_id": str(valid_context.usuario_id),
                 "nombre": "Juan",
@@ -104,7 +104,7 @@ class TestValidadorInventario:
     @pytest.mark.unit
     async def test_nonexistent_user_fails(self, handler, valid_context):
         """Non-existent user should fail validation."""
-        with patch("src.chain.validators.get_usuario") as mock_get:
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
             result = await handler.handle(valid_context)
             assert result.error == "Usuario no encontrado"
@@ -113,7 +113,7 @@ class TestValidadorInventario:
     @pytest.mark.unit
     async def test_service_error_returns_503(self, handler, valid_context):
         """Service error should return 503."""
-        with patch("src.chain.validators.get_usuario") as mock_get:
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Service unavailable")
             result = await handler.handle(valid_context)
             assert result.error == "Error validando usuario"
@@ -139,8 +139,8 @@ class TestValidadorEvento:
     @pytest.mark.unit
     async def test_valid_event_passes(self, handler, valid_context):
         """Valid published event with sufficient capacity passes."""
-        with patch("src.chain.validators.get_evento") as mock_get:
-            with patch("src.chain.validators.insert_event_log") as mock_pg:
+        with patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get:
+            with patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
                 mock_get.return_value = {
                     "evento_id": str(valid_context.evento_id),
                     "estado": "publicado",
@@ -155,37 +155,43 @@ class TestValidadorEvento:
     @pytest.mark.unit
     async def test_nonexistent_event_fails(self, handler, valid_context):
         """Non-existent event should return 404."""
-        with patch("src.chain.validators.get_evento") as mock_get:
-            mock_get.return_value = None
-            result = await handler.handle(valid_context)
-            assert result.error == "Evento no encontrado"
-            assert result.status_code == 404
+        with patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get:
+            with patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
+                mock_get.return_value = None
+                mock_pg.return_value = None
+                result = await handler.handle(valid_context)
+                assert result.error == "Evento no encontrado"
+                assert result.status_code == 404
 
     @pytest.mark.unit
     async def test_unpublished_event_fails(self, handler, valid_context):
         """Unpublished event should return 409."""
-        with patch("src.chain.validators.get_evento") as mock_get:
-            mock_get.return_value = {
-                "evento_id": str(valid_context.evento_id),
-                "estado": "borrador",
-                "entradas_disponibles": 100,
-            }
-            result = await handler.handle(valid_context)
-            assert result.error == "Evento no disponible para reservas"
-            assert result.status_code == 409
+        with patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get:
+            with patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
+                mock_get.return_value = {
+                    "evento_id": str(valid_context.evento_id),
+                    "estado": "borrador",
+                    "entradas_disponibles": 100,
+                }
+                mock_pg.return_value = None
+                result = await handler.handle(valid_context)
+                assert result.error == "Evento no disponible para reservas"
+                assert result.status_code == 409
 
     @pytest.mark.unit
     async def test_insufficient_capacity_fails(self, handler, valid_context):
         """Insufficient capacity should return 409."""
-        with patch("src.chain.validators.get_evento") as mock_get:
-            mock_get.return_value = {
-                "evento_id": str(valid_context.evento_id),
-                "estado": "publicado",
-                "entradas_disponibles": 1,  # Less than requested (2)
-            }
-            result = await handler.handle(valid_context)
-            assert result.error == "Inventario insuficiente"
-            assert result.status_code == 409
+        with patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get:
+            with patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
+                mock_get.return_value = {
+                    "evento_id": str(valid_context.evento_id),
+                    "estado": "publicado",
+                    "entradas_disponibles": 1,  # Less than requested (2)
+                }
+                mock_pg.return_value = None
+                result = await handler.handle(valid_context)
+                assert result.error == "Inventario insuficiente"
+                assert result.status_code == 409
 
 
 class TestProcesadorPago:
@@ -210,9 +216,9 @@ class TestProcesadorPago:
     @pytest.mark.unit
     async def test_successful_payment(self, handler, valid_context):
         """Successful payment processing."""
-        with patch("src.chain.validators.ejecutar_pagar_y_decrementar") as mock_redis:
-            mock_redis.return_value = {"success": True, "message": "OK"}
-            with patch("src.chain.validators.insert_event_log") as mock_pg:
+        with patch("src.chain.validators.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis:
+            with patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
+                mock_redis.return_value = {"success": True, "message": "OK"}
                 mock_pg.return_value = None
                 result = await handler.handle(valid_context)
                 assert result.error is None
@@ -222,7 +228,7 @@ class TestProcesadorPago:
     @pytest.mark.unit
     async def test_insufficient_inventory_returns_409(self, handler, valid_context):
         """Insufficient inventory should return 409."""
-        with patch("src.chain.validators.ejecutar_pagar_y_decrementar") as mock_redis:
+        with patch("src.chain.validators.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = {"success": False, "message": "INVENTARIO_INSUFICIENTE"}
             result = await handler.handle(valid_context)
             assert result.error == "INVENTARIO_INSUFICIENTE"
