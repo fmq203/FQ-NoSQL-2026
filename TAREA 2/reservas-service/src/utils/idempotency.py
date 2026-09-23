@@ -8,30 +8,34 @@ import os
 async def check_idempotency(reserva_id: UUID) -> Optional[dict]:
     """
     Verifica si ya existe una reserva con el mismo reserva_id.
-    
+
     Returns:
         Reserva existente si existe, None si no existe.
     """
-    from src.services.mongo import get_reservas_collection
-    from src.services.redis_pago import obtener_pago
-    from src.services.postgresql import get_events_by_aggregate
-    
+    from ..services.mongo import get_reservas_collection
+    from ..services.redis_pago import obtener_pago
+    from ..services.postgresql import get_events_by_aggregate
+    from ..services.metrics import record_idempotency_hit
+
     # Check MongoDB
     collection = await get_reservas_collection()
     existing = await collection.find_one({"_id": reserva_id})
     if existing:
+        record_idempotency_hit()
         return existing
-    
+
     # Check Redis
     pago = await obtener_pago(str(reserva_id))
     if pago:
+        record_idempotency_hit()
         return {"source": "redis", "data": pago}
-    
+
     # Check PostgreSQL
     events = await get_events_by_aggregate(reserva_id)
     if events:
+        record_idempotency_hit()
         return {"source": "postgresql", "events": events}
-    
+
     return None
 
 

@@ -22,6 +22,7 @@ async def get_mongo_client() -> AsyncIOMotorClient:
             minPoolSize=10,
             serverSelectionTimeoutMS=5000,
             connectTimeoutMS=10000,
+            uuidRepresentation="standard",  # Handle UUID encoding
         )
     return _mongo_client
 

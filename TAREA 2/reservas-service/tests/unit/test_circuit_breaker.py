@@ -4,13 +4,20 @@ import time
 from src.api.circuit_breaker import CircuitBreaker, CircuitState, get_circuit_breaker, _circuit_breakers
 
 
+def reset_circuit_breakers():
+    """Reset global circuit breakers to initial state."""
+    global _circuit_breakers
+    _circuit_breakers.clear()
+    _circuit_breakers["usuarios"] = CircuitBreaker("usuarios")
+    _circuit_breakers["eventos"] = CircuitBreaker("eventos")
+
+
 class TestCircuitBreakerTransitions:
     """Tests for circuit breaker state transitions."""
 
     def setup_method(self):
         """Reset circuit breakers before each test."""
-        global _circuit_breakers
-        _circuit_breakers.clear()
+        reset_circuit_breakers()
 
     def test_initial_state_closed(self):
         """New circuit breaker should start in CLOSED state."""
@@ -37,8 +44,8 @@ class TestCircuitBreakerTransitions:
         cb.record_failure()
         assert cb.get_state() == "open"
         
-        # Wait for timeout
-        time.sleep(1.1)
+        # Manually set last_failure_time to simulate timeout passage
+        cb.last_failure_time = time.time() - 2
         
         # Next can_execute should transition to half-open
         assert cb.can_execute() is True
