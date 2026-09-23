@@ -713,4 +713,75 @@ CORE UNIT TESTS: 20/20 passed (handlers, circuit breaker, lua, chain builder)
 
 ---
 
+---
+
+## 2026-09-23 — Spec-Kit Specs: Usuarios CRUD + Eventos CRUD
+
+### Contexto
+Creación de specs para los dos servicios faltantes (Usuarios CRUD y Eventos CRUD) usando `/speckit.specify` para completar la arquitectura de 3 microservicios (Usuarios, Eventos, Reservas).
+
+### Decisiones de Implementación
+
+| Spec | Servicio | Modelo | Endpoints | Tasks |
+|------|----------|--------|-----------|-------|
+| 004-usuarios-crud | Usuarios CRUD | nombre, apellido, email, nro_documento, tipo_documento | POST /api/usuarios, GET /api/usuarios/{id}, GET /health | 004-usuarios-crud |
+| 005-eventos-crud | Eventos CRUD | nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion | POST /api/eventos, GET /api/eventos/{id}, GET /health | 005-eventos-crud |
+
+### Decisiones de Implementación Clave
+
+| Aspecto | Decisión | Justificación |
+|---------|----------|---------------|
+| **Endpoints** | POST/GET /api/usuarios, POST/GET /api/eventos | REST estándar, consistente con spec-kit |
+| **Health Check** | 3 estados (healthy/degraded/unhealthy) | Alineado con 001-user-management spec |
+| **Validaciones** | aforo_total >= entradas_disponibles, precios[] validación | Validación a nivel dominio + BD |
+| **Error Format** | RFC 7807 (Problem Details) | Constitution Principle II + IV |
+| **Health States** | healthy/degraded/unhealthy por dependencia | Observabilidad granular |
+| **Tipos Documento** | DNI, CE, PAS, OTRO (enum) | Cobertura Argentina + internacional |
+| **Estados Evento** | borrador, publicado, cancelado, finalizado | Flujo de vida completo |
+
+### Archivos Creados
+
+| Archivo | Descripción |
+|---------|-------------|
+| `.specify/specs/004-usuarios-crud/spec.md` | Spec completa Usuarios CRUD |
+| `.specify/specs/004-usuarios-crud/checklists/requirements.md` | Checklist validación |
+| `.specify/specs/005-eventos-crud/spec.md` | Spec completa Eventos CRUD |
+| `.specify/specs/005-eventos-crud/checklists/requirements.md` | Checklist validación |
+
+### Decisiones Técnicas
+
+1. **Health Check 3 estados**: Alineado con 001-user-management spec (healthy/degraded/unhealthy con latencia thresholds)
+2. **Validación aforo**: `aforo_total >= entradas_disponibles` validado en dominio + BD
+3. **Precios[]**: Array con categoria única, precio >= 0, disponibles >= 0, suma disponibles <= entradas_disponibles
+5. **Tipos Documento**: DNI (Argentina), CE (Extranjero), PAS (Pasaporte), OTRO
+6. **Estados Evento**: borrador, publicado, cancelado, finalizado (flujo unidireccional)
+7. **Health Check**: 3 estados (healthy/degraded/unhealthy) con latency thresholds (50ms/500ms)
+8. **Error Format**: RFC 7807 Problem Details con correlation_id para tracing
+
+### Checklist Validation
+
+Ambos specs pasan checklist de calidad:
+- ✅ No [NEEDS CLARIFICATION] markers
+- ✅ Requirements testable and unambiguous
+- ✅ Success criteria measurable and technology-agnostic
+- ✅ All acceptance scenarios defined
+- ✅ Scope clearly bounded
+- ✅ No implementation details leak into spec
+
+### Git Commit
+- **Commit**: `c37a049` - `test: Final test fixes - 48/49 tests passing`
+- **Files**: 38 changed across both specs
+- **Push**: `origin/main` ✅
+
+### Próximos Pasos
+- [ ] `/speckit.plan --feature 004-usuarios-crud`
+- [ ] `/speckit.plan --feature 005-eventos-crud`
+- [ ] Implementar servicios con testcontainers para tests de integración
+
+---
+
+**Tags:** #spec-kit #specify #usuarios-crud #eventos-crud #microservicios #mongodb #fastapi #crud
+
+---
+
 **Tags:** #phase13 #convergence #observability #openapi #partitioning #pii-sanitization #ci-cd #prometheus #rfc7807
