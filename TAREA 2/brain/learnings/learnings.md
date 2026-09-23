@@ -656,3 +656,61 @@ Aplicado en todos los `requirements.txt` de servicios.
 4. Verificar coverage ≥ 80%
 
 **Tiempo estimado**: 2-3 horas con infra completa.
+---
+
+## 2026-09-22 — Phase 13 Convergence: Observability, OpenAPI, Partitioning, PII Sanitization
+
+### Contexto
+Ejecución de `/speckit.converge` para cerrar gaps entre spec, plan, tasks y código. Se identificaron 14 tasks de convergencia (T132-T145) en 5 áreas críticas.
+
+### Decisiones de Implementación Clave
+
+| Task | Área | Implementación | Archivos |
+|------|------|----------------|----------|
+| T132-T136 | Prometheus Metrics | 5 métricas instrumentadas: saga steps, HTTP, DB ops, CB states, idempotency | `validators.py`, `routes.py`, `http_clients.py`, `circuit_breaker.py`, `idempotency.py`, `metrics.py` (NEW) |
+| T137-T140 | OpenAPI Docs | Custom `custom_openapi()` con RFC 7807 error schema, examples, GET 404/200 array schemas | `main.py` (custom_openapi), `routes.py` (decorators) |
+| T141 | PG Partitioning | `check_and_create_partition()` - auto-particiona >10M events/mo o latency >500ms | `postgresql.py` |
+| T142 | PII Sanitization | `PIISanitizingFilter` + `sanitize_pii()` - emails, phones, DNI, CC, IBAN, IPs | `logging_config.py` |
+| T143 | Test Infrastructure | `testcontainers==4.6.0` en requirements.txt | `requirements.txt` |
+| T144 | CI Pipeline | GitHub Actions: ruff, pytest, pip-audit, Trivy, Docker build | `.github/workflows/ci.yml` (NEW) |
+| T145 | Correlation ID Index | Test verificando `idx_event_log_correlation` existe y se usa | `test_audit_completeness.py` |
+
+### Código Nuevo/Modificado (Resumen)
+
+| Archivo | Cambio | Tasks |
+|---------|--------|-------|
+| `src/services/metrics.py` | **NEW** - Registro Prometheus + helpers | T132-T136 |
+| `src/chain/validators.py` | Instrumentado 6 handlers con `record_saga_step_duration`, `record_db_operation_duration`, `record_saga_total`, `record_saga_compensation` | T132, T134 |
+| `src/api/routes.py` | `record_http_request_duration` en POST/GET endpoints | T133 |
+| `src/services/http_clients.py` | `record_http_request_duration` en llamadas Usuarios/Eventos | T133 |
+| `src/api/circuit_breaker.py` | `set_circuit_breaker_state` en transiciones CLOSED/OPEN/HALF_OPEN | T135 |
+| `src/utils/idempotency.py` | `record_idempotency_hit()` en `check_idempotency()` | T136 |
+| `src/main.py` | `custom_openapi()` con RFC 7807 schema + examples | T137-T140 |
+| `src/services/postgresql.py` | `check_and_create_partition()` + llamado en `init_pg_schema()` | T141 |
+| `src/services/logging_config.py` | `PIISanitizingFilter` + `sanitize_pii()` (emails, phones, DNI, CC, IBAN, IPs) | T142 |
+| `.github/workflows/ci.yml` | **NEW** - GitHub Actions workflow completo | T144 |
+| `tests/integration/test_audit_completeness.py` | Test `test_correlation_id_index_exists_and_used` | T145 |
+
+### Tests Status Post-Implementación
+
+```
+PASSED: 48/86 tests (56%)
+FAILED: 38 tests - primarily test infra (event loop closed, pytest.helpers missing)
+CORE UNIT TESTS: 20/20 passed (handlers, circuit breaker, lua, chain builder)
+```
+
+### Git Commit
+- **Commit**: `a0d8aa9` - `feat: Complete Phase 13 convergence - Observability, OpenAPI, partitioning, PII sanitization`
+- **Files**: 38 changed, 2170 insertions(+), 1164 deletions(-)
+- **New files**: `metrics.py`, `.github/workflows/ci.yml`
+
+### Próximos Pasos
+- [ ] Levantar stack completo: `docker-compose up -d`
+- [ ] Ejecutar `pytest tests/` con infra completa
+- [ ] Verificar 86 tests pasan (resolver infra test issues)
+- [ ] Coverage report ≥ 80%
+- [ ] Generar diagrama Mermaid para `architecture/overview.md`
+
+---
+
+**Tags:** #phase13 #convergence #observability #openapi #partitioning #pii-sanitization #ci-cd #prometheus #rfc7807
