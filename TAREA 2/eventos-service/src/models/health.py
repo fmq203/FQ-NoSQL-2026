@@ -19,7 +19,7 @@ class HealthCheckResponse(BaseModel):
     status: HealthStatus
     checks: dict = Field(default_factory=dict)
     timestamp: datetime
-    
+
     class Config:
         use_enum_values = True
         json_schema_extra = {

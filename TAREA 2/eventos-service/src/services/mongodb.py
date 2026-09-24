@@ -15,33 +15,29 @@ _database: AsyncIOMotorDatabase | None = None
 def _build_connection_uri() -> str:
     settings = get_settings()
     uri = settings.mongodb_uri
-    
-    # Add connection options to URI if not already present
+
     if "?" not in uri:
         uri += "?"
     else:
         uri += "&"
-    
+
     uri += "readPreference=secondaryPreferred"
-    uri += "&maxPoolSize=10"
-    uri += "&minPoolSize=1"
+    uri += "&maxStalenessSeconds=1"
     uri += "&serverSelectionTimeoutMS=5000"
-    uri += "&connectTimeoutMS=10000"
-    uri += "&socketTimeoutMS=30000"
     uri += "&w=majority"
     uri += "&journal=true"
     uri += "&uuidRepresentation=standard"
-    
+
     return uri
 
 
 async def connect_to_mongodb() -> None:
     global _client, _database
     uri = _build_connection_uri()
-    
+
     _client = AsyncIOMotorClient(uri)
     _database = _client[get_settings().mongodb_database]
-    
+
     await create_indexes()
     logger.info("MongoDB connection established")
 
@@ -68,15 +64,12 @@ def get_collection(collection_name: str | None = None):
 
 async def create_indexes() -> None:
     collection = get_collection()
-    
-    # Drop collection to clear any duplicate documents from previous runs
-    await collection.drop()
-    
+
     await collection.create_index("nombre", unique=True)
     await collection.create_index("estado")
     await collection.create_index("creado_en")
     await collection.create_index([("estado", 1), ("creado_en", -1)])
-    
+
     logger.info("MongoDB indexes created/verified")
 
 

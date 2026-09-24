@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 class HealthService:
     def __init__(self):
         self.settings = get_settings()
-    
+
     async def check_health(self) -> HealthCheckResponse:
         success, latency_ms = await ping_mongodb(self.settings.health_check_timeout_ms)
-        
+
         if not success:
             status = HealthStatus.UNHEALTHY
             mongodb_status = MongoDBHealth.DOWN
@@ -32,12 +32,14 @@ class HealthService:
             status = HealthStatus.UNHEALTHY
             mongodb_status = MongoDBHealth.DOWN
             http_status = 503
-        
+
         response = HealthCheckResponse(
             status=status,
             checks={"mongodb": mongodb_status},
             timestamp=datetime.now(timezone.utc),
         )
+
+        mongodb_status_str = mongodb_status.value if hasattr(mongodb_status, 'value') else str(mongodb_status)
         
         logger.info(
             f"Health check: {status.value}",
@@ -49,10 +51,10 @@ class HealthService:
                 "context": {
                     "operation": "health_check",
                     "duration_ms": round(latency_ms, 2),
-                    "mongodb_status": mongodb_status.value,
+                    "mongodb_status": mongodb_status_str,
                     "mongodb_latency_ms": round(latency_ms, 2),
                 },
             },
         )
-        
+
         return response

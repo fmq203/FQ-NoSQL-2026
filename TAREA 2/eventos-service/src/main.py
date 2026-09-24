@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    
+
     app = FastAPI(
         title="Eventos Service",
         version="1.0.0",
@@ -47,20 +47,20 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
-    
+
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(StructuredLoggingMiddleware)
-    
+
     app.add_exception_handler(EventFlowHTTPException, eventflow_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
-    
+
     app.include_router(eventos.router, prefix="/api")
     app.include_router(health.router, prefix="")
-    
+
     return app
 
 
@@ -70,4 +70,4 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
     settings = get_settings()
-    uvicorn.run(app, host=settings.host, port=settings.port)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
