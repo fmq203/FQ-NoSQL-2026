@@ -15,14 +15,15 @@ Un organizador crea un nuevo evento con nombre, estado, aforo total, entradas di
 
 **Why this priority**: Funcionalidad base - sin eventos no hay reservas ni ventas.
 
-**Independent Test**: POST `/api/eventos` con JSON válido → 201 con evento creado + UUID. Verificar en MongoDB que documento existe.
+**Independent Test**: POST `/api/v1/eventos` con JSON válido → 201 con evento creado + UUID. Verificar en MongoDB que documento existe.
 
 **Acceptance Scenarios**:
-1. **Given** JSON válido con nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion, **When** POST `/api/eventos`, **Then** 201 con evento_id, creado_en
-2. **Given** aforo_total < entradas_disponibles, **When** POST `/api/eventos`, **Then** 422 Validation Error
-3. **Given** precio negativo en precios[], **When** POST `/api/eventos`, **Then** 422 Validation Error
-4. **Given** estado no válido, **When** POST `/api/eventos`, **Then** 422 Validation Error
-5. **Given** categoria duplicada en precios[], **When** POST `/api/eventos`, **Then** 422 Validation Error
+1. **Given** JSON válido con nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion, **When** POST `/api/v1/eventos`, **Then** 201 con evento_id, creado_en
+2. **Given** aforo_total < entradas_disponibles, **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
+3. **Given** precio negativo en precios[], **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
+4. **Given** estado no válido, **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
+5. **Given** categoria duplicada en precios[], **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
+6. **Given** evento with same nombre exists, **When** POST `/api/v1/eventos`, **Then** 409 Conflict
 
 ---
 
@@ -55,8 +56,7 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 ---
 
 ### Edge Cases
-- Creación de evento con aforo_total = 0 y entradas_disponibles = 0: Válido (evento borrador sin capacidad)
-- Creación de evento con aforo_total = 0 y entradas_disponibles > 0: 422 Validation Error
+- Creación de evento con aforo_total = 0: Válido solo si entradas_disponibles = 0 (evento borrador sin capacidad); 422 si entradas > 0
 - Creación de evento con entradas_disponibles = aforo_total > 0: Válido (evento lleno al crear)
 - Consulta de evento inexistente: Retorna 404 con error code NOT_FOUND
 - Health check con MongoDB lento (latencia 50-500ms): Retorna estado degraded
@@ -64,6 +64,7 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 - Precio 0 en precios[]: Válido (evento gratis)
 - Categoría duplicada en precios[]: 422 Validation Error
 - Evento con estado "cancelado": No disponible para reservas
+- Creación de evento con nombre duplicado: 409 Conflict
 
 ## Requirements
 
@@ -190,6 +191,8 @@ Obtener evento por ID.
 #### GET /health
 Health check del servicio.
 
+**Nota**: Health check es intencionalmente no versionado (`/health` sin `/v1/`) para compatibilidad con orquestadores (Kubernetes, Docker Compose) que esperan endpoint fijo.
+
 **Response 200 (healthy)**:
 ```json
 {
@@ -238,6 +241,8 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 }
 ```
 
+**Nota**: El campo `instance` refleja la ruta real del request (ej. `/api/v1/eventos`, `/api/v1/eventos/{id}`, `/health`).
+
 | HTTP Status | Error Code | Title | Cuándo |
 |-------------|------------|-------|--------|
 | 400 | `VALIDATION_ERROR` | Validation Error | JSON inválido, campos faltantes, tipos incorrectos |
@@ -261,10 +266,12 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 |-------|----------|----------|
 | `healthy` | MongoDB ping OK, latencia < 50ms | `{"status":"healthy","checks":{"mongodb":"ok"},"timestamp":"..."}` |
 | `degraded` | MongoDB ping OK, latencia 50-500ms | `{"status":"degraded","checks":{"mongodb":"slow"},"timestamp":"..."}` |
-| `unhealthy` | MongoDB ping failed, timeout, o conexión rechazada | `{"status":"unhealthy","checks":{"mongodb":"down"},"timestamp":"..."}` HTTP 503 |
+| `unhealthy` | MongoDB ping failed, timeout, o conexión rechazada (single attempt, 2s timeout) | `{"status":"unhealthy","checks":{"mongodb":"down"},"timestamp":"..."}` HTTP 503 |
+
+**Requisito de latencia**: Health check debe responder < 50ms (p99) cuando MongoDB está healthy.
 
 ### Health Check Implementation
-- Timeout: 2 segundos para ping MongoDB
+- Timeout: 2 segundos para ping MongoDB (single attempt)
 - Latencia medida con `ping` command
 - Sin dependencias externas (solo MongoDB)
 
@@ -303,23 +310,23 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 
 | Campo | Validación |
 |-------|------------|
-| nombre | String 1-200 chars, no vacío |
+| nombre | String 1-200 chars, non-empty |
 | estado | Enum: borrador, publicado, cancelado, finalizado |
 | aforo_total | Int >= 0 |
 | entradas_disponibles | Int >= 0, <= aforo_total |
-| precios[] | Array no vacío, categorias únicas |
-| precio | Decimal >= 0, máx 2 decimales |
+| precios[] | Array non-empty, categorias unique |
+| precio | Decimal >= 0, max 2 decimals |
 | disponibles | Int >= 0 |
-| ubicacion.ciudad | String 1-100 chars, requerido |
-| ubicacion.pais | String 1-100 chars, requerido |
-| ubicacion.direccion | String opcional, max 500 chars |
+| ubicacion.ciudad | String 1-100 chars, required |
+| ubicacion.pais | String 1-100 chars, required |
+| ubicacion.direccion | String optional, max 500 chars |
 
 ### Validaciones de Precios
-- Array `precios` no puede estar vacío
-- Cada categoria debe ser única dentro del evento
-- `precio` >= 0 (0 = evento gratis)
+- Array `precios` non-empty
+- Each categoria unique within event
+- `precio` >= 0 (0 = free event), max 2 decimals
 - `disponibles` >= 0
-- Suma de `disponibles` en todas las categorías <= `entradas_disponibles`
+- Sum of `disponibles` across all categories <= `entradas_disponibles` <= `aforo_total`
 
 ## Structured Logging Schema (Mandatory per Constitution Principle IV)
 
@@ -378,7 +385,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 ### Propagation Rules
 1. **Ingress**: Extract `X-Correlation-ID` from request headers; if missing, generate UUID v4
 2. **Internal**: Use as `correlation_id` in all structured logs
-3. **Egress**: Pass `X-Correlation-ID` to ALL downstream HTTP calls (no downstream calls in MVP)
+3. **Egress**: Pass `X-Correlation-ID` to downstream HTTP calls (for future extensibility; no downstream calls in MVP)
 4. **Logging**: `trace_id` = `correlation_id`; `span_id` = new UUID per operation
 
 ## Technology Stack (per Constitution)
@@ -386,20 +393,26 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 - **Database**: MongoDB 7.0 (Motor async driver)
 - **Containerization**: Docker + Docker Compose (dev), K8s-ready (prod)
 - **Testing**: pytest, pytest-asyncio, httpx for contract tests
-
 ## Assumptions
+
+- Organizadores tienen conectividad estable para operaciones CRUD
 - MongoDB replica set disponible (writes a primary, reads con secondaryPreferred)
 - No autenticación/autorización en MVP (scope mínimo)
 - Estados de evento: borrador, publicado, cancelado, finalizado
 - Precios en moneda local (sin conversión de moneda en MVP)
 - Aforo total inmutable tras creación (solo entradas_disponibles cambia via reservas)
-- No autenticación/autorización en esta versión (scope MVP)
-
 ## Consistency Model
+
 - **Writes**: `majority` + `journal: true` (strong consistency)
-- **Reads**: `secondaryPreferred` (eventual consistency aceptable para reads)
+- **Reads**: `secondaryPreferred` (eventual consistency acceptable for reads)
 - **Max Staleness**: 1 segundo
 - **Write Timeout**: 5 segundos
+
+**MongoDB Client Configuration**:
+- `read_preference=secondaryPreferred`
+- `max_staleness_seconds=1`
+- `server_selection_timeout_ms=5000`
+- `write_concern=majority + journal:true`
 
 ---
 

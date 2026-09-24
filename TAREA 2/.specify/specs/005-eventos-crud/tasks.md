@@ -48,10 +48,14 @@ description: "Task list for Eventos CRUD Service implementation"
 
 - [ ] T008 Create configuration management with pydantic-settings in `eventos-service/src/config.py`
 - [ ] T009 Implement MongoDB connection manager with Motor async in `eventos-service/src/services/mongodb.py`
+  - Configure `read_preference=secondaryPreferred`
+  - Configure `max_staleness_seconds=1`
+  - Configure `server_selection_timeout_ms=5000`
+  - Configure `write_concern=majority + journal:true`
 - [ ] T010 [P] Create base exception classes and RFC 7807 error handling in `eventos-service/src/utils/errors.py`
 - [ ] T011 [P] Implement correlation ID middleware for distributed tracing in `eventos-service/src/api/middleware/correlation.py`
 - [ ] T012 [P] Implement structured JSON logging middleware in `eventos-service/src/api/middleware/logging.py`
-- [ ] T013 [P] Implement Prometheus metrics middleware in `eventos-service/src/api/middleware/metrics.py`
+- [ ] T013 [P] Implement Prometheus metrics middleware using `prometheus-client` in `eventos-service/src/api/middleware/metrics.py`
 - [ ] T014 [P] Create base Pydantic models with validation utilities in `eventos-service/src/utils/validation.py`
 - [ ] T015 Create FastAPI app factory with middleware registration in `eventos-service/src/main.py`
 - [ ] T016 Configure MongoDB indexes on startup in `eventos-service/src/services/mongodb.py`
@@ -107,6 +111,8 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. Run contract tests to validate.
 
+**TDD Approval Gate**: Tests written → Review & approve → Tests fail → Implement (Constitution Principle III)
+
 ---
 
 ## Phase 4: User Story 2 - Obtener Evento por ID (Priority: P1)
@@ -139,6 +145,8 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently.
 
+**TDD Approval Gate**: Tests written → Review & approve → Tests fail → Implement (Constitution Principle III)
+
 ---
 
 ## Phase 5: User Story 3 - Health Check (Priority: P1)
@@ -152,6 +160,7 @@ description: "Task list for Eventos CRUD Service implementation"
 - [ ] T037 [P] [US3] Contract test for GET /health in `eventos-service/tests/contract/test_health.py`
 - [ ] T038 [P] [US3] Integration test for health check with real MongoDB in `eventos-service/tests/integration/test_health_integration.py`
 - [ ] T039 [P] [US3] Unit test for health status determination logic in `eventos-service/tests/unit/test_health_service.py`
+- [ ] T045 [P] [US3] Integration test: verify 503 within 5s when MongoDB goes down in `eventos-service/tests/integration/test_health_5s_detection.py`
 
 ### Implementation for User Story 3
 
@@ -170,17 +179,20 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **Checkpoint**: All user stories should now be independently functional.
 
+**TDD Approval Gate**: Tests written → Review & approve → Tests fail → Implement (Constitution Principle III)
+
 ---
 
 ## Phase 6: Cross-Cutting Concerns (Constitution Compliance)
 
 **Purpose**: Constitution Principles II, IV, V, VII compliance tasks
 
-- [ ] T045 [P] Implement API versioning: add /v1 prefix to all routes, Accept header parsing in `eventos-service/src/api/routes/`
-- [ ] T046 [P] Implement egress correlation ID propagation for downstream HTTP calls in `eventos-service/src/api/middleware/correlation.py` (no downstream calls in MVP - document)
-- [ ] T047 [P] Add dependency vulnerability scanning (pip-audit) to CI in `.github/workflows/ci.yml`
-- [ ] T048 [P] Run contract test suite against OpenAPI spec for compliance in `eventos-service/tests/contract/test_openapi_compliance.py`
-- [ ] T049 [P] Add Prometheus metrics exposition endpoint `/metrics` in `eventos-service/src/api/routes/metrics.py`
+- [ ] T046 [P] Clarify egress correlation ID propagation: document "no downstream calls in MVP; future extensibility" in `eventos-service/src/api/middleware/correlation.py` (code comment)
+- [ ] T047 [P] Add dependency vulnerability scanning (`pip-audit` + `safety`) to CI in `.github/workflows/ci.yml`
+- [ ] T048 [P] Run contract test suite against OpenAPI spec using `schemathesis` in `eventos-service/tests/contract/test_openapi_compliance.py`
+- [ ] T049 [P] Add Prometheus metrics exposition endpoint `/metrics` using `prometheus-client` in `eventos-service/src/api/routes/metrics.py`
+
+**Note**: T045 (API versioning) - routes already implement `/api/v1/` prefix per spec; no additional implementation needed beyond existing `/api/v1/` routes
 
 ---
 
@@ -302,6 +314,6 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
-- Constitution Principle IV: All logging must use structured JSON with correlation_id; metrics exposition required
-- Constitution Principle II: OpenAPI spec is source of truth - validate against contracts/openapi.yaml; versioned routes required
-- Constitution Principle VII: Dependency vulnerability scanning required in CI
+- Constitution Principle IV: All logging must use structured JSON with correlation_id; metrics exposition required via `prometheus-client` (T013, T049)
+- Constitution Principle II: OpenAPI spec is source of truth - validate against contracts/openapi.yaml using `schemathesis` (T048); versioned routes required
+- Constitution Principle VII: Dependency vulnerability scanning required in CI via `pip-audit` + `safety` (T047)

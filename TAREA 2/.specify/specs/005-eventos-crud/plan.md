@@ -49,19 +49,20 @@ Implement a FastAPI-based microservice for CRUD operations on Eventos (events) s
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Microservice Autonomy | ✅ Pass | Independent service, owns Eventos collection |
-| II. API-First Contract | ⚠️ Partial | OpenAPI 3.1 from FastAPI; versioned routes (/api/v1/) need implementation; OpenAPI validation task needed |
-| III. Test-First (NON-NEGOTIABLE) | ✅ Pass | TDD mandatory, contract → integration → unit |
-| IV. Observability by Default | ⚠️ Partial | Structured logging, /health, correlation IDs done; **metrics exposition (Prometheus) missing** |
-| V. Polyglot Persistence | ⚠️ Partial | MongoDB justified; `brain/decisions/db-selection.md` not verified |
+| II. API-First Contract | ⚠️ Partial | OpenAPI 3.1 from FastAPI; versioned routes implemented; OpenAPI contract validation via schemathesis in T048 |
+| III. Test-First (NON-NEGOTIABLE) | ⚠️ Partial | TDD order correct; add explicit "user approval" gate before implementation |
+| IV. Observability by Default | ⚠️ Partial | Structured logging, /health, correlation IDs done; metrics via T013 (prometheus-client) + T049 (/metrics endpoint) |
+| V. Polyglot Persistence | ⚠️ Partial | MongoDB justified; T017 verifies `brain/decisions/db-selection.md` exists |
 | VI. SAGA Transactions | ✅ Pass | Not applicable (single service CRUD) |
-| VII. Security & Privacy | ⚠️ Partial | No PII in logs, input validation, env vars; **dependency vulnerability scanning missing** |
+| VII. Security & Privacy | ⚠️ Partial | No PII in logs, input validation, env vars; T047 adds pip-audit/safety to CI |
 | VIII. Simplicity & YAGNI | ✅ Pass | Minimal MVP implementation |
 
 Violations to address before implementation:
-- Principle II: Add API versioning implementation task + OpenAPI contract validation task
-- Principle IV: Add metrics middleware task (Prometheus/OpenTelemetry)
-- Principle V: Verify `brain/decisions/db-selection.md` exists
-- Principle VII: Add dependency scanning task (pip-audit/safety) in CI
+- Principle II: T048 OpenAPI contract validation via schemathesis
+- Principle III: Add explicit test approval checkpoint in tasks
+- Principle IV: T013 (prometheus-client middleware), T049 (/metrics endpoint)
+- Principle V: T017 verify brain/decisions/db-selection.md
+- Principle VII: T047 add pip-audit/safety to CI pipeline
 
 ## Project Structure
 
