@@ -166,8 +166,9 @@ class HealthCheckResponse(BaseModel):
 
 ```javascript
 // Automatic: _id (unique)
+// Unique index for name (enables 409 DUPLICATE_EVENT)
+db.eventos.createIndex({ "nombre": 1 }, { unique: true })
 // Query performance indexes
-db.eventos.createIndex({ "nombre": 1 })
 db.eventos.createIndex({ "estado": 1 })
 db.eventos.createIndex({ "creado_en": -1 })
 db.eventos.createIndex({ "estado": 1, "creado_en": -1 })

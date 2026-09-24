@@ -8,7 +8,7 @@ class TestEventosCRUDIntegration:
     async def test_create_and_get_event(self, async_client: AsyncClient):
         # Create event
         create_response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Integration Test Event",
                 "estado": "publicado",
@@ -30,7 +30,7 @@ class TestEventosCRUDIntegration:
         evento_id = created_event["evento_id"]
         
         # Get event
-        get_response = await async_client.get(f"/api/eventos/{evento_id}")
+        get_response = await async_client.get(f"/api/v1/eventos/{evento_id}")
         assert get_response.status_code == 200
         retrieved_event = get_response.json()
         
@@ -49,7 +49,7 @@ class TestEventosCRUDIntegration:
     async def test_create_event_with_correlation_id(self, async_client: AsyncClient):
         correlation_id = "550e8400-e29b-41d4-a716-446655440000"
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Correlation Test",
                 "estado": "publicado",
@@ -74,7 +74,7 @@ class TestEventosCRUDIntegration:
     async def test_get_event_returns_correlation_id(self, async_client: AsyncClient):
         # Create event first
         create_response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Test Event",
                 "estado": "publicado",
@@ -94,7 +94,7 @@ class TestEventosCRUDIntegration:
         # Get event with correlation ID
         correlation_id = "550e8400-e29b-41d4-a716-446655440001"
         get_response = await async_client.get(
-            f"/api/eventos/{evento_id}",
+            f"/api/v1/eventos/{evento_id}",
             headers={"X-Correlation-ID": correlation_id}
         )
         assert get_response.status_code == 200

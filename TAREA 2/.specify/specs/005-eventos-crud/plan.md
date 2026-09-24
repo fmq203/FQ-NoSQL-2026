@@ -6,7 +6,7 @@
 
 ## Summary
 
-Implement a FastAPI-based microservice for CRUD operations on Eventos (events) stored in MongoDB using Motor async driver. The service provides three endpoints: POST /api/eventos (create event), GET /api/eventos/{id} (get event by UUID), and GET /health (health check with MongoDB connectivity verification). Follows the EventFlow Constitution principles: microservice autonomy, API-first contract, test-first development, observability by default, and distributed tracing.
+Implement a FastAPI-based microservice for CRUD operations on Eventos (events) stored in MongoDB using Motor async driver. The service provides three endpoints: POST /api/v1/eventos (create event), GET /api/v1/eventos/{id} (get event by UUID), and GET /health (health check with MongoDB connectivity verification). Follows the EventFlow Constitution principles: microservice autonomy, API-first contract, test-first development, observability by default, and distributed tracing.
 
 ## Technical Context
 
@@ -25,7 +25,7 @@ Implement a FastAPI-based microservice for CRUD operations on Eventos (events) s
 **Performance Goals**: 
 - Create event < 100ms (p95)
 - Get event < 50ms (p95)
-- Health check < 10ms (p99) verifying MongoDB
+- Health check < 50ms (p99) verifying MongoDB
 
 **Constraints**: 
 - < 200ms p95 latency for CRUD operations
@@ -34,6 +34,8 @@ Implement a FastAPI-based microservice for CRUD operations on Eventos (events) s
 - RFC 7807 error format compliance
 - Structured JSON logging with correlation IDs
 - Distributed tracing headers (X-Correlation-ID, X-Trace-ID)
+- Metrics exposition (Prometheus/OpenTelemetry) for latency, error rate, throughput per endpoint
+- Dependency vulnerability scanning in CI
 
 **Scale/Scope**: 
 - Single microservice (eventos-service)
@@ -47,15 +49,19 @@ Implement a FastAPI-based microservice for CRUD operations on Eventos (events) s
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Microservice Autonomy | ✅ Pass | Independent service, owns Eventos collection |
-| II. API-First Contract | ✅ Pass | OpenAPI 3.1 from FastAPI, spec is source of truth |
+| II. API-First Contract | ⚠️ Partial | OpenAPI 3.1 from FastAPI; versioned routes (/api/v1/) need implementation; OpenAPI validation task needed |
 | III. Test-First (NON-NEGOTIABLE) | ✅ Pass | TDD mandatory, contract → integration → unit |
-| IV. Observability by Default | ✅ Pass | Structured logging, /health endpoint, correlation IDs |
-| V. Polyglot Persistence | ✅ Pass | MongoDB justified in brain/decisions/db-selection.md |
+| IV. Observability by Default | ⚠️ Partial | Structured logging, /health, correlation IDs done; **metrics exposition (Prometheus) missing** |
+| V. Polyglot Persistence | ⚠️ Partial | MongoDB justified; `brain/decisions/db-selection.md` not verified |
 | VI. SAGA Transactions | ✅ Pass | Not applicable (single service CRUD) |
-| VII. Security & Privacy | ✅ Pass | No PII in logs, input validation, env vars for secrets |
+| VII. Security & Privacy | ⚠️ Partial | No PII in logs, input validation, env vars; **dependency vulnerability scanning missing** |
 | VIII. Simplicity & YAGNI | ✅ Pass | Minimal MVP implementation |
 
-All principles satisfied - no violations.
+Violations to address before implementation:
+- Principle II: Add API versioning implementation task + OpenAPI contract validation task
+- Principle IV: Add metrics middleware task (Prometheus/OpenTelemetry)
+- Principle V: Verify `brain/decisions/db-selection.md` exists
+- Principle VII: Add dependency scanning task (pip-audit/safety) in CI
 
 ## Project Structure
 
@@ -93,12 +99,13 @@ eventos-service/
 │   │   ├── __init__.py
 │   │   ├── routes/
 │   │   │   ├── __init__.py
-│   │   │   ├── eventos.py      # POST /api/eventos, GET /api/eventos/{id}
+│   │   │   ├── eventos.py      # POST /api/v1/eventos, GET /api/v1/eventos/{id}
 │   │   │   └── health.py       # GET /health
 │   │   └── middleware/
 │   │       ├── __init__.py
 │   │       ├── correlation.py  # Correlation ID middleware
-│   │       └── logging.py      # Structured logging middleware
+│   │       ├── logging.py      # Structured logging middleware
+│   │       └── metrics.py      # Prometheus metrics middleware
 │   └── utils/
 │       ├── __init__.py
 │       ├── errors.py           # RFC 7807 error handling
@@ -126,7 +133,7 @@ eventos-service/
 └── .env.example
 ```
 
-**Structure Decision**: Using existing eventos-service directory structure at repository root `/home/fqueirolo/TECNOLOGO/NoSQL/TAREA 2/eventos-service/`. This follows the single-project microservice pattern consistent with existing services (usuarios-service, reservas-service).
+**Structure Decision**: Using existing eventos-service directory structure at repository root `/home/fqueirolo/TECNOLOGO/NoSQL/TAREA 2/eventos-service/`. This follows the single-project microservice pattern consistent with existing services (usuarios-service, reservas-service). Added `metrics.py` middleware for Principle IV compliance.
 
 ## Complexity Tracking
 

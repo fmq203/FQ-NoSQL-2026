@@ -23,6 +23,8 @@ tags:
     description: Event management operations
   - name: health
     description: Service health checks
+  - name: metrics
+    description: Prometheus metrics exposition
 
 components:
   schemas:
@@ -186,7 +188,7 @@ components:
           type: string
           format: uri-reference
           description: Request path that generated the error
-          example: "/api/eventos"
+          example: "/api/v1/eventos"
         correlation_id:
           type: string
           format: uuid
@@ -217,7 +219,7 @@ components:
       example: "550e8400-e29b-41d4-a716-446655440000"
 
 paths:
-  /api/eventos:
+  /api/v1/eventos:
     post:
       tags: [eventos]
       summary: Create a new event
@@ -285,6 +287,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Event already exists (duplicate name)
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/X-Correlation-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              examples:
+                duplicate_event:
+                  summary: Duplicate event name
+                  value:
+                    type: "https://eventflow.example.com/errors/duplicate-event"
+                    title: "Conflict"
+                    status: 409
+                    detail: "Evento duplicado (nombre ya existe)"
+                    instance: "/api/v1/eventos"
+                    correlation_id: "550e8400-e29b-41d4-a716-446655440000"
         '422':
           description: Validation error (business rules)
           headers:
@@ -302,7 +323,7 @@ paths:
                     title: "Validation Error"
                     status: 422
                     detail: "entradas_disponibles cannot exceed aforo_total"
-                    instance: "/api/eventos"
+                    instance: "/api/v1/eventos"
                     correlation_id: "550e8400-e29b-41d4-a716-446655440000"
                 precio_negativo:
                   summary: Negative price
@@ -311,7 +332,7 @@ paths:
                     title: "Validation Error"
                     status: 422
                     detail: "precio must be >= 0"
-                    instance: "/api/eventos"
+                    instance: "/api/v1/eventos"
                     correlation_id: "550e8400-e29b-41d4-a716-446655440000"
                 categoria_duplicada:
                   summary: Duplicate category
@@ -320,7 +341,7 @@ paths:
                     title: "Validation Error"
                     status: 422
                     detail: "categoria must be unique within precios"
-                    instance: "/api/eventos"
+                    instance: "/api/v1/eventos"
                     correlation_id: "550e8400-e29b-41d4-a716-446655440000"
         '500':
           description: Internal server error
@@ -341,7 +362,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
 
-  /api/eventos/{evento_id}:
+  /api/v1/eventos/{evento_id}:
     get:
       tags: [eventos]
       summary: Get event by ID
@@ -380,7 +401,7 @@ paths:
                     title: "Not Found"
                     status: 404
                     detail: "Evento no encontrado"
-                    instance: "/api/eventos/550e8400-e29b-41d4-a716-446655440000"
+                    instance: "/api/v1/eventos/550e8400-e29b-41d4-a716-446655440000"
                     correlation_id: "550e8400-e29b-41d4-a716-446655440001"
         '422':
           description: Invalid UUID format
@@ -399,7 +420,7 @@ paths:
                     title: "Validation Error"
                     status: 422
                     detail: "Invalid UUID format"
-                    instance: "/api/eventos/invalid-uuid"
+                    instance: "/api/v1/eventos/invalid-uuid"
                     correlation_id: "550e8400-e29b-41d4-a716-446655440001"
         '500':
           description: Internal server error
@@ -473,6 +494,21 @@ paths:
                     checks:
                       mongodb: "down"
                     timestamp: "2026-09-23T10:00:00.000Z"
+
+  /metrics:
+    get:
+      tags: [metrics]
+      summary: Prometheus metrics exposition
+      description: |
+        Exposes Prometheus metrics for latency, error rate, throughput per endpoint.
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus metrics in text format
+          content:
+            text/plain:
+              schema:
+                type: string
 
 security: []
 

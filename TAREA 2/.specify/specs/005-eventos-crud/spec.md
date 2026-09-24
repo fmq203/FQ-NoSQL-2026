@@ -20,9 +20,9 @@ Un organizador crea un nuevo evento con nombre, estado, aforo total, entradas di
 **Acceptance Scenarios**:
 1. **Given** JSON válido con nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion, **When** POST `/api/eventos`, **Then** 201 con evento_id, creado_en
 2. **Given** aforo_total < entradas_disponibles, **When** POST `/api/eventos`, **Then** 422 Validation Error
-3. **Given** entradas_disponibles > aforo_total, **When** POST `/api/eventos`, **Then** 422 Validation Error
 3. **Given** precio negativo en precios[], **When** POST `/api/eventos`, **Then** 422 Validation Error
 4. **Given** estado no válido, **When** POST `/api/eventos`, **Then** 422 Validation Error
+5. **Given** categoria duplicada en precios[], **When** POST `/api/eventos`, **Then** 422 Validation Error
 
 ---
 
@@ -55,10 +55,11 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 ---
 
 ### Edge Cases
-- Creación de evento con aforo_total = 0: 422 Validation Error
-- Creación de evento con entradas_disponibles = aforo_total: Válido (evento lleno al crear)
+- Creación de evento con aforo_total = 0 y entradas_disponibles = 0: Válido (evento borrador sin capacidad)
+- Creación de evento con aforo_total = 0 y entradas_disponibles > 0: 422 Validation Error
+- Creación de evento con entradas_disponibles = aforo_total > 0: Válido (evento lleno al crear)
 - Consulta de evento inexistente: Retorna 404 con error code NOT_FOUND
-- Health check con MongoDB lento (>100ms): Retorna estado degraded
+- Health check con MongoDB lento (latencia 50-500ms): Retorna estado degraded
 - Health check con MongoDB caído: Retorna 503 unhealthy
 - Precio 0 en precios[]: Válido (evento gratis)
 - Categoría duplicada en precios[]: 422 Validation Error
@@ -73,7 +74,7 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 - **EC-FR-003**: System MUST validar estado en enum: borrador, publicado, cancelado, finalizado
 - **EC-FR-004**: System MUST validar ubicacion con ciudad y pais obligatorios
 - **EC-FR-005**: System MUST retornar evento por UUID con todos los campos + precios[]
-- **EC-FR-006**: System MUST responder health check en `/health` con latencia < 10ms (p99), verificando conectividad MongoDB
+- **EC-FR-006**: System MUST responder health check en `/health` con latencia < 50ms (p99), verificando conectividad MongoDB
 
 ### Key Entities
 
@@ -92,7 +93,7 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 
 - **EC-SC-001**: Crear evento < 100ms (p95) bajo carga normal
 - **EC-SC-002**: Obtener evento < 50ms (p95)
-- **EC-SC-003**: Health check < 10ms (p99) verificando MongoDB
+- **EC-SC-003**: Health check < 50ms (p99) verificando MongoDB
 - **EC-SC-004**: 0 eventos con aforo_total < entradas_disponibles (validación BD)
 - **EC-SC-005**: Health check detecta MongoDB caído en < 5s y retorna 503
 
@@ -104,13 +105,12 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 - Estados de evento: borrador, publicado, cancelado, finalizado
 - Precios en moneda local (sin conversión de moneda en MVP)
 - Capacidad de evento inmutable tras creación (solo entradas_disponibles cambia)
-- No autenticación/autorización en esta versión (scope MVP)
 
 ## API Specification
 
 ### Endpoints
 
-#### POST /api/eventos
+#### POST /api/v1/eventos
 Crear nuevo evento.
 
 **Request Body**:
@@ -156,8 +156,9 @@ Crear nuevo evento.
 
 **Error Responses**:
 - 422 Validation Error: aforo_total < entradas_disponibles, precio negativo, categoria duplicada, estado inválido, campos faltantes
+- 409 Conflict: Evento duplicado (nombre ya existe)
 
-#### GET /api/eventos/{evento_id}
+#### GET /api/v1/eventos/{evento_id}
 Obtener evento por ID.
 
 **Response 200**:
@@ -183,7 +184,7 @@ Obtener evento por ID.
 ```
 
 **Error Responses**:
-- 404 Not Found: `{"type":".../not-found","title":"Not Found","status":404,"detail":"Evento no encontrado","instance":"/api/eventos/{id}"}`
+- 404 Not Found: `{"type":".../not-found","title":"Not Found","status":404,"detail":"Evento no encontrado","instance":"/api/v1/eventos/{id}"}`
 - 422 Validation Error: UUID inválido
 
 #### GET /health
@@ -232,7 +233,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
   "title": "Human-readable title",
   "status": 422,
   "detail": "Specific error description",
-  "instance": "/api/eventos",
+  "instance": "/api/v1/eventos",
   "correlation_id": "uuid-v4"
 }
 ```
@@ -241,7 +242,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 |-------------|------------|-------|--------|
 | 400 | `VALIDATION_ERROR` | Validation Error | JSON inválido, campos faltantes, tipos incorrectos |
 | 404 | `NOT_FOUND` | Not Found | Evento no existe (GET por ID) |
-| 409 | `DUPLICATE_EVENT` | Conflict | Evento duplicado (si se implementa unicidad por nombre) |
+| 409 | `DUPLICATE_EVENT` | Conflict | Evento duplicado (nombre ya existe) |
 | 422 | `VALIDATION_ERROR` | Unprocessable Entity | aforo_total < entradas_disponibles, precio negativo, categoria duplicada, estado inválido, campos faltantes |
 | 500 | `INTERNAL_ERROR` | Internal Server Error | Fallo BD, error inesperado |
 | 503 | `SERVICE_UNAVAILABLE` | Service Unavailable | MongoDB down |
@@ -251,7 +252,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 ### Implementation Requirements
 - All endpoints MUST return errors in RFC 7807 format exactly as specified
 - `correlation_id` in error response MUST match `X-Correlation-ID` header
-- `instance` field MUST be the request path (e.g., `/api/eventos`)
+- `instance` field MUST be the request path (e.g., `/api/v1/eventos`)
 - `type` URI MUST use `https://eventflow.example.com/errors/{error-code}` pattern
 
 ## Health Check States
@@ -307,7 +308,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 | aforo_total | Int >= 0 |
 | entradas_disponibles | Int >= 0, <= aforo_total |
 | precios[] | Array no vacío, categorias únicas |
-| precio | Decimal >= 0 |
+| precio | Decimal >= 0, máx 2 decimales |
 | disponibles | Int >= 0 |
 | ubicacion.ciudad | String 1-100 chars, requerido |
 | ubicacion.pais | String 1-100 chars, requerido |
@@ -377,7 +378,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 ### Propagation Rules
 1. **Ingress**: Extract `X-Correlation-ID` from request headers; if missing, generate UUID v4
 2. **Internal**: Use as `correlation_id` in all structured logs
-3. **Egress**: Pass `X-Correlation-ID` to ALL downstream HTTP calls
+3. **Egress**: Pass `X-Correlation-ID` to ALL downstream HTTP calls (no downstream calls in MVP)
 4. **Logging**: `trace_id` = `correlation_id`; `span_id` = new UUID per operation
 
 ## Technology Stack (per Constitution)

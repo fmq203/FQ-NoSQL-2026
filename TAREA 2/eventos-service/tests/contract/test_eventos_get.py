@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 class TestEventosGetContract:
     @pytest.mark.asyncio
     async def test_get_event_existing(self, async_client: AsyncClient, created_event_id: str):
-        response = await async_client.get(f"/api/eventos/{created_event_id}")
+        response = await async_client.get(f"/api/v1/eventos/{created_event_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["evento_id"] == created_event_id
@@ -22,7 +22,7 @@ class TestEventosGetContract:
     @pytest.mark.asyncio
     async def test_get_event_not_found(self, async_client: AsyncClient):
         non_existent_id = str(uuid4())
-        response = await async_client.get(f"/api/eventos/{non_existent_id}")
+        response = await async_client.get(f"/api/v1/eventos/{non_existent_id}")
         assert response.status_code == 404
         data = response.json()
         assert data["type"] == "https://eventflow.example.com/errors/not-found"
@@ -31,7 +31,7 @@ class TestEventosGetContract:
     
     @pytest.mark.asyncio
     async def test_get_event_invalid_uuid(self, async_client: AsyncClient):
-        response = await async_client.get("/api/eventos/invalid-uuid")
+        response = await async_client.get("/api/v1/eventos/invalid-uuid")
         assert response.status_code == 422
         data = response.json()
         assert data["type"] == "https://eventflow.example.com/errors/validation-error"

@@ -76,10 +76,10 @@ Expected response (healthy):
 
 ## API Usage Examples
 
-### Create Event (POST /api/eventos)
+### Create Event (POST /api/v1/eventos)
 
 ```bash
-curl -X POST http://localhost:8000/api/eventos \
+curl -X POST http://localhost:8000/api/v1/eventos \
   -H "Content-Type: application/json" \
   -H "X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000" \
   -d '{
@@ -123,10 +123,10 @@ curl -X POST http://localhost:8000/api/eventos \
 
 **Headers**: `X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000`
 
-### Get Event by ID (GET /api/eventos/{evento_id})
+### Get Event by ID (GET /api/v1/eventos/{evento_id})
 
 ```bash
-curl -X GET http://localhost:8000/api/eventos/550e8400-e29b-41d4-a716-446655440000 \
+curl -X GET http://localhost:8000/api/v1/eventos/550e8400-e29b-41d4-a716-446655440000 \
   -H "X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440001"
 ```
 
@@ -194,7 +194,19 @@ curl -X GET http://localhost:8000/health
   "title": "Validation Error",
   "status": 422,
   "detail": "entradas_disponibles cannot exceed aforo_total",
-  "instance": "/api/eventos",
+  "instance": "/api/v1/eventos",
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### Conflict - Duplicate Event (409)
+```json
+{
+  "type": "https://eventflow.example.com/errors/duplicate-event",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "Evento duplicado (nombre ya existe)",
+  "instance": "/api/v1/eventos",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
@@ -206,7 +218,7 @@ curl -X GET http://localhost:8000/health
   "title": "Not Found",
   "status": 404,
   "detail": "Evento no encontrado",
-  "instance": "/api/eventos/550e8400-e29b-41d4-a716-446655440000",
+  "instance": "/api/v1/eventos/550e8400-e29b-41d4-a716-446655440000",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440001"
 }
 ```
@@ -310,8 +322,8 @@ kill -9 <PID>
 ## Integration with Other Services
 
 ### Reservas Service (SAGA Orchestrator)
-- Calls `GET /api/eventos/{evento_id}` to validate event exists and has capacity
-- Expects RFC 7807 error format for 404/422 responses
+- Calls `GET /api/v1/eventos/{evento_id}` to validate event exists and has capacity
+- Expects RFC 7807 error format for 404/422/409 responses
 - Propagates `X-Correlation-ID` for distributed tracing
 
 ### Usuarios Service

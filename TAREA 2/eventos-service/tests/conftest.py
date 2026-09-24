@@ -67,7 +67,7 @@ async def async_client(app):
 @pytest_asyncio.fixture
 async def created_event_id(async_client):
     response = await async_client.post(
-        "/api/eventos",
+        "/api/v1/eventos",
         json={
             "nombre": "Test Event for Get",
             "estado": "publicado",
