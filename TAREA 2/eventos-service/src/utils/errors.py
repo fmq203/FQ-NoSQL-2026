@@ -1,8 +1,8 @@
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import ValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from uuid import UUID, uuid4
 import logging
 
@@ -53,7 +53,7 @@ def create_error_response(
 ) -> JSONResponse:
     error_type = ERROR_CODES.get(error_code, ERROR_CODES["INTERNAL_ERROR"])
     title = ERROR_TITLES.get(error_code, "Internal Server Error")
-    
+
     content = {
         "type": error_type,
         "title": title,
@@ -62,12 +62,12 @@ def create_error_response(
         "instance": instance,
         "correlation_id": str(correlation_id),
     }
-    
+
     headers = {
         "X-Correlation-ID": str(correlation_id),
         "X-Trace-ID": str(correlation_id),
     }
-    
+
     return JSONResponse(
         status_code=status_code,
         content=content,
@@ -102,7 +102,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         field = " -> ".join(str(loc) for loc in error["loc"])
         errors.append(f"{field}: {error['msg']}")
     detail = "; ".join(errors)
-    
+
     logger.warning(
         f"Validation error: {detail}",
         extra={
@@ -126,7 +126,7 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
         field = " -> ".join(str(loc) for loc in error["loc"])
         errors.append(f"{field}: {error['msg']}")
     detail = "; ".join(errors)
-    
+
     logger.warning(
         f"Pydantic validation error: {detail}",
         extra={
@@ -145,14 +145,14 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     correlation_id = getattr(request.state, "correlation_id", uuid4())
-    
+
     if exc.status_code == status.HTTP_404_NOT_FOUND:
         error_code = "NOT_FOUND"
         detail = exc.detail if isinstance(exc.detail, str) else "Not Found"
     else:
         error_code = "INTERNAL_ERROR"
         detail = exc.detail if isinstance(exc.detail, str) else "Internal Server Error"
-    
+
     logger.warning(
         f"HTTP exception: {exc.status_code}",
         extra={
@@ -172,7 +172,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     correlation_id = getattr(request.state, "correlation_id", uuid4())
-    
+
     logger.error(
         f"Unhandled exception: {type(exc).__name__}: {exc}",
         extra={

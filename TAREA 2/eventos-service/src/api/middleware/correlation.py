@@ -12,29 +12,37 @@ UUID_PATTERN = re.compile(
 
 
 class CorrelationIDMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware for handling correlation IDs for distributed tracing.
+
+    Ingress: Extract X-Correlation-ID from request headers; if missing, generate UUID v4
+    Internal: Use as correlation_id in all structured logs
+    Egress: Pass X-Correlation-ID to downstream HTTP calls (for future extensibility; no downstream calls in MVP)
+    Logging: trace_id = correlation_id; span_id = new UUID per operation
+    """
     async def dispatch(self, request: Request, call_next):
         correlation_id = self._extract_correlation_id(request)
-        
+
         request.state.correlation_id = correlation_id
         request.state.trace_id = correlation_id
-        
+
         response = await call_next(request)
-        
+
         response.headers["X-Correlation-ID"] = str(correlation_id)
         response.headers["X-Trace-ID"] = str(correlation_id)
-        
+
         return response
-    
+
     def _extract_correlation_id(self, request: Request) -> UUID:
         correlation_id = request.headers.get("X-Correlation-ID")
         if correlation_id and self._is_valid_uuid(correlation_id):
             return UUID(correlation_id)
-        
+
         trace_id = request.headers.get("X-Trace-ID")
         if trace_id and self._is_valid_uuid(trace_id):
             return UUID(trace_id)
-        
+
         return uuid4()
-    
+
     def _is_valid_uuid(self, value: str) -> bool:
         return bool(UUID_PATTERN.match(value))

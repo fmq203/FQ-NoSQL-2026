@@ -14,34 +14,34 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, logger_name: str = "eventos-service"):
         super().__init__(app)
         self.logger = logging.getLogger(logger_name)
-    
+
     async def dispatch(self, request: Request, call_next):
         start_time = time.perf_counter()
-        
+
         correlation_id = getattr(request.state, "correlation_id", uuid4())
         trace_id = getattr(request.state, "trace_id", correlation_id)
         span_id = uuid4()
-        
+
         request.state.correlation_id = correlation_id
         request.state.trace_id = trace_id
         request.state.span_id = span_id
-        
+
         self._log_request(request, correlation_id, trace_id, span_id)
-        
+
         try:
             response = await call_next(request)
             duration_ms = (time.perf_counter() - start_time) * 1000
-            
+
             self._log_response(
                 request, response, correlation_id, trace_id, span_id, duration_ms
             )
-            
+
             return response
         except Exception as exc:
             duration_ms = (time.perf_counter() - start_time) * 1000
             self._log_exception(request, exc, correlation_id, trace_id, span_id, duration_ms)
             raise
-    
+
     def _log_request(self, request: Request, correlation_id: UUID, trace_id: UUID, span_id: UUID):
         self.logger.info(
             f"Incoming request: {request.method} {request.url.path}",
@@ -58,7 +58,7 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
                 },
             },
         )
-    
+
     def _log_response(
         self,
         request: Request,
@@ -73,7 +73,7 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
             level = logging.ERROR
         elif response.status_code >= 400:
             level = logging.WARNING
-        
+
         self.logger.log(
             level,
             f"Response: {response.status_code} for {request.method} {request.url.path}",
@@ -89,7 +89,7 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
                 },
             },
         )
-    
+
     def _log_exception(
         self,
         request: Request,
@@ -120,11 +120,11 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
 def setup_json_logging(log_level: str = "INFO"):
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
-    
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JSONFormatter())
     root_logger.handlers = [handler]
-    
+
     logging.getLogger("uvicorn").handlers = [handler]
     logging.getLogger("uvicorn.access").handlers = [handler]
     logging.getLogger("motor").setLevel(logging.WARNING)
@@ -143,7 +143,7 @@ class JSONFormatter(logging.Formatter):
             "message": record.getMessage(),
             "context": getattr(record, "context", {}),
         }
-        
+
         if log_entry["correlation_id"] is None:
             del log_entry["correlation_id"]
         if log_entry["trace_id"] is None:
@@ -152,5 +152,5 @@ class JSONFormatter(logging.Formatter):
             del log_entry["span_id"]
         if not log_entry["context"]:
             del log_entry["context"]
-        
+
         return json.dumps(log_entry, ensure_ascii=False)

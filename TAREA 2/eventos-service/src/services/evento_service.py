@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 class EventoService:
     def __init__(self):
         self.collection = get_collection()
-    
+
     async def create_event(self, evento: EventoCreate) -> EventoResponse:
         evento_id = uuid4()
         now = datetime.now(timezone.utc)
-        
+
         document = {
             "_id": evento_id,
             "nombre": evento.nombre,
@@ -41,10 +41,10 @@ class EventoService:
             "creado_en": now,
             "actualizado_en": now,
         }
-        
+
         try:
             await self.collection.insert_one(document)
-            
+
             logger.info(
                 "Event created successfully",
                 extra={
@@ -59,7 +59,7 @@ class EventoService:
                     },
                 },
             )
-            
+
             return EventoResponse(
                 evento_id=evento_id,
                 nombre=evento.nombre,
@@ -86,12 +86,12 @@ class EventoService:
                 status_code=500,
                 instance="/api/v1/eventos",
             )
-    
+
     async def get_event(self, evento_id: str) -> EventoResponse:
         from bson import Binary
         from bson.errors import InvalidId
         import uuid as uuid_module
-        
+
         try:
             parsed_uuid = uuid_module.UUID(evento_id)
             bson_uuid = Binary.from_uuid(parsed_uuid)
@@ -102,9 +102,9 @@ class EventoService:
                 status_code=422,
                 instance=f"/api/v1/eventos/{evento_id}",
             )
-        
+
         document = await self.collection.find_one({"_id": bson_uuid})
-        
+
         if not document:
             raise EventFlowHTTPException(
                 error_code="NOT_FOUND",
@@ -112,12 +112,12 @@ class EventoService:
                 status_code=404,
                 instance=f"/api/v1/eventos/{evento_id}",
             )
-        
+
         precios = [
             {"categoria": p["categoria"], "precio": Decimal(p["precio"]), "disponibles": p["disponibles"]}
             for p in document.get("precios", [])
         ]
-        
+
         return EventoResponse(
             evento_id=document["_id"],
             nombre=document["nombre"],
