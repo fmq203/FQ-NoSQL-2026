@@ -68,3 +68,38 @@
 **Próximos pasos:** Integrar con Reservas Service para validación de aforo en SAGA
 
 **Tags:** #implementation #spec-kit #eventos-crud #tdd #constitution-compliance #motor-async #prometheus
+
+---
+
+### 2026-09-24 — Análisis post-implementación y validación para Eventos CRUD (005-eventos-crud)
+
+**Contexto:** Ejecución de `/speckit.analyze` sobre los artefactos implementados (spec.md, plan.md, tasks.md) para validar consistencia, completitud y alineación con la Constitución antes de ejecutar `/speckit.implement`.
+
+**Problema:** El análisis identificó issues menores pendientes de resolver antes de la implementación final:
+- F1 (HIGH): US2/US3 acceptance tests usan `/api/eventos` en lugar de `/api/v1/eventos` (copy-paste legacy)
+- B1 (HIGH): Health check latency `<50ms p99` aplica solo a estado "healthy"; degraded/unhealthy tienen thresholds distintos
+- C1 (MEDIUM): Falta acceptance scenario para 409 DUPLICATE_EVENT en US1
+- B1 (MEDIUM): Health check latency spec dice `<50ms p99` pero tabla de estados muestra 3 estados con thresholds distintos
+- C1/C2: Falta 5s detection window y "no retries" en health check implementation
+- D1: T048 no especifica OpenAPI 3.1 explícitamente
+- C3: API Versioning menciona Accept header para futuro pero no hay task que implemente header parsing
+
+**Análisis:**
+1. F1 es copy-paste legacy en acceptance scenarios de US2/US3 - paths deben usar `/api/v1/eventos`
+2. B1: Spec dice `<50ms p99` pero health check states table muestra healthy <50ms, degraded 50-500ms, unhealthy failed - aclarar que 50ms p99 aplica solo a "healthy"
+3. C1: Falta acceptance scenario explícito para 409 en US1 (ya implementado en código pero no documentado)
+4. B5: Health check timeout dice "single attempt" pero no especifica retries - agregar "no retries" explícito
+5. C3: Accept header parsing mencionado en versioning strategy pero no hay task para implementarlo
+6. D1: T048 debe especificar OpenAPI 3.1 explícitamente
+6. C5: Consistency Model define Max Staleness 1s, Write Timeout 5s - no hay tasks que configuren estos valores en Motor client
+
+**Decisión:** Aplicar correcciones menores antes de `/speckit.implement`:
+- spec.md: Fix F1 (paths en US2/US3), clarificar B1/B5, agregar C1 (409 scenario), C2 (no retries), C3 (Accept header note)
+- tasks.md: Actualizar T048 con OpenAPI 3.1, agregar Accept header parsing task o deferir explícitamente, agregar MongoDB client config para consistency model
+- plan.md: Actualizar D1 con OpenAPI 3.1 en T048
+
+**Resultado esperado:** Artefactos 100% consistentes y listos para `/speckit.implement`
+
+**Próximos pasos:** Aplicar correcciones, commit, push, luego ejecutar `/speckit.implement`
+
+**Tags:** #analysis #spec-kit #eventos-crud #constitution-compliance #pre-implementation
