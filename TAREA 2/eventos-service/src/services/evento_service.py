@@ -77,14 +77,14 @@ class EventoService:
                     error_code="DUPLICATE_EVENT",
                     detail="Evento already exists",
                     status_code=409,
-                    instance="/api/eventos",
+                    instance="/api/v1/eventos",
                 )
             logger.error(f"Failed to create event: {e}")
             raise EventFlowHTTPException(
                 error_code="INTERNAL_ERROR",
                 detail="Failed to create event",
                 status_code=500,
-                instance="/api/eventos",
+                instance="/api/v1/eventos",
             )
     
     async def get_event(self, evento_id: str) -> EventoResponse:
@@ -100,7 +100,7 @@ class EventoService:
                 error_code="VALIDATION_ERROR",
                 detail="Invalid UUID format",
                 status_code=422,
-                instance=f"/api/eventos/{evento_id}",
+                instance=f"/api/v1/eventos/{evento_id}",
             )
         
         document = await self.collection.find_one({"_id": bson_uuid})
@@ -110,7 +110,7 @@ class EventoService:
                 error_code="NOT_FOUND",
                 detail="Evento no encontrado",
                 status_code=404,
-                instance=f"/api/eventos/{evento_id}",
+                instance=f"/api/v1/eventos/{evento_id}",
             )
         
         precios = [

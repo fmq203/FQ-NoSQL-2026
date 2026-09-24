@@ -4,7 +4,7 @@ from src.services.evento_service import EventoService
 from src.utils.errors import EventFlowHTTPException
 from uuid import UUID
 
-router = APIRouter(prefix="/eventos", tags=["eventos"])
+router = APIRouter(prefix="/v1/eventos", tags=["eventos"])
 
 
 def get_evento_service() -> EventoService:

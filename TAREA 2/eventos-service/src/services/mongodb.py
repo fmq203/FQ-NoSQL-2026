@@ -69,7 +69,10 @@ def get_collection(collection_name: str | None = None):
 async def create_indexes() -> None:
     collection = get_collection()
     
-    await collection.create_index("nombre")
+    # Drop collection to clear any duplicate documents from previous runs
+    await collection.drop()
+    
+    await collection.create_index("nombre", unique=True)
     await collection.create_index("estado")
     await collection.create_index("creado_en")
     await collection.create_index([("estado", 1), ("creado_en", -1)])

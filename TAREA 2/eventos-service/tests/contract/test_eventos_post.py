@@ -7,7 +7,7 @@ class TestEventosPostContract:
     @pytest.mark.asyncio
     async def test_create_event_valid(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Concierto Rock 2026",
                 "estado": "publicado",
@@ -39,7 +39,7 @@ class TestEventosPostContract:
     @pytest.mark.asyncio
     async def test_create_event_aforo_exceeded(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Test Event",
                 "estado": "publicado",
@@ -62,7 +62,7 @@ class TestEventosPostContract:
     @pytest.mark.asyncio
     async def test_create_event_negative_price(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Test Event",
                 "estado": "publicado",
@@ -84,7 +84,7 @@ class TestEventosPostContract:
     @pytest.mark.asyncio
     async def test_create_event_duplicate_categoria(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Test Event",
                 "estado": "publicado",
@@ -107,7 +107,7 @@ class TestEventosPostContract:
     @pytest.mark.asyncio
     async def test_create_event_invalid_estado(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Test Event",
                 "estado": "invalido",
@@ -129,7 +129,7 @@ class TestEventosPostContract:
     @pytest.mark.asyncio
     async def test_create_event_precios_disponibles_exceeds_entradas(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Test Event",
                 "estado": "publicado",
@@ -152,7 +152,7 @@ class TestEventosPostContract:
     @pytest.mark.asyncio
     async def test_create_event_zero_aforo_valid(self, async_client: AsyncClient):
         response = await async_client.post(
-            "/api/eventos",
+            "/api/v1/eventos",
             json={
                 "nombre": "Evento Borrador",
                 "estado": "borrador",
