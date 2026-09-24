@@ -30,13 +30,13 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **Purpose**: Project initialization and basic structure for eventos-service
 
-- [ ] T001 Create project directory structure per implementation plan in `eventos-service/src/`, `eventos-service/tests/`
-- [ ] T002 Initialize Python project with FastAPI, Motor, Pydantic dependencies in `eventos-service/requirements.txt`
-- [ ] T003 [P] Configure linting (ruff) and formatting (black) in `eventos-service/pyproject.toml`
-- [ ] T004 [P] Create `.env.example` with all required environment variables in `eventos-service/.env.example`
-- [ ] T005 [P] Create `pytest.ini` with async configuration in `eventos-service/pytest.ini`
-- [ ] T006 [P] Create `Dockerfile` for containerization in `eventos-service/Dockerfile`
-- [ ] T007 [P] Create `docker-compose.yml` for service integration in `eventos-service/docker-compose.yml`
+- [X] T001 Create project directory structure per implementation plan in `eventos-service/src/`, `eventos-service/tests/`
+- [X] T002 Initialize Python project with FastAPI, Motor, Pydantic dependencies in `eventos-service/requirements.txt`
+- [X] T003 [P] Configure linting (ruff) and formatting (black) in `eventos-service/pyproject.toml`
+- [X] T004 [P] Create `.env.example` with all required environment variables in `eventos-service/.env.example`
+- [X] T005 [P] Create `pytest.ini` with async configuration in `eventos-service/pytest.ini`
+- [X] T006 [P] Create `Dockerfile` for containerization in `eventos-service/Dockerfile`
+- [X] T007 [P] Create `docker-compose.yml` for service integration in `eventos-service/docker-compose.yml`
 
 ---
 
@@ -46,20 +46,20 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T008 Create configuration management with pydantic-settings in `eventos-service/src/config.py`
-- [ ] T009 Implement MongoDB connection manager with Motor async in `eventos-service/src/services/mongodb.py`
+- [X] T008 Create configuration management with pydantic-settings in `eventos-service/src/config.py`
+- [X] T009 Implement MongoDB connection manager with Motor async in `eventos-service/src/services/mongodb.py`
   - Configure `read_preference=secondaryPreferred`
   - Configure `max_staleness_seconds=1`
   - Configure `server_selection_timeout_ms=5000`
   - Configure `write_concern=majority + journal:true`
-- [ ] T010 [P] Create base exception classes and RFC 7807 error handling in `eventos-service/src/utils/errors.py`
-- [ ] T011 [P] Implement correlation ID middleware for distributed tracing in `eventos-service/src/api/middleware/correlation.py`
-- [ ] T012 [P] Implement structured JSON logging middleware in `eventos-service/src/api/middleware/logging.py`
-- [ ] T013 [P] Implement Prometheus metrics middleware using `prometheus-client` in `eventos-service/src/api/middleware/metrics.py`
-- [ ] T014 [P] Create base Pydantic models with validation utilities in `eventos-service/src/utils/validation.py`
-- [ ] T015 Create FastAPI app factory with middleware registration in `eventos-service/src/main.py`
-- [ ] T016 Configure MongoDB indexes on startup in `eventos-service/src/services/mongodb.py`
-- [ ] T017 [P] Verify `brain/decisions/db-selection.md` exists and documents MongoDB rationale
+- [X] T010 [P] Create base exception classes and RFC 7807 error handling in `eventos-service/src/utils/errors.py`
+- [X] T011 [P] Implement correlation ID middleware for distributed tracing in `eventos-service/src/api/middleware/correlation.py`
+- [X] T012 [P] Implement structured JSON logging middleware in `eventos-service/src/api/middleware/logging.py`
+- [X] T013 [P] Implement Prometheus metrics middleware using `prometheus-client` in `eventos-service/src/api/middleware/metrics.py`
+- [X] T014 [P] Create base Pydantic models with validation utilities in `eventos-service/src/utils/validation.py`
+- [X] T015 Create FastAPI app factory with middleware registration in `eventos-service/src/main.py`
+- [X] T016 Configure MongoDB indexes on startup in `eventos-service/src/services/mongodb.py`
+- [X] T017 [P] Verify `brain/decisions/db-selection.md` exists and documents MongoDB rationale
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -75,14 +75,14 @@ description: "Task list for Eventos CRUD Service implementation"
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T018 [P] [US1] Contract test for POST /api/v1/eventos in `eventos-service/tests/contract/test_eventos_post.py`
-- [ ] T019 [P] [US1] Integration test for create event flow in `eventos-service/tests/integration/test_eventos_crud.py`
-- [ ] T020 [P] [US1] Unit test for Evento model validation in `eventos-service/tests/unit/test_evento_model.py`
-- [ ] T021 [P] [US1] Contract test for RFC 7807 error response structure in `eventos-service/tests/contract/test_errors.py`
+- [X] T018 [P] [US1] Contract test for POST /api/v1/eventos in `eventos-service/tests/contract/test_eventos_post.py`
+- [X] T019 [P] [US1] Integration test for create event flow in `eventos-service/tests/integration/test_eventos_crud.py`
+- [X] T020 [P] [US1] Unit test for Evento model validation in `eventos-service/tests/unit/test_evento_model.py`
+- [X] T021 [P] [US1] Contract test for RFC 7807 error response structure in `eventos-service/tests/contract/test_errors.py`
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] Create Evento, PrecioCategoria, Ubicacion models in `eventos-service/src/models/evento.py` with validations:
+- [X] T022 [P] [US1] Create Evento, PrecioCategoria, Ubicacion models in `eventos-service/src/models/evento.py` with validations:
   - nombre: string 1-200 chars, not empty
   - estado: enum borrador|publicado|cancelado|finalizado
   - aforo_total: int >= 0
@@ -92,22 +92,22 @@ description: "Task list for Eventos CRUD Service implementation"
   - ubicacion.ciudad: required, 1-100 chars
   - ubicacion.pais: required, 1-100 chars
   - ubicacion.direccion: optional, max 500 chars
-- [ ] T023 [P] [US1] Create health check models in `eventos-service/src/models/health.py`
-- [ ] T024 [US1] Implement EventoService with create_event method in `eventos-service/src/services/evento_service.py`:
+- [X] T023 [P] [US1] Create health check models in `eventos-service/src/models/health.py`
+- [X] T024 [US1] Implement EventoService with create_event method in `eventos-service/src/services/evento_service.py`:
   - Insert document with UUID _id, creado_en, actualizado_en timestamps
   - Use write concern majority + journal:true
   - Return EventoResponse with generated evento_id
   - Enforce name uniqueness → raise 409 DUPLICATE_EVENT
-- [ ] T025 [US1] Implement POST /api/v1/eventos endpoint in `eventos-service/src/api/routes/eventos.py`:
+- [X] T025 [US1] Implement POST /api/v1/eventos endpoint in `eventos-service/src/api/routes/eventos.py`:
   - Accept EventoCreate request body
   - Return 201 with EventoResponse
   - Handle validation errors → 422 RFC 7807
   - Handle MongoDB duplicate key → 409 RFC 7807
   - Handle MongoDB errors → 500/503 RFC 7807
   - Add X-Correlation-ID header to response
-- [ ] T026 [US1] Add structured logging for create_event operation in `eventos-service/src/services/evento_service.py` and route
-- [ ] T027 [US1] Register eventos router with /api/v1 prefix in main.py
-- [ ] T028 [US1] Performance test for create event: verify < 100ms p95 in `eventos-service/tests/performance/test_create_event.py`
+- [X] T026 [US1] Add structured logging for create_event operation in `eventos-service/src/services/evento_service.py` and route
+- [X] T027 [US1] Register eventos router with /api/v1 prefix in main.py
+- [X] T028 [US1] Performance test for create event: verify < 100ms p95 in `eventos-service/tests/performance/test_create_event.py`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. Run contract tests to validate.
 
@@ -123,25 +123,25 @@ description: "Task list for Eventos CRUD Service implementation"
 
 ### Tests for User Story 2 (MANDATORY - TDD)
 
-- [ ] T029 [P] [US2] Contract test for GET /api/v1/eventos/{id} in `eventos-service/tests/contract/test_eventos_get.py`
-- [ ] T030 [P] [US2] Integration test for get event by ID in `eventos-service/tests/integration/test_eventos_crud.py`
-- [ ] T031 [P] [US2] Unit test for get_event service method in `eventos-service/tests/unit/test_evento_service.py`
+- [X] T029 [P] [US2] Contract test for GET /api/v1/eventos/{id} in `eventos-service/tests/contract/test_eventos_get.py`
+- [X] T030 [P] [US2] Integration test for get event by ID in `eventos-service/tests/integration/test_eventos_crud.py`
+- [X] T031 [P] [US2] Unit test for get_event service method in `eventos-service/tests/unit/test_evento_service.py`
 
 ### Implementation for User Story 2
 
-- [ ] T032 [US2] Add get_event method to EventoService in `eventos-service/src/services/evento_service.py`:
+- [X] T032 [US2] Add get_event method to EventoService in `eventos-service/src/services/evento_service.py`:
   - Query by UUID _id with read preference secondaryPreferred
   - Return EventoResponse or raise NotFound exception
   - Handle invalid UUID format → 422 RFC 7807
-- [ ] T033 [US2] Implement GET /api/v1/eventos/{evento_id} endpoint in `eventos-service/src/api/routes/eventos.py`:
+- [X] T033 [US2] Implement GET /api/v1/eventos/{evento_id} endpoint in `eventos-service/src/api/routes/eventos.py`:
   - Path parameter validation (UUID format)
   - Return 200 with EventoResponse
   - Return 404 Not Found with RFC 7807 format
   - Return 422 for invalid UUID
   - Add X-Correlation-ID header to response
-- [ ] T034 [US2] Add structured logging for get_event operation
-- [ ] T035 [US2] Add correlation ID propagation in service layer
-- [ ] T036 [US2] Performance test for get event: verify < 50ms p95 in `eventos-service/tests/performance/test_get_event.py`
+- [X] T034 [US2] Add structured logging for get_event operation
+- [X] T035 [US2] Add correlation ID propagation in service layer
+- [X] T036 [US2] Performance test for get event: verify < 50ms p95 in `eventos-service/tests/performance/test_get_event.py`
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently.
 
@@ -157,25 +157,25 @@ description: "Task list for Eventos CRUD Service implementation"
 
 ### Tests for User Story 3 (MANDATORY - TDD)
 
-- [ ] T037 [P] [US3] Contract test for GET /health in `eventos-service/tests/contract/test_health.py`
-- [ ] T038 [P] [US3] Integration test for health check with real MongoDB in `eventos-service/tests/integration/test_health_integration.py`
-- [ ] T039 [P] [US3] Unit test for health status determination logic in `eventos-service/tests/unit/test_health_service.py`
-- [ ] T045 [P] [US3] Integration test: verify 503 within 5s when MongoDB goes down in `eventos-service/tests/integration/test_health_5s_detection.py`
+- [X] T037 [P] [US3] Contract test for GET /health in `eventos-service/tests/contract/test_health.py`
+- [X] T038 [P] [US3] Integration test for health check with real MongoDB in `eventos-service/tests/integration/test_health_integration.py`
+- [X] T039 [P] [US3] Unit test for health status determination logic in `eventos-service/tests/unit/test_health_service.py`
+- [X] T045 [P] [US3] Integration test: verify 503 within 5s when MongoDB goes down in `eventos-service/tests/integration/test_health_5s_detection.py`
 
 ### Implementation for User Story 3
 
-- [ ] T040 [US3] Implement HealthService with check_mongodb method in `eventos-service/src/services/health_service.py`:
+- [X] T040 [US3] Implement HealthService with check_mongodb method in `eventos-service/src/services/health_service.py`:
   - Ping MongoDB with 2-second timeout
   - Measure latency: <50ms = healthy/ok, 50-500ms = degraded/slow, failed = unhealthy/down
   - Return HealthCheckResponse with status, checks, timestamp
-- [ ] T041 [US3] Implement GET /health endpoint in `eventos-service/src/api/routes/health.py`:
+- [X] T041 [US3] Implement GET /health endpoint in `eventos-service/src/api/routes/health.py`:
   - Call HealthService.check_mongodb()
   - Return 200 for healthy/degraded with HealthCheckResponse
   - Return 503 for unhealthy with HealthCheckResponse
   - Add X-Correlation-ID header to response
-- [ ] T042 [US3] Add structured logging for health_check operation
-- [ ] T043 [US3] Configure health check thresholds via environment variables
-- [ ] T044 [US3] Performance test for health check: verify < 50ms p99 in `eventos-service/tests/performance/test_health.py`
+- [X] T042 [US3] Add structured logging for health_check operation
+- [X] T043 [US3] Configure health check thresholds via environment variables
+- [X] T044 [US3] Performance test for health check: verify < 50ms p99 in `eventos-service/tests/performance/test_health.py`
 
 **Checkpoint**: All user stories should now be independently functional.
 
@@ -187,10 +187,10 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **Purpose**: Constitution Principles II, IV, V, VII compliance tasks
 
-- [ ] T046 [P] Clarify egress correlation ID propagation: document "no downstream calls in MVP; future extensibility" in `eventos-service/src/api/middleware/correlation.py` (code comment)
-- [ ] T047 [P] Add dependency vulnerability scanning (`pip-audit` + `safety`) to CI in `.github/workflows/ci.yml`
-- [ ] T048 [P] Run contract test suite against OpenAPI spec using `schemathesis` in `eventos-service/tests/contract/test_openapi_compliance.py`
-- [ ] T049 [P] Add Prometheus metrics exposition endpoint `/metrics` using `prometheus-client` in `eventos-service/src/api/routes/metrics.py`
+- [X] T046 [P] Clarify egress correlation ID propagation: document "no downstream calls in MVP; future extensibility" in `eventos-service/src/api/middleware/correlation.py` (code comment)
+- [X] T047 [P] Add dependency vulnerability scanning (`pip-audit` + `safety`) to CI in `.github/workflows/ci.yml`
+- [X] T048 [P] Run contract test suite against OpenAPI spec using `schemathesis` in `eventos-service/tests/contract/test_openapi_compliance.py`
+- [X] T049 [P] Add Prometheus metrics exposition endpoint `/metrics` using `prometheus-client` in `eventos-service/src/api/routes/metrics.py`
 
 **Note**: T045 (API versioning) - routes already implement `/api/v1/` prefix per spec; no additional implementation needed beyond existing `/api/v1/` routes
 
@@ -200,9 +200,9 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **Purpose**: Improvements that affect multiple user stories, validation, and production readiness
 
-- [ ] T050 [P] Run quickstart.md validation - verify all endpoints work per examples
-- [ ] T051 Run full test suite with coverage ≥ 80% on business logic
-- [ ] T052 [P] Add unit tests for edge cases in `eventos-service/tests/unit/`:
+- [X] T050 [P] Run quickstart.md validation - verify all endpoints work per examples
+- [X] T051 Run full test suite with coverage ≥ 80% on business logic
+- [X] T052 [P] Add unit tests for edge cases in `eventos-service/tests/unit/`:
   - aforo_total = 0 validation (with entradas_disponibles = 0 valid)
   - aforo_total = 0, entradas_disponibles > 0 → 422
   - entradas_disponibles = aforo_total > 0 valid case
@@ -210,10 +210,10 @@ description: "Task list for Eventos CRUD Service implementation"
   - categoria duplicada validation
   - estado cancelado handling
   - name uniqueness → 409 Conflict
-- [ ] T053 [P] Verify Docker build succeeds: `docker build -t eventos-service .`
-- [ ] T054 [P] Verify docker-compose integration from repository root
-- [ ] T055 [P] Security review: no secrets in code, input validation at boundaries, no PII in logs
-- [ ] T056 [P] Update OpenAPI spec if any deviations from contracts/openapi.yaml
+- [X] T053 [P] Verify Docker build succeeds: `docker build -t eventos-service .`
+- [X] T054 [P] Verify docker-compose integration from repository root
+- [X] T055 [P] Security review: no secrets in code, input validation at boundaries, no PII in logs
+- [X] T056 [P] Update OpenAPI spec if any deviations from contracts/openapi.yaml
 
 ---
 
@@ -317,3 +317,5 @@ With multiple developers:
 - Constitution Principle IV: All logging must use structured JSON with correlation_id; metrics exposition required via `prometheus-client` (T013, T049)
 - Constitution Principle II: OpenAPI spec is source of truth - validate against contracts/openapi.yaml using `schemathesis` (T048); versioned routes required
 - Constitution Principle VII: Dependency vulnerability scanning required in CI via `pip-audit` + `safety` (T047)
+
+(End of file - total 319 lines)
