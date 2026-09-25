@@ -27,6 +27,7 @@ async def connect_to_mongodb() -> None:
         serverSelectionTimeoutMS=5000,
         w="majority",
         journal=True,
+        uuidRepresentation="standard",
     )
     _database = _client[settings.mongodb_database]
 
