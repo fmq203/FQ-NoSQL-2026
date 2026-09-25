@@ -73,10 +73,6 @@ class TestCodeQuality:
 
     def test_no_unused_imports(self, project_root):
         """Check for unused imports (basic check)."""
-        import pyflakes.api
-        import pyflakes.reporter
-        from io import StringIO
-        
         python_files = self.get_python_files(project_root)
         
         for file_path in python_files:
