@@ -19,36 +19,30 @@ class TestSAGAPerformance:
 
     @pytest.fixture
     def mock_services(self):
-        """Mock all external services for performance testing."""
-        with patch("src.services.http_clients.get_usuarios_client") as mock_usuarios, \
-             patch("src.services.http_clients.get_eventos_client") as mock_eventos, \
-             patch("src.services.redis_pago.ejecutar_pagar_y_decrementar") as mock_redis:
-            
-            # Setup usuarios client
-            usuarios_client = AsyncMock()
-            mock_usuarios.return_value = usuarios_client
-            usuarios_client.get.return_value = AsyncMock(
-                status_code=200,
-                json=lambda: {"usuario_id": str(uuid4()), "nombre": "Test"}
-            )
-            
-            # Setup eventos client
-            eventos_client = AsyncMock()
-            mock_eventos.return_value = eventos_client
-            eventos_client.get.return_value = AsyncMock(
-                status_code=200,
-                json=lambda: {
-                    "evento_id": str(uuid4()),
-                    "estado": "publicado",
-                    "entradas_disponibles": 100,
-                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 100}],
-                    "ubicacion": {"ciudad": "Madrid", "pais": "España"}
-                }
-            )
-            
-            # Setup Redis
+        """Mock all external services for performance testing.
+
+        Patched at src.chain.validators / src.api.routes.reservas (the
+        actual call sites) - see test_double_booking.py for why patching
+        the origin modules doesn't intercept an already-imported name.
+        """
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get_usuario, \
+             patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get_evento, \
+             patch("src.chain.validators.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis, \
+             patch("src.chain.validators.decrementar_inventario_evento", new_callable=AsyncMock) as mock_decrementar_evento, \
+             patch("src.api.routes.reservas.check_idempotency", new_callable=AsyncMock) as mock_idempotency:
+
+            mock_get_usuario.return_value = {"usuario_id": str(uuid4()), "nombre": "Test"}
+            mock_get_evento.return_value = {
+                "evento_id": str(uuid4()),
+                "estado": "publicado",
+                "entradas_disponibles": 100,
+                "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 100}],
+                "ubicacion": {"ciudad": "Madrid", "pais": "España"}
+            }
             mock_redis.return_value = {"success": True, "message": "OK"}
-            
+            mock_decrementar_evento.return_value = {"disponibles": 99}
+            mock_idempotency.return_value = None
+
             yield mock_redis
 
     @pytest.mark.performance
