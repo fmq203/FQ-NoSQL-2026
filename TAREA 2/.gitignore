@@ -3,29 +3,30 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+.pyre/
 
 # Virtual environments
 venv/
-ENV/
+.env/
+.venv/
 env/
-.venv
+ENV/
+venv*/
+.env*/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
 
 # IDE
 .vscode/
@@ -33,44 +34,63 @@ env/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
+Thumbs.db
 
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Spec-kit
-spec.json
-spec.json.bak
-
-# Node
-node_modules/
-npm-debug.log
-yarn-error.log
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Docker
+.dockerignore
 
 # Logs
 *.log
 logs/
 
-# OS
-Thumbs.db
-.DS_Store
+# Test coverage
+coverage.xml
+.coverage*
 
-# Docker
-.docker/
-docker-compose.override.yml
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/
+*.egg
 
-# Brain (referencia local, no necesita commitear)
-# brain/ es referencia - mantenlo pero opcional en git
+# Jupyter
+.ipynb_checkpoints
+
+# Database
+*.sqlite
+*.db
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+
+# Kubernetes
+kubeconfig*
+
+# Secret files
+*.pem
+*.key
+*.crt
+secrets/
+*.secret*
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Node (if any)
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Reports
+*.html
+reports/

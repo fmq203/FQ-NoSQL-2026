@@ -1,1 +1,4 @@
-# Usuarios Service Package
+"""
+Usuarios Service - EventFlow
+Gestión de usuarios y perfiles.
+"""
