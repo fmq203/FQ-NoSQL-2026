@@ -1,1 +1,4 @@
-# Reservas & Pagos Service Package (Orquestador SAGA)
+"""
+Reservas Service - EventFlow
+Orquestador SAGA con Chain of Responsibility.
+"""

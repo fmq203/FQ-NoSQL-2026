@@ -1,0 +1,1 @@
+"""Contract tests para Usuarios Service."""
