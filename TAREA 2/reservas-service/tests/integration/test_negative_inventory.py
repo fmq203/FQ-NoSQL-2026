@@ -17,41 +17,36 @@ class TestNegativeInventory:
 
     @pytest.fixture
     def mock_services(self):
-        with patch("src.services.http_clients.get_usuarios_client") as mock_usuarios, \
-             patch("src.services.http_clients.get_eventos_client") as mock_eventos, \
-             patch("src.services.redis_pago.ejecutar_pagar_y_decrementar") as mock_redis:
-            
-            # Usuarios
-            usuarios_client = AsyncMock()
-            mock_usuarios.return_value = usuarios_client
-            usuarios_client.get.return_value = AsyncMock(
-                status_code=200,
-                json=lambda: {"usuario_id": str(uuid4()), "nombre": "Test"}
-            )
-            
-            # Eventos
-            eventos_client = AsyncMock()
-            mock_eventos.return_value = eventos_client
-            eventos_client.get.return_value = AsyncMock(
-                status_code=200,
-                json=lambda: {
-                    "evento_id": str(uuid4()),
-                    "estado": "publicado",
-                    "entradas_disponibles": 5,
-                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 5}],
-                }
-            )
-            
-            # Redis - track inventory to ensure no negative
+        # Patched at src.chain.validators (the actual call sites), not the
+        # origin modules - see test_double_booking.py for why.
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get_usuario, \
+             patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get_evento, \
+             patch("src.chain.validators.ejecutar_pagar_y_decrementar") as mock_redis, \
+             patch("src.chain.validators.decrementar_inventario_evento", new_callable=AsyncMock) as mock_decrementar_evento, \
+             patch("src.api.routes.reservas.check_idempotency", new_callable=AsyncMock) as mock_idempotency:
+
+            mock_get_usuario.return_value = {"usuario_id": str(uuid4()), "nombre": "Test"}
+            mock_get_evento.return_value = {
+                "evento_id": str(uuid4()),
+                "estado": "publicado",
+                "entradas_disponibles": 5,
+                "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 5}],
+            }
+            mock_decrementar_evento.return_value = {"disponibles": 4}
+            mock_idempotency.return_value = None
+
+            # Redis - track inventory to ensure no negative. No `await`
+            # inside the critical section, so this is atomic under
+            # asyncio's cooperative scheduling.
             inventory = {"count": 5}
-            
+
             async def mock_pagar_y_decrementar(**kwargs):
                 cantidad = kwargs["cantidad"]
                 if inventory["count"] >= cantidad:
                     inventory["count"] -= cantidad
                     return {"success": True, "message": "OK"}
                 return {"success": False, "message": "INVENTARIO_INSUFICIENTE"}
-            
+
             mock_redis.side_effect = mock_pagar_y_decrementar
             yield mock_redis
 
