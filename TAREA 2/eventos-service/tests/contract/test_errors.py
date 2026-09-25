@@ -9,10 +9,10 @@ class TestRFC7807ErrorFormat:
     """Tests that all endpoints return errors in RFC 7807 format."""
 
     @pytest.mark.asyncio
-    async def test_validation_error_format(self, client: AsyncClient):
+    async def test_validation_error_format(self, async_client: AsyncClient):
         """Test 422 validation errors follow RFC 7807 format."""
         # Missing required fields
-        response = await client.post("/api/v1/eventos", json={})
+        response = await async_client.post("/api/v1/eventos", json={})
 
         assert response.status_code == 422
         data = response.json()
@@ -31,9 +31,9 @@ class TestRFC7807ErrorFormat:
         assert data["status"] == 422
 
     @pytest.mark.asyncio
-    async def test_not_found_error_format(self, client: AsyncClient):
+    async def test_not_found_error_format(self, async_client: AsyncClient):
         """Test 404 errors follow RFC 7807 format."""
-        response = await client.get("/api/v1/eventos/00000000-0000-0000-0000-000000000000")
+        response = await async_client.get("/api/v1/eventos/00000000-0000-0000-0000-000000000000")
 
         assert response.status_code == 404
         data = response.json()
@@ -45,7 +45,7 @@ class TestRFC7807ErrorFormat:
         assert "correlation_id" in data
 
     @pytest.mark.asyncio
-    async def test_conflict_error_format(self, client: AsyncClient):
+    async def test_conflict_error_format(self, async_client: AsyncClient):
         """Test 409 conflict errors follow RFC 7807 format."""
         # Create first event
         event_data = {
@@ -56,10 +56,10 @@ class TestRFC7807ErrorFormat:
             "precios": [{"categoria": "General", "precio": 1000.00, "disponibles": 100}],
             "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
         }
-        await client.post("/api/v1/eventos", json=event_data)
+        await async_client.post("/api/v1/eventos", json=event_data)
 
         # Try to create duplicate
-        response = await client.post("/api/v1/eventos", json=event_data)
+        response = await async_client.post("/api/v1/eventos", json=event_data)
 
         assert response.status_code == 409
         data = response.json()
@@ -71,9 +71,9 @@ class TestRFC7807ErrorFormat:
         assert "correlation_id" in data
 
     @pytest.mark.asyncio
-    async def test_invalid_uuid_format_error(self, client: AsyncClient):
+    async def test_invalid_uuid_format_error(self, async_client: AsyncClient):
         """Test 422 for invalid UUID format follows RFC 7807."""
-        response = await client.get("/api/v1/eventos/invalid-uuid")
+        response = await async_client.get("/api/v1/eventos/invalid-uuid")
 
         assert response.status_code == 422
         data = response.json()
@@ -84,9 +84,9 @@ class TestRFC7807ErrorFormat:
         assert "correlation_id" in data
 
     @pytest.mark.asyncio
-    async def test_correlation_id_in_response_header(self, client: AsyncClient):
+    async def test_correlation_id_in_response_header(self, async_client: AsyncClient):
         """Test X-Correlation-ID header present in error responses."""
-        response = await client.post("/api/v1/eventos", json={})
+        response = await async_client.post("/api/v1/eventos", json={})
 
         assert response.status_code == 422
         assert "X-Correlation-ID" in response.headers
@@ -98,7 +98,7 @@ class TestRFC7807ErrorFormat:
         assert data["correlation_id"] == response.headers["X-Correlation-ID"]
 
     @pytest.mark.asyncio
-    async def test_health_check_unhealthy_format(self, client: AsyncClient):
+    async def test_health_check_unhealthy_format(self, async_client: AsyncClient):
         """Test 503 from health check follows RFC 7807 format."""
         # This test requires MongoDB to be down - skip in normal runs
         # It's covered in integration tests
