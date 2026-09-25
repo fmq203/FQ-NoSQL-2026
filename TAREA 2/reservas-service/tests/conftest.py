@@ -61,5 +61,6 @@ def reserva_valida():
         "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
         "evento_id": "550e8400-e29b-41d4-a716-446655440001",
         "cantidad": 2,
-        "categoria": "general"
+        "categoria": "general",
+        "metodo_pago": "tarjeta",
     }

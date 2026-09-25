@@ -1,13 +1,22 @@
 """Idempotency helper for Reservas Service."""
+import logging
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
-import os
+
+logger = logging.getLogger(__name__)
 
 
 async def check_idempotency(reserva_id: UUID) -> Optional[dict]:
     """
     Verifica si ya existe una reserva con el mismo reserva_id.
+
+    Cada backend se consulta de forma best-effort: si Redis o PostgreSQL
+    no estan disponibles, no debe impedir que la reserva se procese (son
+    chequeos secundarios para detectar reintentos a mitad de camino). La
+    fuente de verdad primaria es MongoDB (_id = reserva_id, unico por
+    diseno) y si esa consulta falla, sí se propaga - sin Mongo la SAGA no
+    puede continuar de todas formas.
 
     Returns:
         Reserva existente si existe, None si no existe.
@@ -17,24 +26,30 @@ async def check_idempotency(reserva_id: UUID) -> Optional[dict]:
     from ..services.postgresql import get_events_by_aggregate
     from ..services.metrics import record_idempotency_hit
 
-    # Check MongoDB
+    # Check MongoDB (fuente de verdad - si esto falla, se propaga)
     collection = await get_reservas_collection()
     existing = await collection.find_one({"_id": reserva_id})
     if existing:
         record_idempotency_hit()
         return existing
 
-    # Check Redis
-    pago = await obtener_pago(str(reserva_id))
-    if pago:
-        record_idempotency_hit()
-        return {"source": "redis", "data": pago}
+    # Check Redis (best-effort)
+    try:
+        pago = await obtener_pago(str(reserva_id))
+        if pago:
+            record_idempotency_hit()
+            return {"source": "redis", "data": pago}
+    except Exception as e:
+        logger.warning(f"No se pudo verificar idempotencia en Redis: {e}")
 
-    # Check PostgreSQL
-    events = await get_events_by_aggregate(reserva_id)
-    if events:
-        record_idempotency_hit()
-        return {"source": "postgresql", "events": events}
+    # Check PostgreSQL (best-effort)
+    try:
+        events = await get_events_by_aggregate(reserva_id)
+        if events:
+            record_idempotency_hit()
+            return {"source": "postgresql", "events": events}
+    except Exception as e:
+        logger.warning(f"No se pudo verificar idempotencia en PostgreSQL: {e}")
 
     return None
 
