@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from src.models.usuario import (
     UsuarioCreate,
@@ -9,6 +11,8 @@ from src.services.usuario_service import UsuarioService
 from src.utils.errors import EventFlowHTTPException
 from uuid import UUID
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["usuarios"])
 
@@ -36,7 +40,8 @@ async def crear_usuario(
         return await service.crear_usuario(usuario)
     except EventFlowHTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Error inesperado creando usuario")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al crear usuario"
@@ -59,6 +64,31 @@ async def listar_usuarios(
     return await service.listar_usuarios(skip=skip, limit=limit)
 
 
+@router.get("/usuarios/exportar", response_model=List[UsuarioAnonimizado])
+async def exportar_usuarios(
+    format: str = Query("json", description="Formato de exportación: json o csv"),
+    service: UsuarioService = Depends(get_usuario_service),
+):
+    """
+    Exportar usuarios anonimizados (GDPR).
+
+    - Nombres/emails: anonimizados irreversiblemente (hash)
+    - Historial de compras: preservado para análisis
+    - Formatos soportados: json, csv
+
+    NOTA: esta ruta debe declararse antes de /usuarios/{usuario_id} -
+    FastAPI/Starlette resuelve las rutas en orden de registro, y un
+    registro inverso hace que "exportar" se intente parsear como UUID
+    y devuelva 422 en vez de ejecutar la exportación.
+    """
+    if format.lower() not in ["json", "csv"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato no soportado. Use 'json' o 'csv'"
+        )
+    return await service.exportar_usuarios_anonimizados()
+
+
 @router.get("/usuarios/{usuario_id}", response_model=UsuarioResponse)
 async def obtener_usuario(
     usuario_id: UUID,
@@ -77,23 +107,3 @@ async def obtener_usuario(
             detail="Usuario no encontrado"
         )
     return usuario
-
-
-@router.get("/usuarios/exportar", response_model=List[UsuarioAnonimizado])
-async def exportar_usuarios(
-    format: str = Query("json", description="Formato de exportación: json o csv"),
-    service: UsuarioService = Depends(get_usuario_service),
-):
-    """
-    Exportar usuarios anonimizados (GDPR).
-
-    - Nombres/emails: anonimizados irreversiblemente (hash)
-    - Historial de compras: preservado para análisis
-    - Formatos soportados: json, csv
-    """
-    if format.lower() not in ["json", "csv"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Formato no soportado. Use 'json' o 'csv'"
-        )
-    return await service.exportar_usuarios_anonimizados()
