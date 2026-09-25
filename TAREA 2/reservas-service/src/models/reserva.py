@@ -25,12 +25,34 @@ class ReservaCreateRequest(BaseModel):
             raise ValueError("Cantidad debe ser mayor a 0")
         return v
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
+                "evento_id": "550e8400-e29b-41d4-a716-446655440001",
+                "cantidad": 2,
+                "categoria": "general",
+                "metodo_pago": "tarjeta",
+            }
+        }
+    }
+
 
 class ReservaResponse(BaseModel):
     """Response de reserva exitosa."""
     reserva_id: str
     estado: str
     numero_confirmacion: str
+
+
+class RFC7807Error(BaseModel):
+    """Formato de error estandar (RFC 7807) usado por todos los servicios de EventFlow."""
+    type: str = Field(..., example="https://eventflow.example.com/errors/not-found")
+    title: str = Field(..., example="Not Found")
+    status: int = Field(..., example=404)
+    detail: str = Field(..., example="Usuario no encontrado")
+    instance: str = Field(..., example="/api/reservar")
+    correlation_id: str = Field(..., example="550e8400-e29b-41d4-a716-446655440000")
 
 
 class ReservaDB(BaseModel):
