@@ -14,4 +14,7 @@ COPY src/ ./src/
 
 EXPOSE 8002
 
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${SERVICE_PORT:-8002}/health || exit 1
+
 CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${SERVICE_PORT:-8002}"]
