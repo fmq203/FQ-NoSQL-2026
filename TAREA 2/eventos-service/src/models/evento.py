@@ -79,3 +79,22 @@ class EventoInDB(EventoResponse):
     class Config:
         populate_by_name = True
         use_enum_values = True
+
+
+class AjusteInventarioRequest(BaseModel):
+    """Body para decrementar/incrementar el inventario de una categoria.
+
+    Uso interno: llamado por reservas-service tras confirmar (decrementar) o
+    compensar (incrementar) un paso de la SAGA, para que entradas_disponibles
+    y precios[].disponibles reflejen las ventas reales en vez de quedar
+    congelados en el valor de creacion del evento.
+    """
+    categoria: str = Field(..., min_length=1)
+    cantidad: int = Field(..., gt=0)
+
+
+class AjusteInventarioResponse(BaseModel):
+    evento_id: UUID
+    categoria: str
+    disponibles: int
+    entradas_disponibles: int
