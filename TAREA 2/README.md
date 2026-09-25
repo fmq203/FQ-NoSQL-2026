@@ -120,13 +120,13 @@ curl -X POST http://localhost:8001/api/usuarios \
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/api/v1/eventos` | Crear evento |
-| GET | `/api/v1/eventos/{id}` | Obtener evento |
+| POST | `/api/eventos` | Crear evento |
+| GET | `/api/eventos/{id}` | Obtener evento |
 | GET | `/health` | Health check |
 
 **Ejemplo crear evento:**
 ```bash
-curl -X POST http://localhost:8002/api/v1/eventos \
+curl -X POST http://localhost:8002/api/eventos \
   -H "Content-Type: application/json" \
   -d '{
     "nombre": "Concierto Rock 2026",
@@ -264,7 +264,7 @@ Todos los errores siguen **RFC 7807 Problem Details**:
   "title": "Validation Error",
   "status": 422,
   "detail": "entradas_disponibles cannot exceed aforo_total",
-  "instance": "/api/v1/eventos",
+  "instance": "/api/eventos",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```

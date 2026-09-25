@@ -15,15 +15,15 @@ Un organizador crea un nuevo evento con nombre, estado, aforo total, entradas di
 
 **Why this priority**: Funcionalidad base - sin eventos no hay reservas ni ventas.
 
-**Independent Test**: POST `/api/v1/eventos` con JSON válido → 201 con evento creado + UUID. Verificar en MongoDB que documento existe.
+**Independent Test**: POST `/api/eventos` con JSON válido → 201 con evento creado + UUID. Verificar en MongoDB que documento existe.
 
 **Acceptance Scenarios**:
-1. **Given** JSON válido con nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion, **When** POST `/api/v1/eventos`, **Then** 201 con evento_id, creado_en
-2. **Given** aforo_total < entradas_disponibles, **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
-3. **Given** precio negativo en precios[], **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
-4. **Given** estado no válido, **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
-5. **Given** categoria duplicada en precios[], **When** POST `/api/v1/eventos`, **Then** 422 Validation Error
-6. **Given** evento with same nombre exists, **When** POST `/api/v1/eventos`, **Then** 409 Conflict
+1. **Given** JSON válido con nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion, **When** POST `/api/eventos`, **Then** 201 con evento_id, creado_en
+2. **Given** aforo_total < entradas_disponibles, **When** POST `/api/eventos`, **Then** 422 Validation Error
+3. **Given** precio negativo en precios[], **When** POST `/api/eventos`, **Then** 422 Validation Error
+4. **Given** estado no válido, **When** POST `/api/eventos`, **Then** 422 Validation Error
+5. **Given** categoria duplicada en precios[], **When** POST `/api/eventos`, **Then** 422 Validation Error
+6. **Given** evento with same nombre exists, **When** POST `/api/eventos`, **Then** 409 Conflict
 
 ---
 
@@ -32,12 +32,12 @@ Consultar información completa de un evento por su UUID.
 
 **Why this priority**: Requerido por Reservas Service para validar existencia y aforo en SAGA.
 
-**Independent Test**: GET `/api/v1/eventos/{evento_id}` → 200 con evento completo. Testable sin otros servicios.
+**Independent Test**: GET `/api/eventos/{evento_id}` → 200 con evento completo. Testable sin otros servicios.
 
 **Acceptance Scenarios**:
-1. **Given** Evento existe, **When** GET `/api/v1/eventos/{evento_id}`, **Then** 200 con todos los campos + precios[]
-2. **Given** Evento no existe, **When** GET `/api/v1/eventos/{evento_id}`, **Then** 404 Not Found
-3. **Given** evento_id formato UUID inválido, **When** GET `/api/v1/eventos/{evento_id}`, **Then** 422 Validation Error
+1. **Given** Evento existe, **When** GET `/api/eventos/{evento_id}`, **Then** 200 con todos los campos + precios[]
+2. **Given** Evento no existe, **When** GET `/api/eventos/{evento_id}`, **Then** 404 Not Found
+3. **Given** evento_id formato UUID inválido, **When** GET `/api/eventos/{evento_id}`, **Then** 422 Validation Error
 
 ---
 
@@ -111,7 +111,7 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 
 ### Endpoints
 
-#### POST /api/v1/eventos
+#### POST /api/eventos
 Crear nuevo evento.
 
 **Request Body**:
@@ -159,7 +159,7 @@ Crear nuevo evento.
 - 422 Validation Error: aforo_total < entradas_disponibles, precio negativo, categoria duplicada, estado inválido, campos faltantes
 - 409 Conflict: Evento duplicado (nombre ya existe)
 
-#### GET /api/v1/eventos/{evento_id}
+#### GET /api/eventos/{evento_id}
 Obtener evento por ID.
 
 **Response 200**:
@@ -185,7 +185,7 @@ Obtener evento por ID.
 ```
 
 **Error Responses**:
-- 404 Not Found: `{"type":".../not-found","title":"Not Found","status":404,"detail":"Evento no encontrado","instance":"/api/v1/eventos/{id}"}`
+- 404 Not Found: `{"type":".../not-found","title":"Not Found","status":404,"detail":"Evento no encontrado","instance":"/api/eventos/{id}"}`
 - 422 Validation Error: UUID inválido
 
 #### GET /health
@@ -236,12 +236,12 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
   "title": "Human-readable title",
   "status": 422,
   "detail": "Specific error description",
-  "instance": "/api/v1/eventos",
+  "instance": "/api/eventos",
   "correlation_id": "uuid-v4"
 }
 ```
 
-**Nota**: El campo `instance` refleja la ruta real del request (ej. `/api/v1/eventos`, `/api/v1/eventos/{id}`, `/health`).
+**Nota**: El campo `instance` refleja la ruta real del request (ej. `/api/eventos`, `/api/eventos/{id}`, `/health`).
 
 | HTTP Status | Error Code | Title | Cuándo |
 |-------------|------------|-------|--------|
@@ -257,7 +257,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 ### Implementation Requirements
 - All endpoints MUST return errors in RFC 7807 format exactly as specified
 - `correlation_id` in error response MUST match `X-Correlation-ID` header
-- `instance` field MUST be the request path (e.g., `/api/v1/eventos`)
+- `instance` field MUST be the request path (e.g., `/api/eventos`)
 - `type` URI MUST use `https://eventflow.example.com/errors/{error-code}` pattern
 
 ## Health Check States
@@ -361,7 +361,7 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 ## API Versioning Strategy
 
 ### Version Location
-- **URL Path**: `/api/v1/eventos`, `/api/v1/eventos/{id}`, etc.
+- **URL Path**: `/api/eventos`, `/api/eventos/{id}`, etc.
 - **Header**: `Accept: application/vnd.eventflow.v1+json` (optional, for future)
 
 ### Versioning Rules
