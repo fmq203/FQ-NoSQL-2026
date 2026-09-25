@@ -247,3 +247,43 @@
 **Próximos pasos:** Ejecutar el plan de correcciones anterior, con un commit independiente por cada cambio significativo, y registrar cada uno en este archivo a medida que se completa.
 
 **Tags:** #audit #reservas-service #saga #chain-of-responsibility #redis #spec-kit #tech-debt #claude-sonnet-5
+
+---
+
+### 2026-09-25 — Ejecución del plan de correcciones (Claude Sonnet 5): reservas-service pasó de "no puede procesar una sola reserva" a SAGA + Chain of Responsibility verificados en vivo bajo concurrencia real
+
+**Contexto:** Ejecución del plan propuesto en la auditoría anterior, con un commit por cambio significativo. A diferencia de la sesión de auditoría, esta corrió contra el `docker-compose` real (los 6 contenedores ya estaban `Up` de una sesión previa), lo que permitió validar cada fix contra infraestructura real en vez de mocks — y encontró varios bugs que el análisis estático no había detectado.
+
+**Problema/Decisión:** Aplicar, en orden, los fixes priorizados en la auditoría, verificando cada uno contra Docker antes de commitear.
+
+**Análisis y hallazgos (algunos no estaban en la auditoría original, se descubrieron recién al probar contra Mongo/Redis/PG reales):**
+
+1. **Bug transversal en los 3 servicios:** `CorrelationIDMiddleware` guardaba un `UUID` crudo en `request.state.correlation_id` en vez de `str`. Cualquier error 4xx/5xx que pasara por ese path crasheaba con `TypeError: Object of type UUID is not JSON serializable` en lugar de devolver RFC 7807. Confirmado en vivo: `usuarios-service` estaba devolviendo un 500 crudo (traceback en texto plano) en cada `POST /api/usuarios` en el contenedor que ya estaba corriendo.
+2. **Bug crítico no detectado por la auditoría estática:** el cliente Mongo de `usuarios-service` y el cliente "genérico" de `reservas-service` (`services/mongodb.py`) no seteaban `uuidRepresentation="standard"` al crear el `AsyncIOMotorClient`. PyMongo rechaza codificar un `uuid.UUID` nativo bajo `UuidRepresentation.UNSPECIFIED`. Resultado: **usuarios-service no podía crear un solo usuario** — todo insert con un campo UUID fallaba y quedaba silenciado por un `except Exception` genérico. `eventos-service` sí lo tenía (vía query string de la URI), por eso nunca se notó ahí.
+3. `usuarios-service`: `/usuarios/exportar` estaba declarado después de `/usuarios/{usuario_id}` → Starlette matcheaba por orden de registro y "exportar" se interpretaba como UUID → 422 en vez de ejecutar el export.
+4. `eventos-service`: rutas en `/api/v1/eventos`, el PDF pide `/api/eventos` sin versionar. Alineado en código + tests + specs de spec-kit + README (7 archivos).
+5. **reservas-service (el bloqueante principal):** confirmado que existían dos implementaciones paralelas y que la que corría (paquete `routes/`) no tenía ni Chain of Responsibility real ni SAGA orchestrator real. Se conectó la implementación que sí los tenía (`chain/validators.py` + `services/saga_orchestrator.py`), completando lo que le faltaba:
+   - `services/postgresql.py` no tenía tabla `event_log` ni las funciones que el orchestrator ya importaba (`insert_event_log`, etc.) — se implementaron.
+   - `services/redis_pago.py` no tenía `ejecutar_pagar_y_decrementar` ni `ejecutar_compensar_pago_inventario` — se implementaron como Lua scripts, con claves por `(evento_id, categoria)` para matchear el schema real de eventos-service (`precios[]`), sembrado perezoso vía `SETNX` con el aforo real leído del Eventos Service, e idempotencia (un `pago:{reserva_id}` ya existente corta el script antes de decrementar de nuevo).
+   - `chain/validators.py` tenía `precio_unitario = 50.0  # placeholder` hardcodeado; ahora usa el precio real de `evento.precios[]` para la categoría pedida.
+   - `models/reserva.py` no tenía campo `categoria` (el modelo original era anterior a que eventos-service agregara precios por categoría) — se agregó.
+   - `saga_orchestrator.py` tenía un `NameError` latente: usaba `record_saga_compensation` sin importarlo.
+   - `utils/errors.py` de reservas (a diferencia de usuarios/eventos) nunca registraba un handler para `EventFlowHTTPException` — todo 404/409/422 que la SAGA intentaba levantar cascadeaba al handler genérico y volvía como 500. Mismo bug que ya estaba arreglado en los otros dos servicios, replicado acá.
+   - Se eliminó el código muerto: `api/routes.py`, `api/middleware.py`, `api/tracing.py`, `api/versioning.py`, `api/circuit_breaker.py` (+ su test aislado), `services/reserva_service.py`.
+6. **Bug encontrado recién en vivo, a mitad de las pruebas E2E:** `services/mongodb.py` creaba un índice único sobre `idempotency_key`, campo que `ConfirmadorReserva` nunca setea en los documentos. MongoDB trata el campo ausente como `null` para el índice único, así que la primera reserva se insertaba OK y la SEGUNDA reserva confirmada de todo el sistema fallaba con `E11000 duplicate key: idempotency_key: null`. El `_id` (= `reserva_id`, la idempotency key real del cliente) ya garantiza unicidad por sí solo. Se eliminó el índice sobrante, con auto-limpieza (`drop_index` si ya existía de un deploy anterior) para no requerir un `docker-compose down -v` manual.
+
+**Decisión/Resultado — verificado en vivo contra el docker-compose real, no contra mocks:**
+- `POST /api/reservar` (path correcto, sin el `/api/v1/reservar/reservar` duplicado) confirma una reserva real end-to-end: valida usuario y evento por HTTP, decrementa inventario en Redis atómicamente, confirma en MongoDB, audita en PostgreSQL `event_log`.
+- **Prueba de concurrencia real:** 10 `POST` disparados en paralelo (`&` + `wait` en bash) contra un evento con 5 entradas disponibles en una categoría → exactamente 5 confirmadas (201) y exactamente 5 rechazadas (409 "INSUFICIENTE"). El requisito de la tarea ("una reserva debe ser única y no puede haber dobles ventas") queda probado bajo concurrencia real, no solo en secuencia.
+- Idempotencia verificada: reintentar el mismo `POST` con el mismo `reserva_id` devuelve la reserva ya confirmada sin volver a decrementar inventario.
+- 404 (usuario/evento inexistente), 422 (categoría inexistente, campos faltantes) devuelven RFC 7807 correctamente en vez del 500 genérico de antes.
+- `event_log` en PostgreSQL acumulando `SAGA_STARTED`, `USUARIO_VALIDADO`, `EVENTO_VALIDADO`, `PAGO_PROCESADO`, `INVENTARIO_DECREMENTADO`, `RESERVA_CONFIRMADA`, `SAGA_COMPLETED`, y (durante las pruebas, antes del fix del índice) `SAGA_FAILED`/`COMPENSACION_EJECUTADA` reales — la compensación efectivamente liberó inventario y borró el pago cuando `ConfirmadorReserva` falló.
+
+**Tests:** de 18 passed / 28 failed / 20 errors (estado inicial en local, sin Mongo/Redis/PG) se pasó a 42 passed / 22 failed / 2 skipped / 3 errors corriendo contra los servicios reales en Docker, y después de arreglar los `ReservaContext(...)` que faltaban `categoria=` (8 sitios en `test_handlers.py`), reescribir `test_lua_scripts.py` (probaba un contrato de retorno que ni la implementación vieja ni la nueva Lua produjeron nunca) y alinear ~30 referencias a `/api/v1/reservar` → `/api/reservar` en toda la suite: **41 passed / 25 failed / 2 skipped**. Los 25 que quedan fallando son mayormente `RuntimeError: Event loop is closed` — un problema de aislamiento de tests preexistente (los singletons module-level de `services/mongo.py`/`redis_pago.py`/`postgresql.py` quedan atados al event loop en el que se crearon la primera vez, y pytest-asyncio crea un loop nuevo por test) — no algo introducido por este cambio, y requiere trabajo de fixtures, no de código de producción.
+
+**Pendiente explícito (no se tocó en esta sesión):**
+- `eventos-service` nunca recibe de vuelta el decremento de inventario: Redis es el ledger autoritativo para que la SAGA no venda de más, pero `GET /api/eventos/{id}` sigue mostrando el aforo original después de una venta. Requiere un endpoint mutador nuevo en eventos-service (fuera de alcance de esta sesión).
+- Numeración de spec-kit (specs referencian ramas `004-`/`005-` que ya no existen como carpetas) y duplicación `brain/` vs `docs/` — quedaron señaladas en la auditoría pero no se abordaron, quedan para una sesión aparte.
+- Los 25 tests que siguen fallando por el problema de event loop.
+
+**Tags:** #reservas-service #saga #chain-of-responsibility #redis #mongodb #postgresql #event-log #double-booking #concurrency #live-verification #bugfix #claude-sonnet-5
