@@ -4,7 +4,12 @@ from datetime import datetime
 from uuid import UUID
 from .handler import Handler, BaseHandler
 from ..models.reserva import ReservaContext, SagaStep, EventType
-from ..services.http_clients import get_usuario, get_evento
+from ..services.http_clients import (
+    get_usuario,
+    get_evento,
+    decrementar_inventario_evento,
+    incrementar_inventario_evento,
+)
 from ..services.redis_pago import ejecutar_pagar_y_decrementar, ejecutar_compensar_pago_inventario
 from ..services.mongo import get_reservas_collection
 from ..services.postgresql import insert_event_log
@@ -219,6 +224,28 @@ class ProcesadorPago(BaseHandler):
                 status = "insufficient_inventory" if "INSUFICIENTE" in result["message"] else "payment_failed"
                 return
 
+            # Sincronizar la venta hacia eventos-service. Redis ya decidio
+            # de forma atomica que la venta es valida (arriba); esto solo
+            # mantiene entradas_disponibles/precios[].disponibles alineados
+            # con lo realmente vendido para que GET /api/eventos/{id} no
+            # seguga mostrando el aforo original. Si falla, se revierte el
+            # decremento en Redis para no dejar los dos sistemas divergidos.
+            try:
+                await decrementar_inventario_evento(
+                    str(context.evento_id), context.categoria, context.cantidad, str(context.correlation_id)
+                )
+            except Exception as e:
+                await ejecutar_compensar_pago_inventario(
+                    evento_id=str(context.evento_id),
+                    reserva_id=str(context.reserva_id),
+                    cantidad=context.cantidad,
+                )
+                context.error = f"Error sincronizando inventario con Eventos Service: {e}"
+                context.status_code = 503
+                self._add_saga_log(context, self._step_name, False, str(e))
+                status = "eventos_sync_failed"
+                return
+
             context.pago_data = {
                 "reserva_id": str(context.reserva_id),
                 "monto": monto_total,
@@ -330,6 +357,12 @@ class ConfirmadorReserva(BaseHandler):
                 evento_id=str(context.evento_id),
                 reserva_id=str(context.reserva_id),
                 cantidad=context.cantidad
+            )
+
+            # Compensación: revertir tambien en eventos-service (paso 4 ya
+            # lo habia sincronizado antes de que este paso fallara)
+            await incrementar_inventario_evento(
+                str(context.evento_id), context.categoria, context.cantidad, str(context.correlation_id)
             )
 
             # Registrar compensación en PG

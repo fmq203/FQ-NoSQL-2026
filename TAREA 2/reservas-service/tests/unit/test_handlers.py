@@ -224,12 +224,15 @@ class TestProcesadorPago:
         """Successful payment processing."""
         with patch("src.chain.validators.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis:
             with patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
-                mock_redis.return_value = {"success": True, "message": "OK"}
-                mock_pg.return_value = None
-                result = await handler.handle(valid_context)
-                assert result.error is None
-                assert result.pago_data is not None
-                assert result.pago_data["estado"] == "confirmado"
+                with patch("src.chain.validators.decrementar_inventario_evento", new_callable=AsyncMock) as mock_evt:
+                    mock_redis.return_value = {"success": True, "message": "OK"}
+                    mock_pg.return_value = None
+                    mock_evt.return_value = {"disponibles": 8}
+                    result = await handler.handle(valid_context)
+                    assert result.error is None
+                    assert result.pago_data is not None
+                    assert result.pago_data["estado"] == "confirmado"
+                    mock_evt.assert_called_once()
 
     @pytest.mark.unit
     async def test_insufficient_inventory_returns_409(self, handler, valid_context):
@@ -304,13 +307,16 @@ class TestConfirmadorReserva:
             mock_col.insert_one.side_effect = Exception("MongoDB down")
             with patch("src.chain.validators.ejecutar_compensar_pago_inventario") as mock_comp:
                 mock_comp.return_value = {"success": True, "message": "COMPENSACION_OK"}
-                with patch("src.chain.validators.insert_event_log") as mock_pg:
-                    mock_pg.return_value = None
-                    result = await handler.handle(valid_context)
-                    assert result.error is not None
-                    assert result.status_code == 500
-                    assert result.compensation_triggered is True
-                    mock_comp.assert_called_once()
+                with patch("src.chain.validators.incrementar_inventario_evento") as mock_incr:
+                    mock_incr.return_value = None
+                    with patch("src.chain.validators.insert_event_log") as mock_pg:
+                        mock_pg.return_value = None
+                        result = await handler.handle(valid_context)
+                        assert result.error is not None
+                        assert result.status_code == 500
+                        assert result.compensation_triggered is True
+                        mock_comp.assert_called_once()
+                        mock_incr.assert_called_once()
 
 
 class TestAuditor:
