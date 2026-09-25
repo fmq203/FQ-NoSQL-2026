@@ -21,15 +21,15 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
     Logging: trace_id = correlation_id; span_id = new UUID per operation
     """
     async def dispatch(self, request: Request, call_next):
-        correlation_id = self._extract_correlation_id(request)
+        correlation_id = str(self._extract_correlation_id(request))
 
         request.state.correlation_id = correlation_id
         request.state.trace_id = correlation_id
 
         response = await call_next(request)
 
-        response.headers["X-Correlation-ID"] = str(correlation_id)
-        response.headers["X-Trace-ID"] = str(correlation_id)
+        response.headers["X-Correlation-ID"] = correlation_id
+        response.headers["X-Trace-ID"] = correlation_id
 
         return response
 
