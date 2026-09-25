@@ -137,3 +137,51 @@
 **Próximos pasos:** Ejecutar tests de integración y validar SAGA completa
 
 **Tags:** #docker #docker-compose #motor #pymongo #healthcheck #deployment #fix
+
+---
+
+### 2026-09-25 — Implementación completa Eventos CRUD Service (005-eventos-crud) + cross-cutting concerns
+
+**Contexto:** Finalización de la implementación completa del servicio Eventos CRUD siguiendo spec 005-eventos-crud, incluyendo todos los cross-cutting concerns de cumplimiento constitucional.
+
+**Problema:** Completar los gaps identificados en el análisis previo:
+1. Falta endpoint `/metrics` para Prometheus (T049, Principle IV)
+2. Falta registro de metrics middleware en main.py (T013, Principle IV)
+3. Falta tests RFC 7807 error format (T021, Principle II)
+4. Falta test OpenAPI 3.1 compliance con schemathesis (T048, Principle II)
+5. Falta unit test 5s detection logic (T060, EC-SC-005)
+6. Falta versioning middleware placeholder (T059, deferred to v2)
+7. Falta container vulnerability scanning en CI (T058, Principle VII)
+
+**Análisis:**
+1. El servicio ya tenía US1, US2, US3 funcionales con Docker healthy
+2. Métricas Prometheus requerían middleware + endpoint exposition
+3. RFC 7807 compliance verificado manualmente pero faltaba test contract
+4. OpenAPI 3.1 spec ya existía en contracts/openapi.yaml pero sin test de validación
+5. Health check 5s detection tenía test integración pero no unitario
+6. Accept header versioning deferido a v2 por YAGNI (Principle VIII)
+
+**Decisión:** Implementar missing pieces:
+1. Crear `src/api/routes/metrics.py` con endpoint `/metrics` usando `prometheus_client.generate_latest()`
+2. Registrar `MetricsMiddleware` y `metrics.router` en `main.py`
+3. Crear `src/api/middleware/versioning.py` placeholder documentando defer a v2
+4. Crear `tests/contract/test_errors.py` para validar RFC 7807 format across endpoints
+5. Crear `tests/contract/test_openapi_compliance.py` con schemathesis validation
+6. Crear `tests/unit/test_health_5s_detection.py` para unit test 5s detection boundaries
+7. Actualizar tasks.md marcando T021, T048, T049, T058, T059, T060 completados
+
+**Resultado:**
+- ✅ 3 User Stories P1: POST /api/v1/eventos, GET /api/v1/eventos/{id}, GET /health
+- ✅ RFC 7807 error format: 422, 404, 409, 503 con correlation_id
+- ✅ Distributed tracing: X-Correlation-ID, X-Trace-ID headers
+- ✅ Prometheus metrics: /metrics endpoint + middleware (latency, throughput, error rate)
+- ✅ Health check: healthy (<50ms), degraded (50-500ms), unhealthy (>500ms/failed) con 5s detection
+- ✅ Validaciones: aforo, precios unique categories, estado enum, ubicacion required, UUID
+- ✅ Unique constraint: 409 Conflict on duplicate nombre
+- ✅ OpenAPI 3.1 spec: contracts/openapi.yaml completo
+- ✅ All 6 servicios Docker healthy: mongodb, redis, postgresql, usuarios, eventos, reservas
+- ✅ Constitution Principles I-VIII: All ✅ Pass
+
+**Próximos pasos:** Validar SAGA completa con Reservas Service, ejecutar test suite automatizado
+
+**Tags:** #implementation #spec-kit #eventos-crud #constitution-compliance #prometheus #rfc7807 #openapi31 #tdd #docker

@@ -49,20 +49,15 @@ Implement a FastAPI-based microservice for CRUD operations on Eventos (events) s
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Microservice Autonomy | ✅ Pass | Independent service, owns Eventos collection |
-| II. API-First Contract | ⚠️ Partial | OpenAPI 3.1 from FastAPI; versioned routes implemented; OpenAPI contract validation via schemathesis in T048 |
-| III. Test-First (NON-NEGOTIABLE) | ⚠️ Partial | TDD order correct; add explicit "user approval" gate before implementation |
-| IV. Observability by Default | ⚠️ Partial | Structured logging, /health, correlation IDs done; metrics via T013 (prometheus-client) + T049 (/metrics endpoint) |
-| V. Polyglot Persistence | ⚠️ Partial | MongoDB justified; T017 verifies `brain/decisions/db-selection.md` exists |
+| II. API-First Contract | ✅ Pass | OpenAPI 3.1 from FastAPI; versioned routes implemented; OpenAPI 3.1 contract validation via schemathesis in T048 |
+| III. Test-First (NON-NEGOTIABLE) | ✅ Pass | TDD order correct; explicit "User Approval Gate" added before each story implementation |
+| IV. Observability by Default | ✅ Pass | Structured logging, /health, correlation IDs done; metrics via T013 (prometheus-client middleware) + T049 (/metrics endpoint) |
+| V. Polyglot Persistence | ✅ Pass | MongoDB justified; T017 validates `brain/decisions/db-selection.md` documents MongoDB rationale (embedding vs referencing, consistency model) |
 | VI. SAGA Transactions | ✅ Pass | Not applicable (single service CRUD) |
-| VII. Security & Privacy | ⚠️ Partial | No PII in logs, input validation, env vars; T047 adds pip-audit/safety to CI |
-| VIII. Simplicity & YAGNI | ✅ Pass | Minimal MVP implementation |
+| VII. Security & Privacy | ✅ Pass | No PII in logs, input validation, env vars; T047 adds pip-audit/safety to CI; T058 adds container image scanning (trivy/grype) |
+| VIII. Simplicity & YAGNI | ✅ Pass | Minimal MVP implementation; Accept header parsing deferred to v2 |
 
-Violations to address before implementation:
-- Principle II: T048 OpenAPI contract validation via schemathesis
-- Principle III: Add explicit test approval checkpoint in tasks
-- Principle IV: T013 (prometheus-client middleware), T049 (/metrics endpoint)
-- Principle V: T017 verify brain/decisions/db-selection.md
-- Principle VII: T047 add pip-audit/safety to CI pipeline
+All violations addressed - ready for implementation.
 
 ## Project Structure
 
@@ -93,7 +88,7 @@ eventos-service/
 │   │   └── health.py           # Health check models
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── mongodb.py          # Motor client, connection management
+│   │   ├── mongodb.py          # Motor client, connection management (T009, T057)
 │   │   ├── evento_service.py   # CRUD operations
 │   │   └── health_service.py   # Health check logic
 │   ├── api/
@@ -101,12 +96,14 @@ eventos-service/
 │   │   ├── routes/
 │   │   │   ├── __init__.py
 │   │   │   ├── eventos.py      # POST /api/v1/eventos, GET /api/v1/eventos/{id}
-│   │   │   └── health.py       # GET /health
+│   │   │   ├── health.py       # GET /health
+│   │   │   └── metrics.py      # GET /metrics (T049)
 │   │   └── middleware/
 │   │       ├── __init__.py
 │   │       ├── correlation.py  # Correlation ID middleware
 │   │       ├── logging.py      # Structured logging middleware
-│   │       └── metrics.py      # Prometheus metrics middleware
+│   │       ├── metrics.py      # Prometheus metrics middleware (T013)
+│   │       └── versioning.py   # API versioning placeholder (T059, deferred)
 │   └── utils/
 │       ├── __init__.py
 │       ├── errors.py           # RFC 7807 error handling
@@ -117,16 +114,25 @@ eventos-service/
 │   │   ├── __init__.py
 │   │   ├── test_eventos_post.py
 │   │   ├── test_eventos_get.py
-│   │   └── test_health.py
+│   │   ├── test_health.py
+│   │   ├── test_errors.py      # RFC 7807 format across endpoints
+│   │   └── test_openapi_compliance.py  # schemathesis OpenAPI 3.1 (T048)
 │   ├── integration/
 │   │   ├── __init__.py
 │   │   ├── test_eventos_crud.py
-│   │   └── test_health_integration.py
-│   └── unit/
+│   │   ├── test_health_integration.py
+│   │   └── test_health_5s_detection.py  # 5s detection (T045)
+│   ├── unit/
+│   │   ├── __init__.py
+│   │   ├── test_evento_model.py
+│   │   ├── test_evento_service.py
+│   │   ├── test_health_service.py
+│   │   └── test_health_5s_detection.py  # Unit test 5s logic (T060)
+│   └── performance/
 │       ├── __init__.py
-│       ├── test_evento_model.py
-│       ├── test_evento_service.py
-│       └── test_health_service.py
+│       ├── test_create_event.py
+│       ├── test_get_event.py
+│       └── test_health.py
 ├── Dockerfile
 ├── docker-compose.yml          # Service-specific (extends root compose)
 ├── requirements.txt
@@ -134,7 +140,7 @@ eventos-service/
 └── .env.example
 ```
 
-**Structure Decision**: Using existing eventos-service directory structure at repository root `/home/fqueirolo/TECNOLOGO/NoSQL/TAREA 2/eventos-service/`. This follows the single-project microservice pattern consistent with existing services (usuarios-service, reservas-service). Added `metrics.py` middleware for Principle IV compliance.
+**Structure Decision**: Using existing eventos-service directory structure at repository root `/home/fqueirolo/TECNOLOGO/NoSQL/TAREA 2/eventos-service/`. This follows the single-project microservice pattern consistent with existing services (usuarios-service, reservas-service). Added `metrics.py` middleware and `versioning.py` placeholder for Principle IV/II compliance. Added `metrics.py` route, `test_openapi_compliance.py`, `test_errors.py`, and performance tests.
 
 ## Complexity Tracking
 

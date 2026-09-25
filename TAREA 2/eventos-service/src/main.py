@@ -1,9 +1,3 @@
-"""
-Eventos Service - EventFlow
-Gestión de eventos y disponibilidad de entradas.
-
-Ver: brain/microservices/eventos.md
-"""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +6,8 @@ from src.config import get_settings
 from src.services.mongodb import connect_to_mongodb, close_mongodb_connection, mongodb_lifespan
 from src.api.middleware.correlation import CorrelationIDMiddleware
 from src.api.middleware.logging import StructuredLoggingMiddleware, setup_json_logging
-from src.api.routes import eventos, health
+from src.api.middleware.metrics import MetricsMiddleware
+from src.api.routes import eventos, health, metrics
 from src.utils.errors import (
     EventFlowHTTPException,
     eventflow_exception_handler,
@@ -51,6 +46,7 @@ def create_app() -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(StructuredLoggingMiddleware)
+    app.add_middleware(MetricsMiddleware)
 
     app.add_exception_handler(EventFlowHTTPException, eventflow_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -60,6 +56,7 @@ def create_app() -> FastAPI:
 
     app.include_router(eventos.router, prefix="/api")
     app.include_router(health.router, prefix="")
+    app.include_router(metrics.router, prefix="")
 
     return app
 
