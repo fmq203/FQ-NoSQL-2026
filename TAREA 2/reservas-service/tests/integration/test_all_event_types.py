@@ -17,38 +17,34 @@ class TestAllEventTypes:
 
     @pytest.fixture
     def mock_services(self):
-        with patch("src.services.http_clients.get_usuarios_client") as mock_usuarios, \
-             patch("src.services.http_clients.get_eventos_client") as mock_eventos, \
-             patch("src.services.redis_pago.ejecutar_pagar_y_decrementar") as mock_redis, \
-             patch("src.services.postgresql.insert_event_log") as mock_pg:
-            
-            # Usuarios
-            usuarios_client = AsyncMock()
-            mock_usuarios.return_value = usuarios_client
-            usuarios_client.get.return_value = AsyncMock(
-                status_code=200,
-                json=lambda: {"usuario_id": str(uuid4()), "nombre": "Test"}
-            )
-            
-            # Eventos
-            eventos_client = AsyncMock()
-            mock_eventos.return_value = eventos_client
-            eventos_client.get.return_value = AsyncMock(
-                status_code=200,
-                json=lambda: {
-                    "evento_id": str(uuid4()),
-                    "estado": "publicado",
-                    "entradas_disponibles": 100,
-                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 100}],
-                }
-            )
-            
-            # Redis
+        # Patched at src.chain.validators / src.api.routes.reservas (the
+        # actual call sites) - see test_double_booking.py for why patching
+        # the origin modules doesn't intercept an already-imported name.
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get_usuario, \
+             patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get_evento, \
+             patch("src.chain.validators.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis, \
+             patch("src.chain.validators.decrementar_inventario_evento", new_callable=AsyncMock) as mock_decrementar_evento, \
+             patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg, \
+             patch("src.services.saga_orchestrator.insert_event_log", mock_pg), \
+             patch("src.api.routes.reservas.check_idempotency", new_callable=AsyncMock) as mock_idempotency:
+
+            mock_get_usuario.return_value = {"usuario_id": str(uuid4()), "nombre": "Test"}
+            mock_get_evento.return_value = {
+                "evento_id": str(uuid4()),
+                "estado": "publicado",
+                "entradas_disponibles": 100,
+                "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 100}],
+            }
             mock_redis.return_value = {"success": True, "message": "OK"}
-            
-            # PostgreSQL
+            mock_decrementar_evento.return_value = {"disponibles": 98}
             mock_pg.return_value = None
-            
+            mock_idempotency.return_value = None
+
+            # SAGA_STARTED/SAGA_FAILED are logged from
+            # saga_orchestrator.execute()/_handle_error, which import
+            # insert_event_log independently of chain/validators.py -
+            # reusing the same mock object for both patch targets so both
+            # modules' calls land in one call_args_list.
             yield {"pg": mock_pg}
 
     @pytest.mark.integration
@@ -87,12 +83,17 @@ class TestAllEventTypes:
         # event_types = [e["event_type"] for e in events]
         # assert event_types == expected_events
         
-        # For now, verify the Auditor handler was called with SAGA_COMPLETED
-        from src.services.postgresql import insert_event_log
-        insert_event_log.assert_called()
-        
+        # For now, verify the Auditor handler was called with SAGA_COMPLETED.
+        # Read the mock from mock_services, not a fresh
+        # `from src.services.postgresql import insert_event_log` - that
+        # import would return the real, unpatched function, since the mock
+        # is bound at src.chain.validators.insert_event_log (the call
+        # site), not at its origin module.
+        mock_pg = mock_services["pg"]
+        mock_pg.assert_called()
+
         # Check SAGA_COMPLETED was one of the calls
-        calls = insert_event_log.call_args_list
+        calls = mock_pg.call_args_list
         event_types = [call.kwargs.get("event_type") or call.args[0] for call in calls]
         assert "SAGA_COMPLETED" in event_types
 
@@ -102,21 +103,19 @@ class TestAllEventTypes:
         client: AsyncClient
     ):
         """Test SAGA_FAILED event is logged on failure."""
-        with patch("src.services.http_clients.get_usuarios_client") as mock_usuarios, \
-             patch("src.services.http_clients.get_eventos_client") as mock_eventos, \
-             patch("src.services.redis_pago.ejecutar_pagar_y_decrementar") as mock_redis:
-            
-            # Setup mocks for failure
-            mock_usuarios.return_value.get.return_value = AsyncMock(
-                status_code=200,
-                json=lambda: {"usuario_id": str(uuid4()), "nombre": "Test"}
-            )
-            
-            # Evento not found -> 404
-            mock_eventos = AsyncMock()
-            mock_eventos.get.return_value = AsyncMock(status_code=404, json=lambda: {})
-            
-            response = await AsyncClient(app=app, base_url="http://test").post(
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get_usuario, \
+             patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_get_evento, \
+             patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg, \
+             patch("src.services.saga_orchestrator.insert_event_log", mock_pg), \
+             patch("src.api.routes.reservas.check_idempotency", new_callable=AsyncMock) as mock_idempotency:
+
+            mock_get_usuario.return_value = {"usuario_id": str(uuid4()), "nombre": "Test"}
+            # Evento not found -> ValidadorEvento sets 404 and the chain stops
+            mock_get_evento.return_value = None
+            mock_pg.return_value = None
+            mock_idempotency.return_value = None
+
+            response = await client.post(
                 "/api/reservar",
                 json={
                     "usuario_id": str(uuid4()),
@@ -126,11 +125,17 @@ class TestAllEventTypes:
                     "metodo_pago": "tarjeta"
                 }
             )
-            
+
             assert response.status_code == 404
-            
-            # In real implementation, SAGA_FAILED would be logged
-            # Verify by checking mock calls
+
+            # SAGA_FAILED is logged by SagaOrchestrator._handle_error once
+            # the chain returns with context.error set (see
+            # saga_orchestrator.py::execute).
+            event_types = [
+                call.kwargs.get("event_type") or call.args[0]
+                for call in mock_pg.call_args_list
+            ]
+            assert "SAGA_FAILED" in event_types
 
 
 if __name__ == "__main__":
