@@ -32,12 +32,12 @@ Consultar información completa de un evento por su UUID.
 
 **Why this priority**: Requerido por Reservas Service para validar existencia y aforo en SAGA.
 
-**Independent Test**: GET `/api/eventos/{evento_id}` → 200 con evento completo. Testable sin otros servicios.
+**Independent Test**: GET `/api/v1/eventos/{evento_id}` → 200 con evento completo. Testable sin otros servicios.
 
 **Acceptance Scenarios**:
-1. **Given** Evento existe, **When** GET `/api/eventos/{evento_id}`, **Then** 200 con todos los campos + precios[]
-2. **Given** Evento no existe, **When** GET `/api/eventos/{evento_id}`, **Then** 404 Not Found
-3. **Given** evento_id formato UUID inválido, **When** GET `/api/eventos/{evento_id}`, **Then** 422 Validation Error
+1. **Given** Evento existe, **When** GET `/api/v1/eventos/{evento_id}`, **Then** 200 con todos los campos + precios[]
+2. **Given** Evento no existe, **When** GET `/api/v1/eventos/{evento_id}`, **Then** 404 Not Found
+3. **Given** evento_id formato UUID inválido, **When** GET `/api/v1/eventos/{evento_id}`, **Then** 422 Validation Error
 
 ---
 
@@ -51,7 +51,7 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 **Acceptance Scenarios**:
 1. **Given** MongoDB disponible, **When** GET `/health`, **Then** 200 con `{"status":"healthy","checks":{"mongodb":"ok"},"timestamp":"..."}`
 2. **Given** MongoDB con latencia alta, **When** GET `/health`, **Then** 200 con `{"status":"degraded","checks":{"mongodb":"slow"},"timestamp":"..."}`
-3. **Given** MongoDB caído, **When** GET `/health`, **Then** 503 Service Unavailable con `{"status":"unhealthy","checks":{"mongodb":"down"},"timestamp":"..."}`
+3. **Given** MongoDB caído, **When** GET `/health`, **Then** 503 Service Unavailable con `{"status":"unhealthy","checks":{"mongodb":"down"},"timestamp":"..."}` (single attempt, 2s timeout, no retries)
 
 ---
 
@@ -264,14 +264,14 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 
 | State | Criteria | Response |
 |-------|----------|----------|
-| `healthy` | MongoDB ping OK, latencia < 50ms | `{"status":"healthy","checks":{"mongodb":"ok"},"timestamp":"..."}` |
-| `degraded` | MongoDB ping OK, latencia 50-500ms | `{"status":"degraded","checks":{"mongodb":"slow"},"timestamp":"..."}` |
-| `unhealthy` | MongoDB ping failed, timeout, o conexión rechazada (single attempt, 2s timeout) | `{"status":"unhealthy","checks":{"mongodb":"down"},"timestamp":"..."}` HTTP 503 |
+| `healthy` | MongoDB ping OK, latencia < 50ms (exclusive) | `{"status":"healthy","checks":{"mongodb":"ok"},"timestamp":"..."}` |
+| `degraded` | MongoDB ping OK, latencia 50ms–500ms (inclusive) | `{"status":"degraded","checks":{"mongodb":"slow"},"timestamp":"..."}` |
+| `unhealthy` | MongoDB ping failed, timeout, o conexión rechazada (single attempt, 2s timeout, no retries) | `{"status":"unhealthy","checks":{"mongodb":"down"},"timestamp":"..."}` HTTP 503 |
 
-**Requisito de latencia**: Health check debe responder < 50ms (p99) cuando MongoDB está healthy.
+**Requisito de latencia**: Health check end-to-end debe responder < 50ms (p99) cuando MongoDB ping < 50ms.
 
 ### Health Check Implementation
-- Timeout: 2 segundos para ping MongoDB (single attempt)
+- Timeout: 2 segundos para ping MongoDB (single attempt, no retries)
 - Latencia medida con `ping` command
 - Sin dependencias externas (solo MongoDB)
 
@@ -328,6 +328,8 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 - `disponibles` >= 0
 - Sum of `disponibles` across all categories <= `entradas_disponibles` <= `aforo_total`
 
+**Nota de serialización**: Los precios se serializan como números con exactamente 2 decimales (ej. `15000.00`, `0.00`) para consistencia monetaria.
+
 ## Structured Logging Schema (Mandatory per Constitution Principle IV)
 
 ```json
@@ -368,6 +370,9 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 3. **Deprecation**: 90-day notice via `Deprecation` header + `Sunset` header
 4. **Current version**: `v1` (this specification)
 
+### Accept Header Parsing
+**Deferred to v2**: `Accept` header parsing (`application/vnd.eventflow.v1+json`) no se implementa en MVP. Rutas versionadas por URL path son suficientes para MVP. Futuro: middleware para negociación de versión via header.
+
 ## Distributed Tracing Headers
 
 ### Request Headers (Incoming)
@@ -393,14 +398,6 @@ Todos los endpoints retornan errores en formato RFC 7807 (Problem Details):
 - **Database**: MongoDB 7.0 (Motor async driver)
 - **Containerization**: Docker + Docker Compose (dev), K8s-ready (prod)
 - **Testing**: pytest, pytest-asyncio, httpx for contract tests
-## Assumptions
-
-- Organizadores tienen conectividad estable para operaciones CRUD
-- MongoDB replica set disponible (writes a primary, reads con secondaryPreferred)
-- No autenticación/autorización en MVP (scope mínimo)
-- Estados de evento: borrador, publicado, cancelado, finalizado
-- Precios en moneda local (sin conversión de moneda en MVP)
-- Aforo total inmutable tras creación (solo entradas_disponibles cambia via reservas)
 ## Consistency Model
 
 - **Writes**: `majority` + `journal: true` (strong consistency)

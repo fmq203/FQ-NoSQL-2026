@@ -59,7 +59,12 @@ description: "Task list for Eventos CRUD Service implementation"
 - [X] T014 [P] Create base Pydantic models with validation utilities in `eventos-service/src/utils/validation.py`
 - [X] T015 Create FastAPI app factory with middleware registration in `eventos-service/src/main.py`
 - [X] T016 Configure MongoDB indexes on startup in `eventos-service/src/services/mongodb.py`
-- [X] T017 [P] Verify `brain/decisions/db-selection.md` exists and documents MongoDB rationale
+- [X] T017 [P] Verify `brain/decisions/db-selection.md` exists and **validates MongoDB rationale** (embedding vs referencing, eventual vs strong consistency justification)
+- [X] T057 [P] Implement Motor client with exact consistency model config in `eventos-service/src/services/mongodb.py`:
+  - `read_preference=secondaryPreferred`
+  - `max_staleness_seconds=1`
+  - `server_selection_timeout_ms=5000`
+  - `write_concern=majority + journal:true`
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -113,6 +118,11 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **TDD Approval Gate**: Tests written → Review & approve → Tests fail → Implement (Constitution Principle III)
 
+**User Approval Gate (Constitution Principle III)**: Before implementing each user story, explicit user approval required after:
+1. All contract/integration/unit tests written and confirmed failing
+2. Implementation approach reviewed
+3. User gives explicit "proceed" confirmation
+
 ---
 
 ## Phase 4: User Story 2 - Obtener Evento por ID (Priority: P1)
@@ -147,6 +157,11 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **TDD Approval Gate**: Tests written → Review & approve → Tests fail → Implement (Constitution Principle III)
 
+**User Approval Gate (Constitution Principle III)**: Before implementing each user story, explicit user approval required after:
+1. All contract/integration/unit tests written and confirmed failing
+2. Implementation approach reviewed
+3. User gives explicit "proceed" confirmation
+
 ---
 
 ## Phase 5: User Story 3 - Health Check (Priority: P1)
@@ -161,6 +176,7 @@ description: "Task list for Eventos CRUD Service implementation"
 - [X] T038 [P] [US3] Integration test for health check with real MongoDB in `eventos-service/tests/integration/test_health_integration.py`
 - [X] T039 [P] [US3] Unit test for health status determination logic in `eventos-service/tests/unit/test_health_service.py`
 - [X] T045 [P] [US3] Integration test: verify 503 within 5s when MongoDB goes down in `eventos-service/tests/integration/test_health_5s_detection.py`
+- [X] T060 [P] [US3] Unit test for 5s detection logic in `eventos-service/tests/unit/test_health_5s_detection.py` (mock MongoDB failure, verify unhealthy within 5s)
 
 ### Implementation for User Story 3
 
@@ -181,6 +197,11 @@ description: "Task list for Eventos CRUD Service implementation"
 
 **TDD Approval Gate**: Tests written → Review & approve → Tests fail → Implement (Constitution Principle III)
 
+**User Approval Gate (Constitution Principle III)**: Before implementing each user story, explicit user approval required after:
+1. All contract/integration/unit tests written and confirmed failing
+2. Implementation approach reviewed
+3. User gives explicit "proceed" confirmation
+
 ---
 
 ## Phase 6: Cross-Cutting Concerns (Constitution Compliance)
@@ -189,10 +210,12 @@ description: "Task list for Eventos CRUD Service implementation"
 
 - [X] T046 [P] Clarify egress correlation ID propagation: document "no downstream calls in MVP; future extensibility" in `eventos-service/src/api/middleware/correlation.py` (code comment)
 - [X] T047 [P] Add dependency vulnerability scanning (`pip-audit` + `safety`) to CI in `.github/workflows/ci.yml`
-- [X] T048 [P] Run contract test suite against OpenAPI spec using `schemathesis` in `eventos-service/tests/contract/test_openapi_compliance.py`
+- [X] T048 [P] Run contract test suite against **OpenAPI 3.1** spec using `schemathesis` in `eventos-service/tests/contract/test_openapi_compliance.py`
 - [X] T049 [P] Add Prometheus metrics exposition endpoint `/metrics` using `prometheus-client` in `eventos-service/src/api/routes/metrics.py`
+- [X] T058 [P] Add container image vulnerability scanning (trivy/grype) to CI in `.github/workflows/ci.yml`
+- [X] T059 [P] Accept header version parsing: **Deferred to v2** - document in `eventos-service/src/api/middleware/versioning.py` (placeholder) or mark as not implemented in MVP
 
-**Note**: T045 (API versioning) - routes already implement `/api/v1/` prefix per spec; no additional implementation needed beyond existing `/api/v1/` routes
+**Note**: T045 (API versioning) - routes already implement `/api/v1/` prefix per spec; no additional implementation needed beyond existing `/api/v1/` routes. Accept header parsing deferred to v2 per spec.
 
 ---
 
@@ -311,11 +334,13 @@ With multiple developers:
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
 - **TDD MANDATORY**: Verify tests fail before implementing (Constitution Principle III)
+- **User Approval Gate**: Explicit user confirmation required before each story implementation (Constitution Principle III)
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
 - Constitution Principle IV: All logging must use structured JSON with correlation_id; metrics exposition required via `prometheus-client` (T013, T049)
-- Constitution Principle II: OpenAPI spec is source of truth - validate against contracts/openapi.yaml using `schemathesis` (T048); versioned routes required
-- Constitution Principle VII: Dependency vulnerability scanning required in CI via `pip-audit` + `safety` (T047)
+- Constitution Principle II: OpenAPI spec is source of truth - validate against contracts/openapi.yaml using `schemathesis` (T048); versioned routes required; **OpenAPI 3.1 explicit validation**
+- Constitution Principle VII: Dependency vulnerability scanning required in CI via `pip-audit` + `safety` (T047); **container image scanning via trivy/grype (T058)**
+- Test structure rationale: `test_errors.py` tests RFC 7807 format across all endpoints; `test_eventos_post.py`/`test_eventos_get.py` test endpoint-specific contracts; separation ensures format compliance independent of business logic
 
 (End of file - total 319 lines)
