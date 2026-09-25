@@ -205,11 +205,15 @@ async def compensate_step_5_reservation(context: ReservaContext) -> None:
         return
 
     from ..services.redis_pago import ejecutar_compensar_pago_inventario
+    from ..services.http_clients import incrementar_inventario_evento
 
     result = await ejecutar_compensar_pago_inventario(
         evento_id=str(context.evento_id),
         reserva_id=str(context.reserva_id),
         cantidad=context.cantidad
+    )
+    await incrementar_inventario_evento(
+        str(context.evento_id), context.categoria, context.cantidad, str(context.correlation_id)
     )
 
     if result["success"]:

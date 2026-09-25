@@ -103,3 +103,54 @@ async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[dict]
     resp.raise_for_status()
     record_success("eventos_service")
     return resp.json()
+
+
+async def decrementar_inventario_evento(
+    evento_id: str, categoria: str, cantidad: int, correlation_id: str = ""
+) -> dict:
+    """POST /api/eventos/{id}/decrementar-inventario.
+
+    Sincroniza en eventos-service la venta que Redis ya confirmo de forma
+    atomica. Redis es quien evita la doble venta; esta llamada solo
+    mantiene entradas_disponibles/precios[].disponibles alineados con lo
+    que efectivamente se vendio, para que GET /api/eventos/{id} no siga
+    mostrando el aforo original despues de vender entradas. Propaga la
+    excepcion en caso de error - el llamador decide como compensar.
+    """
+    client = await get_eventos_client()
+    headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
+    resp = await client.post(
+        f"/api/eventos/{evento_id}/decrementar-inventario",
+        json={"categoria": categoria, "cantidad": cantidad},
+        headers=headers,
+    )
+    resp.raise_for_status()
+    record_success("eventos_service")
+    return resp.json()
+
+
+async def incrementar_inventario_evento(
+    evento_id: str, categoria: str, cantidad: int, correlation_id: str = ""
+) -> None:
+    """POST /api/eventos/{id}/incrementar-inventario - compensacion.
+
+    Best-effort: si esta llamada falla no hay nada mas que hacer para
+    revertir (ya estamos en un camino de compensacion), asi que solo se
+    loguea. La fuente de verdad de "cuanto queda disponible" para evitar
+    dobles ventas sigue siendo Redis, que ya se revirtio antes de llegar
+    aca - esto es solo mantener eventos-service alineado.
+    """
+    client = await get_eventos_client()
+    headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
+    try:
+        resp = await client.post(
+            f"/api/eventos/{evento_id}/incrementar-inventario",
+            json={"categoria": categoria, "cantidad": cantidad},
+            headers=headers,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        logger.error(
+            f"No se pudo revertir inventario en eventos-service "
+            f"(evento={evento_id}, categoria={categoria}, cantidad={cantidad}): {e}"
+        )
