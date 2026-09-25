@@ -2,7 +2,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Request, Response, status
 
 from src.chain.builder import ChainBuilder
 from src.models.reserva import ReservaContext, ReservaCreateRequest, ReservaResponse
@@ -42,7 +42,7 @@ def _raise_from_context(context: ReservaContext, instance: str) -> None:
 
 
 @router.post("/reservar", response_model=ReservaResponse, status_code=status.HTTP_201_CREATED)
-async def crear_reserva(request: Request, solicitud: ReservaCreateRequest) -> ReservaResponse:
+async def crear_reserva(request: Request, response: Response, solicitud: ReservaCreateRequest) -> ReservaResponse:
     """
     Inicia la transaccion SAGA de compra de entradas.
 
@@ -56,11 +56,12 @@ async def crear_reserva(request: Request, solicitud: ReservaCreateRequest) -> Re
     inventario reservado en Redis, revierte el pago) antes de responder.
 
     reserva_id funciona como idempotency key: reintentar el mismo POST
-    con el mismo reserva_id devuelve la reserva ya confirmada en vez de
-    procesar una segunda compra.
+    con el mismo reserva_id devuelve la reserva ya confirmada (200, no
+    se creo nada nuevo) en vez de procesar una segunda compra (201).
     """
     existing = await check_idempotency(solicitud.reserva_id)
     if isinstance(existing, dict) and "_id" in existing:
+        response.status_code = status.HTTP_200_OK
         return ReservaResponse(
             reserva_id=str(existing["_id"]),
             estado=existing.get("estado", "confirmada"),

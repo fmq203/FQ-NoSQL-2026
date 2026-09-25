@@ -45,15 +45,43 @@ class TestSAGAHappyPath:
 
     @pytest.fixture
     def mock_redis(self):
-        """Mock Redis operations."""
-        with patch("src.services.redis_pago.ejecutar_pagar_y_decrementar") as mock:
+        """Mock Redis operations.
+
+        Patched at src.chain.validators (the actual call site), not
+        src.services.redis_pago (where it's defined) - validators.py does
+        `from ..services.redis_pago import ejecutar_pagar_y_decrementar`,
+        which binds its own name, so patching the origin module doesn't
+        intercept it.
+        """
+        with patch("src.chain.validators.ejecutar_pagar_y_decrementar") as mock:
             mock.return_value = {"success": True, "message": "OK"}
+            yield mock
+
+    @pytest.fixture
+    def mock_eventos_inventario(self):
+        """Mock the eventos-service inventory sync call (ProcesadorPago step 4)."""
+        with patch("src.chain.validators.decrementar_inventario_evento", new_callable=AsyncMock) as mock:
+            mock.return_value = {"disponibles": 48}
             yield mock
 
     @pytest.fixture
     def mock_mongo(self):
         """MongoDB is tested with real connection via testcontainers in real env."""
         pass
+
+    @pytest.fixture
+    def mock_check_idempotency(self):
+        """check_idempotency's PostgreSQL fallback branch needs a real
+        pg_pool that only exists once the app's lifespan has run - this
+        file's plain AsyncClient(app=app) never triggers FastAPI startup
+        events, so get_pg_pool() would raise "PostgreSQL no inicializado".
+        Mocked directly instead of standing up the whole lifespan for a
+        concern these tests aren't actually exercising (except
+        test_saga_idempotency, which sets a return value explicitly).
+        """
+        with patch("src.api.routes.reservas.check_idempotency", new_callable=AsyncMock) as mock:
+            mock.return_value = None
+            yield mock
 
     @pytest.mark.integration
     async def test_saga_happy_path_complete(
@@ -62,6 +90,8 @@ class TestSAGAHappyPath:
         mock_usuario_service,
         mock_eventos_service,
         mock_redis,
+        mock_eventos_inventario,
+        mock_check_idempotency,
     ):
         """Test complete SAGA happy path: ValidaDatos -> Usuario -> Evento -> PagoRedis -> ReservaMongo -> AuditPG"""
         # Setup mocks
@@ -121,6 +151,8 @@ class TestSAGAHappyPath:
         mock_usuario_service,
         mock_eventos_service,
         mock_redis,
+        mock_eventos_inventario,
+        mock_check_idempotency,
     ):
         """Test idempotency: same request returns 200 with existing reservation."""
         usuario_id = str(uuid4())
@@ -157,6 +189,15 @@ class TestSAGAHappyPath:
         response1 = await client.post("/api/reservar", json=request_data)
         assert response1.status_code == 201
         assert response1.json()["reserva_id"] == reserva_id
+
+        # From here on, check_idempotency should report the reservation
+        # crear_reserva just created, as it would for a real retry against
+        # the real MongoDB collection.
+        mock_check_idempotency.return_value = {
+            "_id": reserva_id,
+            "estado": response1.json()["estado"],
+            "numero_confirmacion": response1.json()["numero_confirmacion"],
+        }
 
         # Second request with SAME data AND same reserva_id (simulate retry) - should be idempotent
         response2 = await client.post("/api/reservar", json={
