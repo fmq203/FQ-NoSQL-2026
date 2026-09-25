@@ -1,8 +1,8 @@
 # Implementation Plan: Eventos CRUD Service
 
-**Branch**: `005-eventos-crud` | **Date**: 2026-09-23 | **Spec**: [.specify/specs/005-eventos-crud/spec.md](.specify/specs/005-eventos-crud/spec.md)
+**Branch**: `002-eventos-crud` | **Date**: 2026-09-23 | **Spec**: [.specify/specs/002-eventos-crud/spec.md](.specify/specs/002-eventos-crud/spec.md)
 
-**Input**: Feature specification from `/specs/005-eventos-crud/spec.md`
+**Input**: Feature specification from `/specs/002-eventos-crud/spec.md`
 
 ## Summary
 
@@ -64,7 +64,7 @@ All violations addressed - ready for implementation.
 ### Documentation (this feature)
 
 ```text
-specs/005-eventos-crud/
+specs/002-eventos-crud/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Phase 1 output

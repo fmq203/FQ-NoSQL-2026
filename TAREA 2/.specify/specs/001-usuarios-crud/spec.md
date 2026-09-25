@@ -1,10 +1,10 @@
 # Feature Specification: Usuarios CRUD Service
 
-**Feature Branch**: `004-usuarios-crud`
+**Feature Branch**: `001-usuarios-crud`
 
 **Created**: 2026-09-23
 
-**Status**: Draft
+**Status**: Complete
 
 **Input**: User description: "Usuarios Service: CRUD usuarios en MongoDB con health check, modelo: nombre, apellido, email, nro_documento, tipo_documento. Endpoints: POST /api/usuarios, GET /api/usuarios/{id}, GET /health. MongoDB Motor async."
 

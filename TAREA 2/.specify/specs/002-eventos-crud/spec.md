@@ -1,10 +1,10 @@
 # Feature Specification: Eventos CRUD Service
 
-**Feature Branch**: `005-eventos-crud`
+**Feature Branch**: `002-eventos-crud`
 
 **Created**: 2026-09-23
 
-**Status**: Draft
+**Status**: Complete
 
 **Input**: User description: "Eventos Service: CRUD eventos en MongoDB con health check, modelo: nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion. Endpoints: POST /api/eventos, GET /api/eventos/{id}, GET /health. MongoDB Motor async."
 
