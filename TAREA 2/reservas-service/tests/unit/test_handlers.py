@@ -28,6 +28,7 @@ class TestValidadorDeDatos:
             usuario_id=uuid4(),
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta"
         )
 
@@ -46,6 +47,7 @@ class TestValidadorDeDatos:
             usuario_id="invalid-uuid",
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta"
         )
         result = await handler.handle(context)
@@ -84,6 +86,7 @@ class TestValidadorInventario:
             usuario_id=uuid4(),
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta"
         )
 
@@ -133,6 +136,7 @@ class TestValidadorEvento:
             usuario_id=uuid4(),
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta"
         )
 
@@ -145,7 +149,7 @@ class TestValidadorEvento:
                     "evento_id": str(valid_context.evento_id),
                     "estado": "publicado",
                     "entradas_disponibles": 100,
-                    "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 100}],
+                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 100}],
                 }
                 mock_pg.return_value = None
                 result = await handler.handle(valid_context)
@@ -186,7 +190,8 @@ class TestValidadorEvento:
                 mock_get.return_value = {
                     "evento_id": str(valid_context.evento_id),
                     "estado": "publicado",
-                    "entradas_disponibles": 1,  # Less than requested (2)
+                    "entradas_disponibles": 1,
+                    "precios": [{"categoria": "general", "precio": 10.0, "disponibles": 1}],  # Less than requested (2)
                 }
                 mock_pg.return_value = None
                 result = await handler.handle(valid_context)
@@ -207,6 +212,7 @@ class TestProcesadorPago:
             usuario_id=uuid4(),
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta",
             reserva_id=uuid4()
         )
@@ -248,6 +254,7 @@ class TestConfirmadorReserva:
             usuario_id=uuid4(),
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta",
             reserva_id=uuid4()
         )
@@ -319,6 +326,7 @@ class TestAuditor:
             usuario_id=uuid4(),
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta",
             reserva_id=uuid4()
         )
@@ -376,6 +384,7 @@ class TestChainBuilder:
             usuario_id="invalid",
             evento_id=uuid4(),
             cantidad=2,
+            categoria="general",
             metodo_pago="tarjeta"
         )
         # This would need async execution, test separately in integration

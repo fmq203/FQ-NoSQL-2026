@@ -9,7 +9,7 @@ from ..chain.handler import Handler
 from ..models.reserva import ReservaContext, SagaStep
 from ..services.redis_pago import ejecutar_compensar_pago_inventario
 from ..services.postgresql import insert_event_log
-from ..services.metrics import record_saga_total
+from ..services.metrics import record_saga_total, record_saga_compensation
 from ..models.reserva import EventType
 
 logger = logging.getLogger(__name__)

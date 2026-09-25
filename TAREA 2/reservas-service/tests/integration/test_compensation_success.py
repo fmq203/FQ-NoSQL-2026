@@ -77,10 +77,11 @@ class TestCompensationSuccess:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
 
-        response = await client.post("/api/v1/reservar", json=request_data)
+        response = await client.post("/api/reservar", json=request_data)
 
         assert response.status_code == 500
 
@@ -139,7 +140,7 @@ class TestCompensationSuccess:
                 "metodo_pago": "tarjeta"
             }
 
-            response = await client.post("/api/v1/reservar", json=request_data)
+            response = await client.post("/api/reservar", json=request_data)
 
             assert response.status_code == 409
             data = response.json()
@@ -171,10 +172,11 @@ class TestCompensationSuccess:
                 "usuario_id": str(uuid4()),
                 "evento_id": str(uuid4()),
                 "cantidad": 1,
+                "categoria": "general",
                 "metodo_pago": "tarjeta"
             }
 
-            response = await client.post("/api/v1/reservar", json=request_data)
+            response = await client.post("/api/reservar", json=request_data)
 
             # Should still succeed (201) since reservation was confirmed
             # Audit failure is warning only

@@ -16,16 +16,17 @@ class TestReservasOpenAPI:
 
     @pytest.mark.contract
     async def test_post_reservar_openapi_validation(self, client: AsyncClient):
-        """Test POST /api/v1/reservar validates OpenAPI spec."""
+        """Test POST /api/reservar validates OpenAPI spec."""
         # Valid request
         valid_request = {
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 2,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
 
-        response = await client.post("/api/v1/reservar", json=valid_request)
+        response = await client.post("/api/reservar", json=valid_request)
 
         # Should return 201 or appropriate error (depending on mock setup)
         assert response.status_code in [201, 404, 409, 422, 500, 503]
@@ -41,10 +42,10 @@ class TestReservasOpenAPI:
 
     @pytest.mark.contract
     async def test_get_reserva_openapi_validation(self, client: AsyncClient):
-        """Test GET /api/v1/reservar/{reserva_id} validates OpenAPI spec."""
+        """Test GET /api/reservar/{reserva_id} validates OpenAPI spec."""
         reserva_id = str(uuid4())
 
-        response = await client.get(f"/api/v1/reservar/{reserva_id}")
+        response = await client.get(f"/api/reservar/{reserva_id}")
 
         assert response.status_code in [200, 404]
 
@@ -56,8 +57,8 @@ class TestReservasOpenAPI:
 
     @pytest.mark.contract
     async def test_list_reservas_openapi_validation(self, client: AsyncClient):
-        """Test GET /api/v1/reservar validates OpenAPI spec."""
-        response = await client.get("/api/v1/reservar")
+        """Test GET /api/reservar validates OpenAPI spec."""
+        response = await client.get("/api/reservar")
 
         assert response.status_code == 200
         data = response.json()
@@ -67,10 +68,11 @@ class TestReservasOpenAPI:
     async def test_error_response_format_rfc7807(self, client: AsyncClient):
         """Test error responses follow RFC 7807 format."""
         # Test with invalid UUID
-        response = await client.post("/api/v1/reservar", json={
+        response = await client.post("/api/reservar", json={
             "usuario_id": "invalid-uuid",
             "evento_id": str(uuid4()),
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         })
 
@@ -94,11 +96,12 @@ class TestReservasOpenAPI:
         correlation_id = "test-correlation-123"
 
         response = await client.post(
-            "/api/v1/reservar",
+            "/api/reservar",
             json={
                 "usuario_id": str(uuid4()),
                 "evento_id": str(uuid4()),
                 "cantidad": 1,
+                "categoria": "general",
                 "metodo_pago": "tarjeta"
             },
             headers={"X-Correlation-ID": correlation_id}

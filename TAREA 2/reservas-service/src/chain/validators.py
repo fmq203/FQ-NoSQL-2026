@@ -137,8 +137,21 @@ class ValidadorEvento(BaseHandler):
                 status = "unavailable"
                 return
 
-            # Verificar aforo
-            aforo_disponible = evento.get("entradas_disponibles", 0)
+            # Verificar que la categoria solicitada exista en el evento
+            precio_categoria = next(
+                (p for p in evento.get("precios", []) if p.get("categoria") == context.categoria),
+                None,
+            )
+            if precio_categoria is None:
+                context.error = f"Categoria '{context.categoria}' no existe en este evento"
+                context.status_code = 422
+                self._add_saga_log(context, self._step_name, False, "Categoria inexistente")
+                status = "validation_error"
+                return
+
+            # Verificar aforo de ESA categoria (cada categoria tiene su propio
+            # cupo en evento.precios[].disponibles - ver eventos-service)
+            aforo_disponible = precio_categoria.get("disponibles", 0)
             if aforo_disponible < context.cantidad:
                 context.error = "Inventario insuficiente"
                 context.status_code = 409
@@ -148,8 +161,10 @@ class ValidadorEvento(BaseHandler):
                 return
 
             context.evento_data = evento
+            context.categoria_disponibles = aforo_disponible
+            context.precio_unitario = float(precio_categoria.get("precio", 0))
             self._add_saga_log(context, self._step_name, True,
-                f"Evento validado, aforo disponible: {aforo_disponible}")
+                f"Evento validado, aforo disponible ({context.categoria}): {aforo_disponible}")
 
             # Emit event
             db_start = time.perf_counter()
@@ -182,9 +197,7 @@ class ProcesadorPago(BaseHandler):
         start_time = time.perf_counter()
         status = "success"
         try:
-            # Calcular monto (precio * cantidad)
-            # En producción, el precio vendría del evento_data
-            precio_unitario = 50.0  # placeholder
+            precio_unitario = context.precio_unitario or 0.0
             monto_total = precio_unitario * context.cantidad
 
             result = await ejecutar_pagar_y_decrementar(
@@ -193,7 +206,9 @@ class ProcesadorPago(BaseHandler):
                 usuario_id=str(context.usuario_id),
                 cantidad=context.cantidad,
                 monto=monto_total,
-                metodo_pago=context.metodo_pago
+                metodo_pago=context.metodo_pago,
+                categoria=context.categoria,
+                seed_disponibles=context.categoria_disponibles or 0,
             )
             record_db_operation_duration("redis", "evalsha", "success" if result["success"] else "failed", 0)
 
@@ -273,6 +288,7 @@ class ConfirmadorReserva(BaseHandler):
                 "usuario_id": context.usuario_id,
                 "evento_id": context.evento_id,
                 "cantidad": context.cantidad,
+                "categoria": context.categoria,
                 "metodo_pago": context.metodo_pago,
                 "monto_total": context.pago_data.get("monto", 0) if context.pago_data else 0,
                 "numero_confirmacion": numero_confirmacion,

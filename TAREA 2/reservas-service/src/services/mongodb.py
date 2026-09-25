@@ -67,13 +67,24 @@ async def create_indexes() -> None:
     settings = get_settings()
     db = get_database()
 
-    # Índices para reservas
+    # Índices para reservas. La idempotencia de reserva_id ya la garantiza
+    # _id (= context.reserva_id, ver ConfirmadorReserva) al ser la primary
+    # key; un índice único adicional sobre un campo "idempotency_key" que
+    # ningún documento llega a setear queda en null para todos los docs y
+    # el segundo insert siempre choca con "duplicate key: idempotency_key:
+    # null" - por eso NO se crea aquí.
     reservas = db[settings.mongodb_collection_reservas]
     await reservas.create_index("usuario_id")
     await reservas.create_index("evento_id")
     await reservas.create_index("estado")
     await reservas.create_index("creado_en")
-    await reservas.create_index("idempotency_key", unique=True)
+
+    # Self-heal: si un deploy anterior llegó a crear el índice único
+    # problemático sobre idempotency_key, se elimina (no falla si no existe).
+    existing_index_names = {idx["name"] async for idx in reservas.list_indexes()}
+    if "idempotency_key_1" in existing_index_names:
+        await reservas.drop_index("idempotency_key_1")
+        logger.info("🧹 Índice obsoleto idempotency_key_1 eliminado")
 
     logger.info("✅ Índices MongoDB creados")
 

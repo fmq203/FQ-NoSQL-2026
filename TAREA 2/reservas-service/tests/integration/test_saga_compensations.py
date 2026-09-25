@@ -58,7 +58,7 @@ class TestSAGACompensations:
              patch("src.services.redis_pago.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis, \
              patch("src.services.mongo.get_reservas_collection", new_callable=AsyncMock) as mock_mongo, \
              patch("src.services.postgresql.insert_event_log", new_callable=AsyncMock) as mock_pg, \
-             patch("src.api.routes.check_idempotency", new_callable=AsyncMock) as mock_idempotency:
+             patch("src.api.routes.reservas.check_idempotency", new_callable=AsyncMock) as mock_idempotency:
 
             mock_redis.return_value = {"success": True, "message": "OK"}
 
@@ -90,10 +90,11 @@ class TestSAGACompensations:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 2,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
 
-        response = await client.post("/api/v1/reservar", json=request_data)
+        response = await client.post("/api/reservar", json=request_data)
 
         # Should return 500
         assert response.status_code == 500
@@ -127,7 +128,7 @@ class TestSAGACompensations:
             "metodo_pago": "tarjeta"
         }
 
-        response = await client.post("/api/v1/reservar", json=request_data)
+        response = await client.post("/api/reservar", json=request_data)
 
         # Should return 409
         assert response.status_code == 409
@@ -152,10 +153,11 @@ class TestSAGACompensations:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
 
-        response = await client.post("/api/v1/reservar", json=request_data)
+        response = await client.post("/api/reservar", json=request_data)
 
         assert response.status_code == 500
 

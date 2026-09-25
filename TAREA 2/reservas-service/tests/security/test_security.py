@@ -27,7 +27,7 @@ class TestSecurityHardening:
         ]
         
         for payload in malicious_payloads:
-            response = await client.post("/api/v1/reservar", json=payload)
+            response = await client.post("/api/reservar", json=payload)
             # Should reject with 422 or 400
             assert response.status_code in [400, 422], f"Failed to reject: {payload}"
 
@@ -51,10 +51,11 @@ class TestSecurityHardening:
             
             # Make a request with PII
             async with AsyncClient(app=app, base_url="http://test") as client:
-                await client.post("/api/v1/reservar", json={
+                await client.post("/api/reservar", json={
                     "usuario_id": str(uuid4()),
                     "evento_id": str(uuid4()),
                     "cantidad": 1,
+                    "categoria": "general",
                     "metodo_pago": "tarjeta"
                 })
         
@@ -109,6 +110,7 @@ class TestIdempotencyBehavior:
                 "usuario_id": str(uuid4()),
                 "evento_id": str(uuid4()),
                 "cantidad": 1,
+                "categoria": "general",
                 "metodo_pago": "tarjeta"
             }
             
@@ -153,9 +155,10 @@ class TestIdempotencyBehavior:
                             "usuario_id": str(uuid4()),
                             "evento_id": str(uuid4()),
                             "cantidad": 1,
+                            "categoria": "general",
                             "metodo_pago": "tarjeta"
                         }
-                        response1 = await client.post("/api/v1/reservar", json=request_data)
+                        response1 = await client.post("/api/reservar", json=request_data)
                         assert response1.status_code == 201
                         
                         # Second request with same reserva_id (simulated)

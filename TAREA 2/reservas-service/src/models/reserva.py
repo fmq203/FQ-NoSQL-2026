@@ -14,6 +14,7 @@ class ReservaCreateRequest(BaseModel):
     usuario_id: UUID
     evento_id: UUID
     cantidad: int = Field(..., gt=0, description="Cantidad de entradas (>0)")
+    categoria: str = Field(..., min_length=1, description="Categoria de precio del evento (debe existir en evento.precios[])")
     metodo_pago: MetodoPago
     reserva_id: Optional[UUID] = Field(default_factory=uuid4, description="Idempotency key (UUID v4). If provided, used for idempotency check.")
 
@@ -53,10 +54,13 @@ class ReservaContext:
     evento_id: UUID
     cantidad: int
     metodo_pago: str
+    categoria: str
     reserva_id: UUID = field(default_factory=uuid4)
     correlation_id: UUID = field(default_factory=uuid4)
     evento_data: Optional[Dict] = None
     usuario_data: Optional[Dict] = None
+    categoria_disponibles: Optional[int] = None
+    precio_unitario: Optional[float] = None
     pago_data: Optional[Dict] = None
     reserva_data: Optional[Dict] = None
     error: Optional[str] = None

@@ -71,13 +71,14 @@ class TestDoubleBooking:
             "usuario_id": str(uuid4()),  # Different users
             "evento_id": evento_id,
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
         
         async def make_request(user_id):
             req = request_data.copy()
             req["usuario_id"] = str(user_id)
-            response = await client.post("/api/v1/reservar", json=req)
+            response = await client.post("/api/reservar", json=req)
             return response.status_code, response.json() if response.status_code == 201 else None
         
         # 20 concurrent requests for 10 available tickets

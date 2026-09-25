@@ -34,8 +34,8 @@ class TestOpenAPIDocumentation:
         
         # Required endpoints
         required_paths = [
-            "/api/v1/reservar",
-            "/api/v1/reservar/{reserva_id}",
+            "/api/reservar",
+            "/api/reservar/{reserva_id}",
         ]
         
         for path in required_paths:
@@ -44,7 +44,7 @@ class TestOpenAPIDocumentation:
             path_item = paths[path]
             
             # Check POST for /reservar
-            if path == "/api/v1/reservar":
+            if path == "/api/reservar":
                 assert "post" in path_item
                 post = path_item["post"]
                 assert "summary" in post or "description" in post
@@ -63,7 +63,7 @@ class TestOpenAPIDocumentation:
                 assert "application/json" in req_body["content"]
                 
             # Check GET for /reservar/{reserva_id}
-            if path == "/api/v1/reservar/{reserva_id}":
+            if path == "/api/reservar/{reserva_id}":
                 assert "get" in path_item
                 get_op = path_item["get"]
                 assert "responses" in get_op
