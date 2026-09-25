@@ -42,7 +42,7 @@
 ## 🎯 Patrones de Diseño
 
 - [[saga-pattern]] — Patrón SAGA: orquestación + compensación
-- [[chain-of-responsibility-pattern]] — Validadores en cadena
+- [[chain-of-responsibility]] — Validadores en cadena
 - [[event-log-pattern]] — Event Log append-only (PostgreSQL)
 - [[event-sourcing-cqrs]] — Event Sourcing y CQRS (opcional avanzado)
 

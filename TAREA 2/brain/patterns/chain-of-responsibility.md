@@ -423,7 +423,6 @@ async def reservar(solicitud: ReservaRequest):
 
 ## Referencias
 
-- `brain/architecture/chain-of-responsibility.md` - Diagrama + implementación completa
 - `brain/architecture/saga-flow.md` - Integración con SAGA
 - `brain/patterns/saga-pattern.md` - Orquestador SAGA
 - `brain/patterns/event-sourcing-cqrs.md` - Auditor como Event Sourcing
