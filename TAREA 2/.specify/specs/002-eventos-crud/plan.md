@@ -6,7 +6,7 @@
 
 ## Summary
 
-Implement a FastAPI-based microservice for CRUD operations on Eventos (events) stored in MongoDB using Motor async driver. The service provides three endpoints: POST /api/v1/eventos (create event), GET /api/v1/eventos/{id} (get event by UUID), and GET /health (health check with MongoDB connectivity verification). Follows the EventFlow Constitution principles: microservice autonomy, API-first contract, test-first development, observability by default, and distributed tracing.
+Implement a FastAPI-based microservice for CRUD operations on Eventos (events) stored in MongoDB using Motor async driver. The service provides three endpoints: POST /api/eventos (create event), GET /api/eventos/{id} (get event by UUID), and GET /health (health check with MongoDB connectivity verification). Follows the EventFlow Constitution principles: microservice autonomy, API-first contract, test-first development, observability by default, and distributed tracing.
 
 ## Technical Context
 
@@ -95,7 +95,7 @@ eventos-service/
 │   │   ├── __init__.py
 │   │   ├── routes/
 │   │   │   ├── __init__.py
-│   │   │   ├── eventos.py      # POST /api/v1/eventos, GET /api/v1/eventos/{id}
+│   │   │   ├── eventos.py      # POST /api/eventos, GET /api/eventos/{id}
 │   │   │   ├── health.py       # GET /health
 │   │   │   └── metrics.py      # GET /metrics (T049)
 │   │   └── middleware/

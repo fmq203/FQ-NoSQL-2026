@@ -12,7 +12,7 @@ class TestRFC7807ErrorFormat:
     async def test_validation_error_format(self, async_client: AsyncClient):
         """Test 422 validation errors follow RFC 7807 format."""
         # Missing required fields
-        response = await async_client.post("/api/v1/eventos", json={})
+        response = await async_client.post("/api/eventos", json={})
 
         assert response.status_code == 422
         data = response.json()
@@ -27,13 +27,13 @@ class TestRFC7807ErrorFormat:
 
         # Check type URI format
         assert data["type"].startswith("https://eventflow.example.com/errors/")
-        assert data["instance"] == "/api/v1/eventos"
+        assert data["instance"] == "/api/eventos"
         assert data["status"] == 422
 
     @pytest.mark.asyncio
     async def test_not_found_error_format(self, async_client: AsyncClient):
         """Test 404 errors follow RFC 7807 format."""
-        response = await async_client.get("/api/v1/eventos/00000000-0000-0000-0000-000000000000")
+        response = await async_client.get("/api/eventos/00000000-0000-0000-0000-000000000000")
 
         assert response.status_code == 404
         data = response.json()
@@ -41,7 +41,7 @@ class TestRFC7807ErrorFormat:
         assert data["type"] == "https://eventflow.example.com/errors/not-found"
         assert data["title"] == "Not Found"
         assert data["status"] == 404
-        assert data["instance"] == "/api/v1/eventos/00000000-0000-0000-0000-000000000000"
+        assert data["instance"] == "/api/eventos/00000000-0000-0000-0000-000000000000"
         assert "correlation_id" in data
 
     @pytest.mark.asyncio
@@ -56,10 +56,10 @@ class TestRFC7807ErrorFormat:
             "precios": [{"categoria": "General", "precio": 1000.00, "disponibles": 100}],
             "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
         }
-        await async_client.post("/api/v1/eventos", json=event_data)
+        await async_client.post("/api/eventos", json=event_data)
 
         # Try to create duplicate
-        response = await async_client.post("/api/v1/eventos", json=event_data)
+        response = await async_client.post("/api/eventos", json=event_data)
 
         assert response.status_code == 409
         data = response.json()
@@ -67,26 +67,26 @@ class TestRFC7807ErrorFormat:
         assert data["type"] == "https://eventflow.example.com/errors/duplicate-event"
         assert data["title"] == "Conflict"
         assert data["status"] == 409
-        assert data["instance"] == "/api/v1/eventos"
+        assert data["instance"] == "/api/eventos"
         assert "correlation_id" in data
 
     @pytest.mark.asyncio
     async def test_invalid_uuid_format_error(self, async_client: AsyncClient):
         """Test 422 for invalid UUID format follows RFC 7807."""
-        response = await async_client.get("/api/v1/eventos/invalid-uuid")
+        response = await async_client.get("/api/eventos/invalid-uuid")
 
         assert response.status_code == 422
         data = response.json()
 
         assert data["type"] == "https://eventflow.example.com/errors/validation-error"
         assert data["status"] == 422
-        assert data["instance"] == "/api/v1/eventos/invalid-uuid"
+        assert data["instance"] == "/api/eventos/invalid-uuid"
         assert "correlation_id" in data
 
     @pytest.mark.asyncio
     async def test_correlation_id_in_response_header(self, async_client: AsyncClient):
         """Test X-Correlation-ID header present in error responses."""
-        response = await async_client.post("/api/v1/eventos", json={})
+        response = await async_client.post("/api/eventos", json={})
 
         assert response.status_code == 422
         assert "X-Correlation-ID" in response.headers

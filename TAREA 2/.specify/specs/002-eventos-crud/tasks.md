@@ -72,15 +72,15 @@ description: "Task list for Eventos CRUD Service implementation"
 
 ## Phase 3: User Story 1 - Crear Evento (Priority: P1) 🎯 MVP
 
-**Goal**: Implement POST /api/v1/eventos endpoint to create events with full validation
+**Goal**: Implement POST /api/eventos endpoint to create events with full validation
 
-**Independent Test**: POST `/api/v1/eventos` with valid JSON → 201 with evento_id, creado_en. Verify in MongoDB document exists with all fields.
+**Independent Test**: POST `/api/eventos` with valid JSON → 201 with evento_id, creado_en. Verify in MongoDB document exists with all fields.
 
 ### Tests for User Story 1 (MANDATORY - TDD)
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [X] T018 [P] [US1] Contract test for POST /api/v1/eventos in `eventos-service/tests/contract/test_eventos_post.py`
+- [X] T018 [P] [US1] Contract test for POST /api/eventos in `eventos-service/tests/contract/test_eventos_post.py`
 - [X] T019 [P] [US1] Integration test for create event flow in `eventos-service/tests/integration/test_eventos_crud.py`
 - [X] T020 [P] [US1] Unit test for Evento model validation in `eventos-service/tests/unit/test_evento_model.py`
 - [X] T021 [P] [US1] Contract test for RFC 7807 error response structure in `eventos-service/tests/contract/test_errors.py`
@@ -103,7 +103,7 @@ description: "Task list for Eventos CRUD Service implementation"
   - Use write concern majority + journal:true
   - Return EventoResponse with generated evento_id
   - Enforce name uniqueness → raise 409 DUPLICATE_EVENT
-- [X] T025 [US1] Implement POST /api/v1/eventos endpoint in `eventos-service/src/api/routes/eventos.py`:
+- [X] T025 [US1] Implement POST /api/eventos endpoint in `eventos-service/src/api/routes/eventos.py`:
   - Accept EventoCreate request body
   - Return 201 with EventoResponse
   - Handle validation errors → 422 RFC 7807
@@ -127,13 +127,13 @@ description: "Task list for Eventos CRUD Service implementation"
 
 ## Phase 4: User Story 2 - Obtener Evento por ID (Priority: P1)
 
-**Goal**: Implement GET /api/v1/eventos/{evento_id} endpoint to retrieve events by UUID
+**Goal**: Implement GET /api/eventos/{evento_id} endpoint to retrieve events by UUID
 
-**Independent Test**: GET `/api/v1/eventos/{evento_id}` → 200 with complete event + precios[]. Testable without other services.
+**Independent Test**: GET `/api/eventos/{evento_id}` → 200 with complete event + precios[]. Testable without other services.
 
 ### Tests for User Story 2 (MANDATORY - TDD)
 
-- [X] T029 [P] [US2] Contract test for GET /api/v1/eventos/{id} in `eventos-service/tests/contract/test_eventos_get.py`
+- [X] T029 [P] [US2] Contract test for GET /api/eventos/{id} in `eventos-service/tests/contract/test_eventos_get.py`
 - [X] T030 [P] [US2] Integration test for get event by ID in `eventos-service/tests/integration/test_eventos_crud.py`
 - [X] T031 [P] [US2] Unit test for get_event service method in `eventos-service/tests/unit/test_evento_service.py`
 
@@ -143,7 +143,7 @@ description: "Task list for Eventos CRUD Service implementation"
   - Query by UUID _id with read preference secondaryPreferred
   - Return EventoResponse or raise NotFound exception
   - Handle invalid UUID format → 422 RFC 7807
-- [X] T033 [US2] Implement GET /api/v1/eventos/{evento_id} endpoint in `eventos-service/src/api/routes/eventos.py`:
+- [X] T033 [US2] Implement GET /api/eventos/{evento_id} endpoint in `eventos-service/src/api/routes/eventos.py`:
   - Path parameter validation (UUID format)
   - Return 200 with EventoResponse
   - Return 404 Not Found with RFC 7807 format
@@ -283,7 +283,7 @@ description: "Task list for Eventos CRUD Service implementation"
 
 ```bash
 # Launch all tests for User Story 1 together:
-Task: "Contract test for POST /api/v1/eventos in events-service/tests/contract/test_eventos_post.py"
+Task: "Contract test for POST /api/eventos in events-service/tests/contract/test_eventos_post.py"
 Task: "Integration test for create event flow in events-service/tests/integration/test_eventos_crud.py"
 Task: "Unit test for Evento model validation in events-service/tests/unit/test_evento_model.py"
 Task: "Contract test for RFC 7807 error response structure in events-service/tests/contract/test_errors.py"

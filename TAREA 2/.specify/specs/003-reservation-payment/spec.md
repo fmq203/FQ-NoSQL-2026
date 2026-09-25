@@ -494,7 +494,7 @@ CREATE INDEX idx_event_log_payload_gin ON event_log USING GIN(payload);
 
 El campo `monto_total` en la reserva se calcula como: `precio_unitario * cantidad`.
 
-**Fuente del precio**: El `Eventos Service` provee el precio por categoría en el endpoint `GET /api/v1/eventos/{evento_id}`:
+**Fuente del precio**: El `Eventos Service` provee el precio por categoría en el endpoint `GET /api/eventos/{evento_id}`:
 - Response incluye `precios[]` con `categoria`, `precio`, `disponibles`
 - El `ValidadorEvento` obtiene y almacena `evento_data.precios` en `ReservaContext`
 - El `ProcesadorPago` calcula: `monto_total = precio_categoria_seleccionada * cantidad`

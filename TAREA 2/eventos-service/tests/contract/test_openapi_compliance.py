@@ -14,7 +14,7 @@ class TestOpenAPICompliance:
 
     @pytest.mark.asyncio
     async def test_post_eventos_compliance(self, client):
-        """Test POST /api/v1/eventos matches OpenAPI spec."""
+        """Test POST /api/eventos matches OpenAPI spec."""
         valid_event = {
             "nombre": "Test Event",
             "estado": "publicado",
@@ -31,7 +31,7 @@ class TestOpenAPICompliance:
             },
         }
 
-        response = await client.post("/api/v1/eventos", json=valid_event)
+        response = await client.post("/api/eventos", json=valid_event)
 
         # Validate response against OpenAPI schema
         assert response.status_code == 201
@@ -39,7 +39,7 @@ class TestOpenAPICompliance:
 
     @pytest.mark.asyncio
     async def test_get_eventos_compliance(self, client):
-        """Test GET /api/v1/eventos/{id} matches OpenAPI spec."""
+        """Test GET /api/eventos/{id} matches OpenAPI spec."""
         # First create an event
         valid_event = {
             "nombre": "Test Event Get",
@@ -49,11 +49,11 @@ class TestOpenAPICompliance:
             "precios": [{"categoria": "General", "precio": 5000.00, "disponibles": 100}],
             "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
         }
-        create_response = await client.post("/api/v1/eventos", json=valid_event)
+        create_response = await client.post("/api/eventos", json=valid_event)
         event_id = create_response.json()["evento_id"]
 
         # Get the event
-        response = await client.get(f"/api/v1/eventos/{event_id}")
+        response = await client.get(f"/api/eventos/{event_id}")
 
         assert response.status_code == 200
         # schemathesis validation would go here
