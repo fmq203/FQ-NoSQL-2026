@@ -40,7 +40,7 @@ class TestCompensationSuccess:
                     "evento_id": str(uuid4()),
                     "estado": "publicado",
                     "entradas_disponibles": 100,
-                    "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 100}],
+                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 100}],
                 }
             )
 
@@ -125,7 +125,7 @@ class TestCompensationSuccess:
                     "evento_id": str(uuid4()),
                     "estado": "publicado",
                     "entradas_disponibles": 1,  # Very low inventory
-                    "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 1}],
+                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 1}],
                 }
             )
 

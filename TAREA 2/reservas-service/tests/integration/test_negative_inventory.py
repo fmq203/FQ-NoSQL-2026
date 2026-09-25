@@ -38,7 +38,7 @@ class TestNegativeInventory:
                     "evento_id": str(uuid4()),
                     "estado": "publicado",
                     "entradas_disponibles": 5,
-                    "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 5}],
+                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 5}],
                 }
             )
             
