@@ -39,7 +39,7 @@ class TestLoad:
                     "evento_id": str(uuid4()),
                     "estado": "publicado",
                     "entradas_disponibles": 1000,
-                    "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 1000}],
+                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 1000}],
                 }
             )
             

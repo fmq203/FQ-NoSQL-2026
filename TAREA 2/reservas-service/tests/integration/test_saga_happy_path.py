@@ -37,7 +37,7 @@ class TestSAGAHappyPath:
                 "evento_id": "test",
                 "estado": "publicado",
                 "entradas_disponibles": 50,
-                "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 50}],
+                "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 50}],
             }
         with patch("src.chain.validators.get_evento") as mock:
             mock.side_effect = mock_get_evento
@@ -83,7 +83,7 @@ class TestSAGAHappyPath:
             "estado": "publicado",
             "aforo_total": 100,
             "entradas_disponibles": 50,
-            "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 50}],
+            "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 50}],
             "ubicacion": {"ciudad": "Madrid", "pais": "España"}
         }
 
@@ -139,7 +139,7 @@ class TestSAGAHappyPath:
             "evento_id": str(uuid4()),
             "estado": "publicado",
             "entradas_disponibles": 50,
-            "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 50}],
+            "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 50}],
         }
 
         mock_redis.return_value = {"success": True, "message": "OK"}

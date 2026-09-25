@@ -33,7 +33,7 @@ class TestSAGACompensations:
                 "evento_id": evento_id,
                 "estado": "publicado",
                 "entradas_disponibles": 100,
-                "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 100}],
+                "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 100}],
             }
         mock_get_evento.side_effect = mock_get_evento_impl
 

@@ -216,7 +216,7 @@ class TestProcesadorPago:
             metodo_pago="tarjeta",
             reserva_id=uuid4()
         )
-        ctx.evento_data = {"precios": [{"categoria": "General", "precio": 50.0}]}
+        ctx.evento_data = {"precios": [{"categoria": "general", "precio": 50.0}]}
         return ctx
 
     @pytest.mark.unit

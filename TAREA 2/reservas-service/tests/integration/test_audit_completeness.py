@@ -77,7 +77,7 @@ class TestAuditCompleteness:
                 mock_evento.return_value = {
                     "estado": "publicado",
                     "entradas_disponibles": 10,
-                    "precios": [{"categoria": "General", "precio": 50.0, "disponibles": 10}]
+                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 10}]
                 }
                 
                 from src.services.redis_pago import ejecutar_pagar_y_decrementar
