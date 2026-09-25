@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_database: str = "eventflow"
     mongodb_collection: str = "eventos"
+    service_port: int = 8000
     log_level: str = "INFO"
     health_check_timeout_ms: int = 2000
     health_check_degraded_threshold_ms: int = 50

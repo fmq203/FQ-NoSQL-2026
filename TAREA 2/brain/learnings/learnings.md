@@ -103,3 +103,37 @@
 **Próximos pasos:** Aplicar correcciones, commit, push, luego ejecutar `/speckit.implement`
 
 **Tags:** #analysis #spec-kit #eventos-crud #constitution-compliance #pre-implementation
+
+---
+
+### 2026-09-25 — Corrección Docker Compose: eventos-service fallaba al iniciar (puerto y motor/pymongo)
+
+**Contexto:** Al ejecutar `docker-compose up`, el contenedor `eventflow_eventos` fallaba con error de importación `ImportError: cannot import name '_QUERY_OPTIONS' from 'pymongo.cursor'` y el health check fallaba porque el servicio escuchaba en puerto 8000 pero docker-compose mapeaba 8002.
+
+**Problema:** 
+1. Versión incompatible de motor (3.3.2) con pymongo (latest traía 4.8+) - motor 3.3.2 requiere pymongo <4.7
+2. Dockerfile hardcodeaba puerto 8000 en CMD pero docker-compose.yml exponía 8002
+3. Health check usaba `curl` que no estaba instalado en la imagen base
+
+**Análisis:**
+1. El error `_QUERY_OPTIONS` es un breaking change en pymongo 4.7+ que motor 3.3.2 no soporta
+2. El servicio leía `SERVICE_PORT` desde config.py pero el entrypoint no lo usaba
+3. El health check de docker-compose requiere curl disponible en el container
+
+**Decisión:**
+1. Pinnear `pymongo==4.6.1` en requirements.txt de eventos-service
+2. Agregar `service_port` a config.py con env var `SERVICE_PORT`
+3. Cambiar Dockerfile CMD a usar `${SERVICE_PORT:-8002}` via shell
+4. Instalar `curl` en Dockerfile para health checks
+5. Actualizar .env y .env.example con `SERVICE_PORT=8002`
+6. Aplicar mismos fixes a reservas-service (actualizar requirements.txt con motor, pymongo, pydantic-settings)
+
+**Resultado:**
+- eventos-service: Healthy ✅ (puerto 8002, MongoDB OK)
+- reservas-service: Healthy ✅ (puerto 8003, MongoDB/Redis/PostgreSQL/usuarios/eventos OK)
+- usuarios-service: Healthy ✅ (puerto 8001)
+- Todos los 5 contenedores (3 DBs + 3 services) saludables
+
+**Próximos pasos:** Ejecutar tests de integración y validar SAGA completa
+
+**Tags:** #docker #docker-compose #motor #pymongo #healthcheck #deployment #fix
