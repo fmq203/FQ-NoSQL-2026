@@ -69,6 +69,9 @@ async def init_pg_schema() -> None:
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_event_log_timestamp ON event_log(timestamp DESC)
         """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_event_log_correlation ON event_log(correlation_id)
+        """)
 
     logger.info("✅ PostgreSQL schema inicializado (pagos + event_log)")
 

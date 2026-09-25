@@ -45,123 +45,105 @@ class TestAuditCompleteness:
     @pytest.mark.integration
     async def test_successful_reservation_logs_all_events(self):
         """Test successful reservation logs all 7 success events."""
-        with patch("src.services.postgresql.insert_event_log") as mock_insert:
-            mock_insert.return_value = None
-            
-            # Simulate a successful SAGA by calling handlers directly
-            from src.chain.validators import (
-                ValidadorDeDatos, ValidadorInventario, ValidadorEvento,
-                ProcesadorPago, ConfirmadorReserva, Auditor, ChainBuilder
-            )
-            from src.models.reserva import ReservaContext, SagaStep, EventType
-            from uuid import uuid4
-            from datetime import datetime
-            
+        from src.chain.validators import ChainBuilder
+        from src.models.reserva import ReservaContext
+
+        # Mock external calls. Patched at src.chain.validators (the actual
+        # call sites) - see test_double_booking.py for why patching the
+        # origin modules doesn't intercept an already-imported name.
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_usuario, \
+             patch("src.chain.validators.get_evento", new_callable=AsyncMock) as mock_evento, \
+             patch("src.chain.validators.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_pago, \
+             patch("src.chain.validators.decrementar_inventario_evento", new_callable=AsyncMock) as mock_decrementar_evento, \
+             patch("src.chain.validators.get_reservas_collection", new_callable=AsyncMock) as mock_mongo, \
+             patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
+
+            mock_usuario.return_value = {"nombre": "Test"}
+            mock_evento.return_value = {
+                "estado": "publicado",
+                "entradas_disponibles": 10,
+                "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 10}]
+            }
+            mock_pago.return_value = {"success": True, "message": "OK"}
+            mock_decrementar_evento.return_value = {"disponibles": 9}
+
+            mock_collection = AsyncMock()
+            mock_collection.insert_one = AsyncMock()
+            mock_collection.find_one = AsyncMock(return_value=None)
+            mock_mongo.return_value = mock_collection
+
+            chain = ChainBuilder.build()
             context = ReservaContext(
                 usuario_id=uuid4(),
                 evento_id=uuid4(),
                 cantidad=1,
+                categoria="general",
                 metodo_pago="tarjeta",
                 reserva_id=uuid4(),
                 correlation_id=uuid4()
             )
-            
-            # Mock external calls
-            with patch("src.chain.validators.get_usuario") as mock_usuario, \
-                 patch("src.chain.validators.get_evento") as mock_evento, \
-                 patch("src.chain.validators.ejecutar_pagar_y_decrementar") as mock_pago, \
-                 patch("src.chain.validators.get_reservas_collection") as mock_mongo, \
-                 patch("src.chain.validators.insert_event_log") as mock_pg:
-                
-                mock_usuario.return_value = AsyncMock(return_value={"nombre": "Test"})
-                mock_evento.return_value = {
-                    "estado": "publicado",
-                    "entradas_disponibles": 10,
-                    "precios": [{"categoria": "general", "precio": 50.0, "disponibles": 10}]
-                }
-                
-                from src.services.redis_pago import ejecutar_pagar_y_decrementar
-                import src.chain.validators as validators_module
-                original_pago = validators_module.ejecutar_pagar_y_decrementar
-                validators_module.ejecutar_pagar_y_decrementar = AsyncMock(return_value={"success": True, "message": "OK"})
-                
-                mock_mongo.return_value = AsyncMock()
-                mock_mongo.return_value.insert_one = AsyncMock()
-                mock_mongo.return_value.find_one = AsyncMock(return_value=None)
-                
-                validators_module.insert_event_log = AsyncMock()
-                
-                try:
-                    chain = ChainBuilder.build()
-                    context = ReservaContext(
-                        usuario_id=uuid4(),
-                        evento_id=uuid4(),
-                        cantidad=1,
-                        metodo_pago="tarjeta",
-                        reserva_id=uuid4(),
-                        correlation_id=uuid4()
-                    )
-                    
-                    context = await chain.handle(context)
-                    
-                    # Check that events were logged
-                    # In a real test, we'd verify the actual insert_event_log calls
-                    pass
-                finally:
-                    validators_module.ejecutar_pagar_y_decrementar = original_pago
+
+            context = await chain.handle(context)
+
+            assert context.error is None, f"Chain failed: {context.error}"
+
+            # Auditor (the last handler) only runs - and logs
+            # SAGA_COMPLETED - if every prior handler succeeded, so its
+            # presence is proof the other 6 events were logged too without
+            # having to assert each one's exact position.
+            event_types = [
+                call.kwargs.get("event_type") or call.args[0]
+                for call in mock_pg.call_args_list
+            ]
+            for expected in ("USUARIO_VALIDADO", "EVENTO_VALIDADO", "PAGO_PROCESADO",
+                              "INVENTARIO_DECREMENTADO", "RESERVA_CONFIRMADA"):
+                assert expected in event_types, f"Missing event: {expected}"
 
     @pytest.mark.integration
     async def test_failed_saga_logs_saga_failed_and_compensation(self):
         """Test failed SAGA logs SAGA_FAILED and COMPENSACION_EJECUTADA."""
-        with patch("src.services.postgresql.insert_event_log") as mock_insert:
-            mock_insert.return_value = None
-            
-            # Simulate failed SAGA at step 5 (MongoDB)
-            from src.chain.validators import ConfirmadorReserva
-            from src.models.reserva import ReservaContext, SagaStep
-            from uuid import uuid4
-            
-            handler = ConfirmadorReserva()
+        # Simulate failed SAGA at step 5 (MongoDB)
+        from src.chain.validators import ConfirmadorReserva
+        from src.models.reserva import ReservaContext
+
+        with patch("src.chain.validators.get_reservas_collection", new_callable=AsyncMock) as mock_collection, \
+             patch("src.chain.validators.ejecutar_compensar_pago_inventario", new_callable=AsyncMock) as mock_comp, \
+             patch("src.chain.validators.incrementar_inventario_evento", new_callable=AsyncMock) as mock_incr, \
+             patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
+
+            mock_coll = AsyncMock()
+            mock_coll.find_one.return_value = None
+            mock_coll.insert_one.side_effect = Exception("MongoDB down")
+            mock_collection.return_value = mock_coll
+
+            mock_comp.return_value = {"success": True, "message": "COMPENSACION_OK"}
+            mock_incr.return_value = None
+            mock_pg.return_value = None
+
             context = ReservaContext(
                 usuario_id=uuid4(),
                 evento_id=uuid4(),
                 cantidad=1,
+                categoria="general",
                 metodo_pago="tarjeta",
                 reserva_id=uuid4(),
                 correlation_id=uuid4(),
                 pago_data={"monto": 50.0}
             )
-            
-            with patch("src.chain.validators.get_reservas_collection") as mock_collection:
-                mock_coll = AsyncMock()
-                mock_coll.find_one.return_value = None
-                mock_coll.insert_one.side_effect = Exception("MongoDB down")
-                mock_collection.return_value = mock_coll
-                
-                with patch("src.chain.validators.ejecutar_compensar_pago_inventario") as mock_comp:
-                    mock_comp.return_value = {"success": True, "message": "COMPENSACION_OK"}
-                    
-                    with patch("src.chain.validators.insert_event_log") as mock_pg:
-                        mock_pg.return_value = None
-                        
-                        context = ReservaContext(
-                            usuario_id=uuid4(),
-                            evento_id=uuid4(),
-                            cantidad=1,
-                            metodo_pago="tarjeta",
-                            reserva_id=uuid4(),
-                            correlation_id=uuid4(),
-                            pago_data={"monto": 50.0}
-                        )
-                        
-                        result = await ConfirmadorReserva().handle(context)
-                        
-                        # Verify compensation event was logged
-                        assert result.compensation_triggered is True
-                        # Check COMPENSACION_EJECUTADA was logged
-                        pg_calls = [c for c in mock_insert.call_args_list 
-                                   if c.kwargs.get("event_type") == "COMPENSACION_EJECUTADA"]
-                        assert len(pg_calls) >= 1
+
+            result = await ConfirmadorReserva().handle(context)
+
+            # Verify compensation ran
+            assert result.compensation_triggered is True
+            mock_comp.assert_called_once()
+            mock_incr.assert_called_once()
+
+            # Check COMPENSACION_EJECUTADA was logged
+            pg_calls = [
+                c for c in mock_pg.call_args_list
+                if c.kwargs.get("event_type") == "COMPENSACION_EJECUTADA"
+            ]
+            assert len(pg_calls) >= 1
 
     @pytest.mark.integration
     async def test_correlation_id_index_exists_and_used(self):
