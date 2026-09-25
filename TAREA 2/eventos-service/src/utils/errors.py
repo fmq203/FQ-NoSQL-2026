@@ -14,6 +14,7 @@ ERROR_CODES = {
     "VALIDATION_ERROR": f"{ERROR_TYPE_BASE}/validation-error",
     "NOT_FOUND": f"{ERROR_TYPE_BASE}/not-found",
     "DUPLICATE_EVENT": f"{ERROR_TYPE_BASE}/duplicate-event",
+    "INSUFFICIENT_INVENTORY": f"{ERROR_TYPE_BASE}/insufficient-inventory",
     "INTERNAL_ERROR": f"{ERROR_TYPE_BASE}/internal-error",
     "SERVICE_UNAVAILABLE": f"{ERROR_TYPE_BASE}/service-unavailable",
 }
@@ -22,6 +23,7 @@ ERROR_TITLES = {
     "VALIDATION_ERROR": "Validation Error",
     "NOT_FOUND": "Not Found",
     "DUPLICATE_EVENT": "Conflict",
+    "INSUFFICIENT_INVENTORY": "Conflict",
     "INTERNAL_ERROR": "Internal Server Error",
     "SERVICE_UNAVAILABLE": "Service Unavailable",
 }
