@@ -46,7 +46,7 @@ brain/
 │
 ├── patterns/                          ← Patrones de diseño
 │   ├── saga-pattern.md               ✅ SAGA orchestration
-│   ├── chain-of-responsibility-pattern.md ✅ Validadores modulares
+│   ├── chain-of-responsibility.md ✅ Validadores modulares
 │   └── event-sourcing-cqrs.md        ⏳ (Opcional)
 │
 ├── deployment/                        ← Docker & deploy
@@ -76,7 +76,7 @@ brain/
 | **Event Log Schema** | ✅ Done | [`event-log-schema.md`](./data-models/event-log-schema.md) |
 | **SAGA Pattern** | ✅ Done | [`saga-pattern.md`](./patterns/saga-pattern.md) |
 | **Event Log Pattern** | ✅ Done | [`event-log-pattern.md`](./patterns/event-log-pattern.md) |
-| **Chain of Responsibility** | ✅ Done | [`chain-of-responsibility-pattern.md`](./patterns/chain-of-responsibility-pattern.md) |
+| **Chain of Responsibility** | ✅ Done | [`chain-of-responsibility.md`](./patterns/chain-of-responsibility.md) |
 | **Docker Setup** | ✅ Done | [`docker-setup.md`](./deployment/docker-setup.md) |
 | **docker-compose.yml** | ✅ Done | [`docker-compose.md`](./deployment/docker-compose.md) |
 | **Event Sourcing/CQRS** | ⏳ Opcional | (Investigar después de MVP) |
@@ -105,7 +105,7 @@ brain/
 ```
 - Revisa data-models/{tu-schema}.md para estructura de datos
 - Sigue endpoints/{tu-service}-endpoints.md para API
-- Implementa validaciones en patterns/chain-of-responsibility-pattern.md
+- Implementa validaciones en patterns/chain-of-responsibility.md
 ```
 
 ### Paso 4: Testea Localmente
@@ -173,7 +173,7 @@ R: Ver [`decisions/db-selection.md`](./decisions/db-selection.md) — MongoDB pa
 R: Ver [`patterns/saga-pattern.md`](./patterns/saga-pattern.md) — pasos secuenciales + compensaciones automáticas en caso de fallo.
 
 **P: ¿Qué es Chain of Responsibility?**  
-R: Ver [`patterns/chain-of-responsibility-pattern.md`](./patterns/chain-of-responsibility-pattern.md) — cadena modular de validadores.
+R: Ver [`patterns/chain-of-responsibility.md`](./patterns/chain-of-responsibility.md) — cadena modular de validadores.
 
 **P: ¿Cómo inicio los servicios?**  
 R: Ver [`deployment/docker-compose.md`](./deployment/docker-compose.md) — `docker-compose up -d`

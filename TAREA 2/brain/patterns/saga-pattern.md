@@ -199,7 +199,7 @@ correlation_id = uuid4()
 ## Referencias
 
 - `brain/architecture/saga-flow.md` - Diagrama completo + Lua scripts
-- `brain/architecture/chain-of-responsibility.md` - Handlers implementados
+- `brain/patterns/chain-of-responsibility.md` - Handlers implementados
 - `brain/data-models/reservation-schema.md` - Esquemas MongoDB/Redis/PG
 - `brain/patterns/event-sourcing-cqrs.md` - Event Sourcing + CQRS
 - `brain/decisions/consistency-strategy.md` - Consistencia fuerte en SAGA

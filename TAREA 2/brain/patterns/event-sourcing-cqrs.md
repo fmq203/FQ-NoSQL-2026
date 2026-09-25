@@ -235,7 +235,7 @@ class ReservaState:
 ## Referencias
 
 - `brain/architecture/saga-flow.md` - Generación de eventos por paso
-- `brain/architecture/chain-of-responsibility.md` - Auditor handler
+- `brain/patterns/chain-of-responsibility.md` - Auditor handler
 - `brain/data-models/reservation-schema.md` - Tabla event_log DDL
 - `brain/data-models/db-choice-rationale.md` - PostgreSQL para Event Sourcing
 - Martin Fowler - Event Sourcing: https://martinfowler.com/eaaDev/EventSourcing.html

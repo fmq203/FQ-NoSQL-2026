@@ -147,7 +147,7 @@ curl http://localhost:8003/openapi.json | jq '.components.schemas'
 
 - [[microservices/reservas-pagos]] - Spec completa servicio
 - [[architecture/saga-flow]] - Flujo completo 6 pasos + compensaciones
-- [[architecture/chain-of-responsibility]] - 6 handlers Chain of Responsibility
+- [[chain-of-responsibility]] - 6 handlers Chain of Responsibility
 - [[patterns/saga-pattern]] - SAGA Orchestration
 - [[patterns/event-sourcing-cqrs]] - Event Sourcing + CQRS en PostgreSQL
 - [[data-models/reservation-schema]] - Esquemas MongoDB/Redis/PostgreSQL

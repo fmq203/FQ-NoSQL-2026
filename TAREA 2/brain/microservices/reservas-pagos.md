@@ -176,7 +176,7 @@ Ver [[architecture/saga-flow]] para diagrama completo.
 
 ## Chain of Responsibility
 
-Ver [[architecture/chain-of-responsibility]] para implementación completa.
+Ver [[chain-of-responsibility]] para implementación completa.
 
 ### Handlers en Orden
 
@@ -265,7 +265,7 @@ GROUP BY e.nombre;
 ## Referencias
 
 - [[architecture/saga-flow]] — Diagrama y pasos SAGA
-- [[architecture/chain-of-responsibility]] — Implementación CoR
+- [[chain-of-responsibility]] — Implementación CoR
 - [[patterns/event-sourcing-cqrs]] — Event Sourcing + CQRS
 - [[data-models/reservation-schema]] — Esquemas detallados
 - [[endpoints/reservas-endpoints]] — Referencia OpenAPI

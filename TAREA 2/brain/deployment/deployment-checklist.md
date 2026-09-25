@@ -138,4 +138,4 @@ metadata:
 - [[deployment/docker-setup]] - Dockerfiles
 - [[decisions/deployment-strategy]] - Estrategia completa K8s
 - [[architecture/saga-flow]] - Validación compensaciones
-- [[architecture/chain-of-responsibility]] - Validación handlers
+- [[chain-of-responsibility]] - Validación handlers
