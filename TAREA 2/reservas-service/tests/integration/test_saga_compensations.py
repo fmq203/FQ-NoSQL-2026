@@ -37,43 +37,41 @@ class TestSAGACompensations:
             }
         mock_get_evento.side_effect = mock_get_evento_impl
 
-        mock_redis = AsyncMock()
-        mock_redis.return_value = {"success": True, "message": "OK"}
-
-        mock_mongo = AsyncMock()
         mock_collection = AsyncMock()
-        mock_mongo.return_value = mock_collection
+        mock_collection.insert_one = AsyncMock()
+        mock_collection.find_one = AsyncMock(return_value=None)
 
-        mock_pg = AsyncMock()
-        mock_pg.return_value = None
-
-        mock_idempotency = AsyncMock()
-        mock_idempotency.return_value = None
-
-        # Patch at both source and imported locations
-        with patch("src.services.http_clients.get_usuario", mock_get_usuario), \
-             patch("src.services.http_clients.get_evento", mock_get_evento), \
-             patch("src.chain.validators.get_usuario", mock_get_usuario), \
+        # IMPORTANT: src/chain/validators.py does
+        # `from ..services.redis_pago import ejecutar_pagar_y_decrementar`,
+        # which binds its own name in the validators module namespace.
+        # Patching src.services.redis_pago.* (the origin module) does NOT
+        # intercept that already-imported name - the patch has to target
+        # src.chain.validators.* (the actual call site) to take effect.
+        with patch("src.chain.validators.get_usuario", mock_get_usuario), \
              patch("src.chain.validators.get_evento", mock_get_evento), \
-             patch("src.services.redis_pago.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis, \
-             patch("src.services.mongo.get_reservas_collection", new_callable=AsyncMock) as mock_mongo, \
-             patch("src.services.postgresql.insert_event_log", new_callable=AsyncMock) as mock_pg, \
+             patch("src.chain.validators.ejecutar_pagar_y_decrementar", new_callable=AsyncMock) as mock_redis, \
+             patch("src.chain.validators.ejecutar_compensar_pago_inventario", new_callable=AsyncMock) as mock_redis_compensar, \
+             patch("src.chain.validators.decrementar_inventario_evento", new_callable=AsyncMock) as mock_decrementar_evento, \
+             patch("src.chain.validators.incrementar_inventario_evento", new_callable=AsyncMock) as mock_incrementar_evento, \
+             patch("src.chain.validators.get_reservas_collection", new_callable=AsyncMock) as mock_mongo, \
+             patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg, \
              patch("src.api.routes.reservas.check_idempotency", new_callable=AsyncMock) as mock_idempotency:
 
             mock_redis.return_value = {"success": True, "message": "OK"}
-
-            mock_collection = AsyncMock()
-            mock_collection.insert_one = AsyncMock()
-            mock_collection.find_one = AsyncMock(return_value=None)
+            mock_redis_compensar.return_value = {"success": True, "message": "COMPENSACION_OK"}
+            mock_decrementar_evento.return_value = {"disponibles": 99}
+            mock_incrementar_evento.return_value = None
             mock_mongo.return_value = mock_collection
-
             mock_pg.return_value = None
             mock_idempotency.return_value = None
 
             yield {
                 "redis": mock_redis,
+                "redis_compensar": mock_redis_compensar,
+                "decrementar_evento": mock_decrementar_evento,
+                "incrementar_evento": mock_incrementar_evento,
                 "mongo": mock_collection,
-                "pg": AsyncMock(return_value=None)
+                "pg": mock_pg,
             }
 
     @pytest.mark.integration
@@ -125,6 +123,7 @@ class TestSAGACompensations:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 100,  # More than available
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
 
