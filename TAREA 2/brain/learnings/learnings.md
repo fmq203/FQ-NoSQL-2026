@@ -217,3 +217,33 @@
 **Próximos pasos:** Iniciar implementación SAGA completa (003-reservation-payment) usando Eventos Service para validación de aforo
 
 **Tags:** #post-implementation #verification #speckit-analyze #eventos-crud #constitution-compliance #saga-ready
+
+---
+
+### 2026-09-25 — Auditoría completa post-restructuración (Claude Sonnet 5) + plan de correcciones
+
+**Contexto:** Tras el commit `f534742` ("restructuración completa del repositorio"), se solicitó una revisión exhaustiva de todo lo hecho con specify-cli antes de seguir avanzando. Sesión realizada en modo solo lectura (sin cambios), cubriendo código de los 3 servicios, specs de spec-kit, `constitution.md`, `docker-compose.yml`, suite de tests y documentación (`brain/` y `docs/`).
+
+**Problema/Decisión:** Identificar gaps entre lo documentado/especificado (constitution, specs 001-003) y el código realmente ejecutado, en particular en reservas-service, que implementa los dos patrones core de la tarea (SAGA + Chain of Responsibility).
+
+**Análisis:**
+1. Reservas-service tiene dos implementaciones paralelas: `src/api/routes.py` (con `ChainBuilder` + `saga_orchestrator` + event log, no usado) y el paquete `src/api/routes/` (el que realmente monta `main.py`, con lógica ad-hoc en `reserva_service.py`). FastAPI carga el paquete, no el módulo suelto.
+2. Prefijo de router duplicado: `routes/reservas.py` ya define `prefix="/reservar"` y `routes/__init__.py` lo vuelve a montar bajo `/api/v1`, resultando en `/api/v1/reservar/reservar` en vez de `/api/reservar` (el path que pide el PDF de la tarea).
+3. `redis_pago.get_redis_client()` es `async def` pero se invoca sin `await` en `reserva_service.py` → se llama `.evalsha` sobre una corrutina, rompiendo el paso de pago en todos los casos.
+4. La clave Redis de inventario (`evento:{id}:categoria:{cat}:disponibles`) nunca se inicializa; el script Lua devuelve `-1` (clave inexistente) y el código hace `pass` sin bloquear la reserva → sin protección real contra doble venta.
+5. No existe la tabla `event_log` en PostgreSQL (solo `pagos`); el patrón Event Log documentado en `brain/patterns/event-log-pattern.md` no está implementado en el código real.
+6. Compensaciones incompletas: si falla el insert en MongoDB no se libera el inventario reservado en Redis ni se revierte el pago. `entradas_disponibles` en eventos-service nunca se decrementa desde reservas.
+7. Manejo de errores: las `EventFlowHTTPException` (404/409) quedan atrapadas por un `except Exception` genérico y se devuelven como 500/503, perdiendo el código HTTP correcto.
+8. Valores hardcodeados: `total = 100.0` fijo pese a calcularse el precio real antes; el `reserva_id` que se registra no coincide con el `_id` persistido en Mongo.
+9. Los tests de reservas-service importan funciones que ya no existen tras la restructuración (`ejecutar_pagar_y_decrementar`, `insert_event_log`, `get_events_by_aggregate`, `get_saga_success_rate`) — la suite no puede correr tal cual está.
+10. Rutas no alineadas con el enunciado: eventos responde en `/api/v1/eventos` (el PDF pide `/api/eventos`); en usuarios, `/usuarios/exportar` está declarado después de `/usuarios/{usuario_id}`, por lo que "exportar" se interpreta como UUID → 422.
+11. Usuarios-service: 28/38 tests fallan localmente (UUID no serializable en el handler de errores RFC 7807, normalización de email a minúsculas, tests de integración/performance sin Mongo disponible en el venv local).
+12. Eventos-service: 62/63 tests pasan; solo falla `test_openapi_compliance` por API de `schemathesis` desactualizada (`from_path` ya no existe en la versión instalada).
+13. spec-kit desalineado: spec 001 referencia rama `004-usuarios-crud` y spec 002 referencia `005-eventos-crud`, pero las carpetas quedaron numeradas 001/002/003 tras la restructuración; `.specify/feature.json` sigue apuntando a `005-eventos-crud` (ya renombrada); spec 001 no tiene `plan.md` ni `tasks.md`.
+14. Documentación duplicada y desincronizada: `brain/` y `docs/` tienen los mismos diagramas (saga-flow, chain-of-responsibility, etc.); `brain/patterns/` tiene dos archivos de Chain of Responsibility; el brain describe Redis como "store de pagos" pero el código real usa Redis solo para el contador de inventario.
+
+**Decisión/Resultado:** No se aplicó ningún cambio en esta sesión (auditoría pura, sin escritura de código). Se entregó al usuario un veredicto priorizado: reservas-service es el bloqueante principal porque los dos patrones evaluados por la cátedra (SAGA, Chain of Responsibility) no están conectados al flujo que realmente se ejecuta. Eventos-service es el servicio más sano del repo. Se propuso un orden de trabajo: (1) unificar el router de reservas y conectar el Chain/SAGA reales al flujo, arreglar el `await` de Redis e inicializar el inventario, agregar `event_log` con sus compensaciones; (2) alinear rutas con el PDF; (3) reparar y correr la suite de tests de reservas; (4) limpiar numeración de spec-kit y unificar `brain/`/`docs/`.
+
+**Próximos pasos:** Ejecutar el plan de correcciones anterior, con un commit independiente por cada cambio significativo, y registrar cada uno en este archivo a medida que se completa.
+
+**Tags:** #audit #reservas-service #saga #chain-of-responsibility #redis #spec-kit #tech-debt #claude-sonnet-5
