@@ -5,7 +5,7 @@ description: "Task list for Eventos CRUD Service implementation"
 
 # Tasks: Eventos CRUD Service
 
-**Input**: Design documents from `/specs/005-eventos-crud/`
+**Input**: Design documents from `/specs/002-eventos-crud/`
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
