@@ -89,11 +89,12 @@ class TestSAGAHappyPath:
 
         # Make request
         response = await client.post(
-            "/api/v1/reservar",
+            "/api/reservar",
             json={
                 "usuario_id": usuario_id,
                 "evento_id": evento_id,
                 "cantidad": 2,
+                "categoria": "general",
                 "metodo_pago": "tarjeta"
             }
         )
@@ -148,19 +149,21 @@ class TestSAGAHappyPath:
             "usuario_id": usuario_id,
             "evento_id": evento_id,
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta",
             "reserva_id": reserva_id  # Include idempotency key
         }
 
-        response1 = await client.post("/api/v1/reservar", json=request_data)
+        response1 = await client.post("/api/reservar", json=request_data)
         assert response1.status_code == 201
         assert response1.json()["reserva_id"] == reserva_id
 
         # Second request with SAME data AND same reserva_id (simulate retry) - should be idempotent
-        response2 = await client.post("/api/v1/reservar", json={
+        response2 = await client.post("/api/reservar", json={
             "usuario_id": usuario_id,
             "evento_id": evento_id,
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta",
             "reserva_id": reserva_id  # Same idempotency key
         })

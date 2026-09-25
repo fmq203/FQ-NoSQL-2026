@@ -57,10 +57,11 @@ class TestQuickstartValidation:
                 assert "checks" in data
                 
                 # 2. Create reservation (SAGA happy path)
-                response = await client.post("/api/v1/reservar", json={
+                response = await client.post("/api/reservar", json={
                     "usuario_id": str(uuid4()),
                     "evento_id": str(uuid4()),
                     "cantidad": 2,
+                    "categoria": "general",
                     "metodo_pago": "tarjeta"
                 })
                 assert response.status_code == 201
@@ -71,12 +72,12 @@ class TestQuickstartValidation:
                 reserva_id = data["reserva_id"]
                 
                 # 3. Get reservation
-                response = await client.get(f"/api/v1/reservar/{reserva_id}")
+                response = await client.get(f"/api/reservar/{reserva_id}")
                 assert response.status_code == 200
                 assert response.json()["reserva_id"] == reserva_id
                 
                 # 4. List reservations
-                response = await client.get("/api/v1/reservar")
+                response = await client.get("/api/reservar")
                 assert response.status_code == 200
                 assert isinstance(response.json(), list)
                 

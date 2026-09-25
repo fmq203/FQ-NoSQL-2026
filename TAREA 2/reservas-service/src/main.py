@@ -8,6 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
 from src.services.mongodb import connect_to_mongodb, close_mongodb_connection
+from src.services.mongo import (
+    init_mongodb_indexes,
+    close_mongodb_connection as close_saga_mongo_connection,
+)
 from src.services.redis_pago import register_lua_scripts, close_redis_connection
 from src.services.postgresql import init_pg_schema, close_pg_pool
 from src.services.http_clients import close_http_clients
@@ -23,10 +27,12 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     setup_json_logging(settings.log_level)
     await connect_to_mongodb()
+    await init_mongodb_indexes()
     await register_lua_scripts()
     await init_pg_schema()
     yield
     await close_mongodb_connection()
+    await close_saga_mongo_connection()
     await close_redis_connection()
     await close_pg_pool()
     await close_http_clients()

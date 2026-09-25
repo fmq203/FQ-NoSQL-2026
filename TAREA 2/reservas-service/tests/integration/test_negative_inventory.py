@@ -66,6 +66,7 @@ class TestNegativeInventory:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
         
@@ -74,7 +75,7 @@ class TestNegativeInventory:
         for i in range(10):
             req = request_data.copy()
             req["usuario_id"] = str(uuid4())
-            response = await client.post("/api/v1/reservar", json=req)
+            response = await client.post("/api/reservar", json=req)
             results.append((response.status_code, response.json() if response.status_code == 201 else None))
         
         # Verify no negative inventory - only 5 should succeed
@@ -100,13 +101,14 @@ class TestNegativeInventory:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
         
         async def make_request():
             req = request_data.copy()
             req["usuario_id"] = str(uuid4())
-            response = await client.post("/api/v1/reservar", json=req)
+            response = await client.post("/api/reservar", json=req)
             return response.status_code
         
         # 50 concurrent requests, only 5 tickets available

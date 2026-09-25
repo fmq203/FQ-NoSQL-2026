@@ -57,12 +57,13 @@ class TestSAGAP99:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
         
         async def make_request():
             start = time.perf_counter()
-            response = await client.post("/api/v1/reservar", json=request_data)
+            response = await client.post("/api/reservar", json=request_data)
             end = time.perf_counter()
             return (end - start) * 1000, response.status_code
         

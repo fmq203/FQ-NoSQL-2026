@@ -59,6 +59,7 @@ class TestLoad:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 1,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
         
@@ -70,7 +71,7 @@ class TestLoad:
             req["usuario_id"] = str(uuid4())
             start = time.perf_counter()
             try:
-                response = await client.post("/api/v1/reservar", json=req)
+                response = await client.post("/api/reservar", json=req)
                 latency_ms = (time.perf_counter() - start) * 1000
                 results.append((response.status_code, latency_ms))
             except Exception as e:
@@ -94,7 +95,7 @@ class TestLoad:
             for i in range(batch_size):
                 req = request_data.copy()
                 req["usuario_id"] = str(uuid4())
-                tasks.append(client.post("/api/v1/reservar", json=req))
+                tasks.append(client.post("/api/reservar", json=req))
             
             batch_start = time.time()
             responses = await asyncio.gather(*tasks, return_exceptions=True)

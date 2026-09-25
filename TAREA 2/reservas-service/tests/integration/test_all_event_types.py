@@ -62,10 +62,11 @@ class TestAllEventTypes:
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
             "cantidad": 2,
+            "categoria": "general",
             "metodo_pago": "tarjeta"
         }
         
-        response = await client.post("/api/v1/reservar", json=request_data)
+        response = await client.post("/api/reservar", json=request_data)
         
         assert response.status_code == 201
         reserva_id = response.json()["reserva_id"]
@@ -116,11 +117,12 @@ class TestAllEventTypes:
             mock_eventos.get.return_value = AsyncMock(status_code=404, json=lambda: {})
             
             response = await AsyncClient(app=app, base_url="http://test").post(
-                "/api/v1/reservar",
+                "/api/reservar",
                 json={
                     "usuario_id": str(uuid4()),
                     "evento_id": str(uuid4()),
                     "cantidad": 1,
+                    "categoria": "general",
                     "metodo_pago": "tarjeta"
                 }
             )
