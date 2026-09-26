@@ -74,7 +74,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     correlation_id = getattr(request.state, "correlation_id", str(uuid4()))
     detail = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors())
     error_response = create_error_response(
-        error_code="validation-error",
+        error_code="VALIDATION_ERROR",
         title="Validation Error",
         status_code=422,
         detail=detail,
@@ -89,7 +89,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def pydantic_validation_exception_handler(request: Request, exc: ValidationError) -> JSONResponse:
     correlation_id = getattr(request.state, "correlation_id", str(uuid4()))
     error_response = create_error_response(
-        error_code="validation-error",
+        error_code="VALIDATION_ERROR",
         title="Validation Error",
         status_code=422,
         detail=str(exc),
@@ -104,8 +104,8 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """Manejador para HTTPException de Starlette (404 de ruta inexistente, etc)."""
     correlation_id = getattr(request.state, "correlation_id", str(uuid4()))
-    error_codes = {404: "not-found", 409: "conflict", 503: "service-unavailable"}
-    error_code = error_codes.get(exc.status_code, "http-error")
+    error_codes = {404: "NOT_FOUND", 409: "CONFLICT", 503: "SERVICE_UNAVAILABLE"}
+    error_code = error_codes.get(exc.status_code, "HTTP_ERROR")
     error_response = create_error_response(
         error_code=error_code,
         title=str(exc.detail) if exc.detail else "HTTP Error",
@@ -124,7 +124,7 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     correlation_id = getattr(request.state, "correlation_id", str(uuid4()))
     logger.exception(f"Error no manejado: {exc}")
     error_response = create_error_response(
-        error_code="internal-error",
+        error_code="INTERNAL_ERROR",
         title="Internal Server Error",
         status_code=500,
         detail="Error interno del servidor",

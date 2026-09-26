@@ -21,21 +21,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["reservas"])
 
 _ERROR_CODE_BY_STATUS = {
-    400: "validation-error",
-    404: "not-found",
-    409: "conflict",
-    422: "validation-error",
-    500: "internal-error",
-    503: "service-unavailable",
+    400: "VALIDATION_ERROR",
+    404: "NOT_FOUND",
+    409: "CONFLICT",
+    422: "VALIDATION_ERROR",
+    500: "INTERNAL_ERROR",
+    503: "SERVICE_UNAVAILABLE",
 }
 
 
 def _raise_from_context(context: ReservaContext, instance: str) -> None:
+    """Traduce el resultado de la cadena a un EventFlowHTTPException RFC 7807.
+
+    Usa context.error_code (seteado por el handler que detecto el fallo,
+    ej. USER_NOT_FOUND, INSUFFICIENT_INVENTORY) cuando esta disponible, para
+    que el `type` URI identifique la causa real en vez de solo el status
+    HTTP. Si algun paso no lo setea explicitamente, cae al mapeo generico
+    por status_code.
+    """
     status_code = context.status_code or 500
-    error_code = _ERROR_CODE_BY_STATUS.get(status_code, "internal-error")
+    error_code = context.error_code or _ERROR_CODE_BY_STATUS.get(status_code, "INTERNAL_ERROR")
     raise EventFlowHTTPException(
         error_code=error_code,
-        title=error_code.replace("-", " ").title(),
+        title=error_code.replace("_", " ").title(),
         status_code=status_code,
         detail=context.error or "Error procesando la reserva",
         instance=instance,
@@ -163,7 +171,7 @@ async def obtener_reserva(reserva_id: UUID) -> ReservaResponse:
     doc = await collection.find_one({"_id": reserva_id})
     if not doc:
         raise EventFlowHTTPException(
-            error_code="not-found",
+            error_code="RESERVA_NOT_FOUND",
             title="Not Found",
             status_code=404,
             detail="Reserva no encontrada",

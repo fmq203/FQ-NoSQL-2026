@@ -86,6 +86,7 @@ class ReservaContext:
     pago_data: Optional[Dict] = None
     reserva_data: Optional[Dict] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None
     status_code: int = 200
     saga_log: List[Dict] = field(default_factory=list)
     compensation_triggered: bool = False

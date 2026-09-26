@@ -44,6 +44,7 @@ class ValidadorDeDatos(BaseHandler):
                 UUID(str(context.evento_id))
             except ValueError:
                 context.error = "UUID inválido"
+                context.error_code = "VALIDATION_ERROR"
                 context.status_code = 400
                 self._add_saga_log(context, self._step_name, False, "UUID inválido")
                 status = "validation_error"
@@ -52,6 +53,7 @@ class ValidadorDeDatos(BaseHandler):
             # Validar cantidad > 0
             if context.cantidad <= 0:
                 context.error = "Cantidad debe ser mayor a 0"
+                context.error_code = "VALIDATION_ERROR"
                 context.status_code = 400
                 self._add_saga_log(context, self._step_name, False, "Cantidad inválida")
                 status = "validation_error"
@@ -61,6 +63,7 @@ class ValidadorDeDatos(BaseHandler):
             valid_metodos = ["tarjeta", "transferencia", "efectivo", "mercadopago"]
             if context.metodo_pago not in valid_metodos:
                 context.error = f"Método de pago inválido. Válidos: {valid_metodos}"
+                context.error_code = "VALIDATION_ERROR"
                 context.status_code = 400
                 self._add_saga_log(context, self._step_name, False, "Método pago inválido")
                 status = "validation_error"
@@ -87,6 +90,7 @@ class ValidadorInventario(BaseHandler):
             usuario = await get_usuario(str(context.usuario_id), str(context.correlation_id))
             if not usuario:
                 context.error = "Usuario no encontrado"
+                context.error_code = "USER_NOT_FOUND"
                 context.status_code = 404
                 self._add_saga_log(context, self._step_name, False, "Usuario no encontrado")
                 status = "not_found"
@@ -106,6 +110,7 @@ class ValidadorInventario(BaseHandler):
             record_db_operation_duration("postgresql", "insert", "success", time.perf_counter() - db_start)
         except Exception as e:
             context.error = "Error validando usuario"
+            context.error_code = "SERVICE_UNAVAILABLE"
             context.status_code = 503
             self._add_saga_log(context, self._step_name, False, f"Error servicio usuarios: {e}")
             status = "service_error"
@@ -129,6 +134,7 @@ class ValidadorEvento(BaseHandler):
             evento = await get_evento(str(context.evento_id), str(context.correlation_id))
             if not evento:
                 context.error = "Evento no encontrado"
+                context.error_code = "EVENT_NOT_FOUND"
                 context.status_code = 404
                 self._add_saga_log(context, self._step_name, False, "Evento no encontrado")
                 status = "not_found"
@@ -137,6 +143,7 @@ class ValidadorEvento(BaseHandler):
             # Verificar estado publicado
             if evento.get("estado") != "publicado":
                 context.error = "Evento no disponible para reservas"
+                context.error_code = "EVENT_NOT_AVAILABLE"
                 context.status_code = 409
                 self._add_saga_log(context, self._step_name, False, "Evento no publicado")
                 status = "unavailable"
@@ -149,6 +156,7 @@ class ValidadorEvento(BaseHandler):
             )
             if precio_categoria is None:
                 context.error = f"Categoria '{context.categoria}' no existe en este evento"
+                context.error_code = "VALIDATION_ERROR"
                 context.status_code = 422
                 self._add_saga_log(context, self._step_name, False, "Categoria inexistente")
                 status = "validation_error"
@@ -159,6 +167,7 @@ class ValidadorEvento(BaseHandler):
             aforo_disponible = precio_categoria.get("disponibles", 0)
             if aforo_disponible < context.cantidad:
                 context.error = "Inventario insuficiente"
+                context.error_code = "INSUFFICIENT_INVENTORY"
                 context.status_code = 409
                 self._add_saga_log(context, self._step_name, False,
                     f"Inventario insuficiente. Disponibles: {aforo_disponible}")
@@ -182,6 +191,7 @@ class ValidadorEvento(BaseHandler):
             record_db_operation_duration("postgresql", "insert", "success", time.perf_counter() - db_start)
         except Exception as e:
             context.error = "Error validando evento"
+            context.error_code = "SERVICE_UNAVAILABLE"
             context.status_code = 503
             self._add_saga_log(context, self._step_name, False, f"Error servicio eventos: {e}")
             status = "service_error"
@@ -218,10 +228,12 @@ class ProcesadorPago(BaseHandler):
             record_db_operation_duration("redis", "evalsha", "success" if result["success"] else "failed", 0)
 
             if not result["success"]:
+                es_inventario_insuficiente = "INSUFICIENTE" in result["message"]
                 context.error = result["message"]
-                context.status_code = 409 if "INSUFICIENTE" in result["message"] else 500
+                context.error_code = "INSUFFICIENT_INVENTORY" if es_inventario_insuficiente else "PAYMENT_FAILED"
+                context.status_code = 409 if es_inventario_insuficiente else 500
                 self._add_saga_log(context, self._step_name, False, result["message"])
-                status = "insufficient_inventory" if "INSUFICIENTE" in result["message"] else "payment_failed"
+                status = "insufficient_inventory" if es_inventario_insuficiente else "payment_failed"
                 return
 
             # Sincronizar la venta hacia eventos-service. Redis ya decidio
@@ -241,6 +253,7 @@ class ProcesadorPago(BaseHandler):
                     cantidad=context.cantidad,
                 )
                 context.error = f"Error sincronizando inventario con Eventos Service: {e}"
+                context.error_code = "SERVICE_UNAVAILABLE"
                 context.status_code = 503
                 self._add_saga_log(context, self._step_name, False, str(e))
                 status = "eventos_sync_failed"
@@ -276,6 +289,7 @@ class ProcesadorPago(BaseHandler):
             record_db_operation_duration("postgresql", "insert", "success", time.perf_counter() - db_start)
         except Exception as e:
             context.error = f"Error procesando pago: {e}"
+            context.error_code = "PAYMENT_FAILED"
             context.status_code = 500
             self._add_saga_log(context, self._step_name, False, str(e))
             status = "error"
@@ -377,6 +391,7 @@ class ConfirmadorReserva(BaseHandler):
             record_saga_compensation(self._step_name.value)
 
             context.error = f"Error confirmando reserva: {e}"
+            context.error_code = "RESERVATION_FAILED"
             context.status_code = 500
             self._add_saga_log(context, self._step_name, False, str(e))
             context.compensation_triggered = True

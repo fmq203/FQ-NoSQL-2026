@@ -37,4 +37,4 @@ class TestPOSTReservar:
         
         assert response.status_code == 422
         data = response.json()
-        assert data["type"] == "https://eventflow.example.com/errors/validation-error"
+        assert data["type"] == "https://eventflow.example.com/errors/VALIDATION_ERROR"
