@@ -16,6 +16,20 @@ class EventoService:
         self.collection = get_collection()
 
     async def create_event(self, evento: EventoCreate) -> EventoResponse:
+        # Chequeo explicito ademas del indice unico en "nombre"
+        # (mongodb.py::create_indexes): los fixtures de test no siempre
+        # invocan create_indexes() antes de correr (ver conftest.py), y
+        # aunque lo hicieran, un pre-check da un 409 limpio en vez de
+        # depender de parsear el mensaje de error de Mongo.
+        existing = await self.collection.find_one({"nombre": evento.nombre})
+        if existing:
+            raise EventFlowHTTPException(
+                error_code="DUPLICATE_EVENT",
+                detail="Evento already exists",
+                status_code=409,
+                instance="/api/eventos",
+            )
+
         evento_id = uuid4()
         now = datetime.now(timezone.utc)
 
