@@ -21,7 +21,7 @@ class HealthService:
         elif latency_ms < self.settings.health_check_degraded_threshold_ms:
             status = HealthStatus.HEALTHY
             mongodb_status = MongoDBHealth.OK
-        elif latency_ms < self.settings.health_check_unhealthy_threshold_ms:
+        elif latency_ms <= self.settings.health_check_unhealthy_threshold_ms:
             status = HealthStatus.DEGRADED
             mongodb_status = MongoDBHealth.SLOW
         else:
