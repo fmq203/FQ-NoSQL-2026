@@ -221,11 +221,11 @@
   </section>
 
   <section class="card">
-    <h2>Demo de un click</h2>
-    <p class="hint">Crea un usuario, un evento y una reserva en secuencia, animando el pipeline de arriba.</p>
-    <div class="actions">
-      <button id="btn-demo-completo">▶ Correr demo completa</button>
-    </div>
+    <h2>Escenarios de un click</h2>
+    <p class="hint">Cada botón crea por su cuenta lo que necesita (usuario/evento propios, sin tocar los formularios de arriba) y anima el pipeline marcando exactamente en qué paso de la SAGA ocurre el resultado.</p>
+    <div class="actions" id="scenario-buttons"></div>
+    <div id="scenario-label" style="margin-top:10px; font-size:12.5px; color:var(--muted);"></div>
+    <pre class="result" id="res-scenario" style="display:none"></pre>
   </section>
 
   <footer>
@@ -313,19 +313,39 @@ function markStep(step, cls) {
   const el = document.querySelector(`#pipeline .step[data-step="${step}"]`);
   if (el) { el.classList.remove('active', 'ok', 'fail'); el.classList.add(cls); }
 }
-async function animatePipeline(finalOk) {
-  const steps = ['datos', 'usuario', 'evento', 'pago', 'reserva', 'auditar'];
+const PIPELINE_STEPS = ['datos', 'usuario', 'evento', 'pago', 'reserva', 'auditar'];
+
+/**
+ * Anima el pipeline paso a paso. failStep=null -> todo termina "ok"
+ * (camino feliz). failStep='usuario'|'evento'|'pago'|'reserva'|'datos'
+ * -> los pasos previos terminan "ok" y ese paso queda "fail" (el resto
+ * ni se marca, porque la SAGA real tampoco llega ahi).
+ */
+async function animatePipeline(failStep) {
   resetPipeline();
-  for (let i = 0; i < steps.length; i++) {
-    markStep(steps[i], 'active');
-    await new Promise(r => setTimeout(r, 220));
-    markStep(steps[i], finalOk || i < steps.length - 1 ? 'ok' : 'fail');
-    if (!finalOk && i === steps.length - 2) {
-      // si fallo, no llega a "auditar" como exitoso visualmente
-      markStep('auditar', 'fail');
-      break;
+  for (const step of PIPELINE_STEPS) {
+    markStep(step, 'active');
+    await new Promise(r => setTimeout(r, 200));
+    if (step === failStep) {
+      markStep(step, 'fail');
+      return;
     }
+    markStep(step, 'ok');
   }
+}
+
+/** Mapea un error_code (o el detail, para VALIDATION_ERROR) al paso del
+ * pipeline donde realmente ocurre, para el boton "Reservar" manual
+ * (donde no sabemos de antemano que va a fallar). */
+function stepForError(body) {
+  const code = (body?.type || '').split('/').pop() || '';
+  const detail = (body?.detail || '').toLowerCase();
+  if (code === 'USER_NOT_FOUND') return 'usuario';
+  if (['EVENT_NOT_FOUND', 'EVENT_NOT_AVAILABLE', 'INSUFFICIENT_INVENTORY'].includes(code)) return 'evento';
+  if (code === 'VALIDATION_ERROR') return detail.includes('categoria') ? 'evento' : 'datos';
+  if (code === 'PAYMENT_FAILED') return 'pago';
+  if (code === 'RESERVATION_FAILED') return 'reserva';
+  return null;
 }
 
 // ---- Paso 1: usuario ----
@@ -408,10 +428,9 @@ async function hacerReserva(overrides = {}) {
 }
 
 $('btn-reservar').addEventListener('click', async () => {
-  await animatePipeline(true);
   const r = await hacerReserva();
   showResult('res-reserva', r);
-  await animatePipeline(r.ok);
+  await animatePipeline(r.ok ? null : stepForError(r.body));
 });
 
 $('btn-reintentar').addEventListener('click', async () => {
@@ -427,29 +446,141 @@ $('btn-reintentar').addEventListener('click', async () => {
 $('btn-error-evento').addEventListener('click', async () => {
   const r = await hacerReserva({ evento_id: uuidv4() });
   showResult('res-reserva', r);
+  await animatePipeline('evento');
 });
 
-// ---- Demo de un click ----
+// ---- Escenarios de un click (auto-contenidos: no tocan los formularios de arriba) ----
 
-$('btn-demo-completo').addEventListener('click', async (ev) => {
-  ev.target.disabled = true;
-  try {
-    $('u-nro').value = '3' + Math.floor(10000000 + Math.random() * 89999999);
-    $('u-email').value = `demo.${randSuffix()}@example.com`;
-    $('btn-crear-usuario').click();
-    await new Promise(r => setTimeout(r, 500));
+async function crearUsuarioAPI() {
+  const c = cfg();
+  const payload = {
+    tipo_documento: 'DNI',
+    nro_documento: '3' + Math.floor(10000000 + Math.random() * 89999999),
+    nombre: 'Demo',
+    apellido: 'Escenario',
+    email: `escenario.${randSuffix()}@example.com`,
+  };
+  const r = await callApi(`${c.usuarios}/api/usuarios`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  return r;
+}
 
-    $('e-nombre').value = `Concierto Demo ${randSuffix()}`;
-    $('btn-crear-evento').click();
-    await new Promise(r => setTimeout(r, 500));
+async function crearEventoAPI(overrides = {}) {
+  const c = cfg();
+  const payload = {
+    nombre: `Evento Escenario ${randSuffix()}`,
+    estado: overrides.estado || 'publicado',
+    aforo_total: overrides.aforo_total ?? 100,
+    entradas_disponibles: overrides.entradas_disponibles ?? 100,
+    precios: [{
+      categoria: overrides.categoria || 'general',
+      precio: 1000.0,
+      disponibles: overrides.disponibles ?? 100,
+    }],
+    ubicacion: { ciudad: 'Buenos Aires', pais: 'Argentina' },
+  };
+  const r = await callApi(`${c.eventos}/api/eventos`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  return r;
+}
 
-    await animatePipeline(true);
-    const r = await hacerReserva();
-    showResult('res-reserva', r);
-    await animatePipeline(r.ok);
-  } finally {
-    ev.target.disabled = false;
-  }
+async function reservarAPI(usuario_id, evento_id, extra = {}) {
+  const c = cfg();
+  const payload = {
+    usuario_id, evento_id,
+    cantidad: extra.cantidad ?? 1,
+    categoria: extra.categoria ?? 'general',
+    metodo_pago: 'tarjeta',
+    reserva_id: uuidv4(),
+  };
+  return await callApi(`${c.reservas}/api/reservar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+}
+
+const SCENARIOS = [
+  {
+    key: 'exito', label: '✅ Camino feliz (éxito)', cls: '', failStep: null,
+    expect: '201 Created — reserva confirmada',
+    run: async () => {
+      const u = await crearUsuarioAPI();
+      const e = await crearEventoAPI();
+      return await reservarAPI(u.body.usuario_id, e.body.evento_id);
+    },
+  },
+  {
+    key: 'usuario-inexistente', label: '❌ Usuario inexistente', cls: 'danger', failStep: 'usuario',
+    expect: '404 USER_NOT_FOUND — falla en el paso "Validar Usuario"',
+    run: async () => {
+      const e = await crearEventoAPI();
+      return await reservarAPI(uuidv4(), e.body.evento_id);
+    },
+  },
+  {
+    key: 'evento-inexistente', label: '❌ Evento inexistente', cls: 'danger', failStep: 'evento',
+    expect: '404 EVENT_NOT_FOUND — falla en el paso "Validar Evento"',
+    run: async () => {
+      const u = await crearUsuarioAPI();
+      return await reservarAPI(u.body.usuario_id, uuidv4());
+    },
+  },
+  {
+    key: 'evento-no-publicado', label: '❌ Evento no publicado', cls: 'danger', failStep: 'evento',
+    expect: '409 EVENT_NOT_AVAILABLE — evento en estado "borrador"',
+    run: async () => {
+      const u = await crearUsuarioAPI();
+      const e = await crearEventoAPI({ estado: 'borrador' });
+      return await reservarAPI(u.body.usuario_id, e.body.evento_id);
+    },
+  },
+  {
+    key: 'inventario-insuficiente', label: '❌ Inventario insuficiente', cls: 'danger', failStep: 'evento',
+    expect: '409 INSUFFICIENT_INVENTORY — se pide más cantidad de la disponible',
+    run: async () => {
+      const u = await crearUsuarioAPI();
+      const e = await crearEventoAPI({ aforo_total: 1, entradas_disponibles: 1, disponibles: 1 });
+      return await reservarAPI(u.body.usuario_id, e.body.evento_id, { cantidad: 5 });
+    },
+  },
+  {
+    key: 'categoria-inexistente', label: '❌ Categoría inexistente', cls: 'danger', failStep: 'evento',
+    expect: '422 VALIDATION_ERROR — la categoría pedida no existe en el evento',
+    run: async () => {
+      const u = await crearUsuarioAPI();
+      const e = await crearEventoAPI({ categoria: 'general' });
+      return await reservarAPI(u.body.usuario_id, e.body.evento_id, { categoria: 'vip-inexistente' });
+    },
+  },
+  {
+    key: 'cantidad-invalida', label: '❌ Cantidad inválida', cls: 'danger', failStep: 'datos',
+    expect: '422 VALIDATION_ERROR — cantidad=0 (Pydantic la rechaza antes de arrancar la SAGA)',
+    run: async () => {
+      const u = await crearUsuarioAPI();
+      const e = await crearEventoAPI();
+      return await reservarAPI(u.body.usuario_id, e.body.evento_id, { cantidad: 0 });
+    },
+  },
+];
+
+$('scenario-buttons').innerHTML = SCENARIOS.map(s =>
+  `<button class="${s.cls}" data-scenario="${s.key}">${s.label}</button>`
+).join('');
+
+document.querySelectorAll('#scenario-buttons button').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const scenario = SCENARIOS.find(s => s.key === btn.dataset.scenario);
+    document.querySelectorAll('#scenario-buttons button').forEach(b => b.disabled = true);
+    $('scenario-label').textContent = `Esperado: ${scenario.expect}`;
+    try {
+      const r = await scenario.run();
+      showResult('res-scenario', r);
+      await animatePipeline(r.ok ? null : scenario.failStep);
+    } finally {
+      document.querySelectorAll('#scenario-buttons button').forEach(b => b.disabled = false);
+    }
+  });
 });
 </script>
 </body>

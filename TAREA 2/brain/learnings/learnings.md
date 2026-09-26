@@ -447,3 +447,17 @@
 **Verificación:** sintaxis JS validada con `node --check`; todos los `id` referenciados en el script confirmados contra los definidos en el HTML (36, ninguno faltante); flujo completo probado con `curl` usando exactamente los mismos payloads que arma el JS; servido con `python3 -m http.server` y confirmado que responde 200.
 
 **Tags:** #demo #html #fetch #cors #docker-image-staleness #claude-sonnet-5
+
+---
+
+### 2026-09-26 — Escenarios de falla en "demo de un click"
+
+**Contexto:** Se pidió ampliar la sección "Demo de un click" del `demo/index.html` para cubrir varios escenarios de falla, no solo el camino feliz.
+
+**Decisión:** Verificados primero contra el stack real con `curl` (usuario/evento a medida por escenario) para confirmar el status/código exacto antes de tocar el HTML, y recién ahí implementados en JS. Quedaron 7 botones auto-contenidos (cada uno crea su propio usuario/evento sin tocar los formularios manuales de arriba): éxito (201), usuario inexistente (404 `USER_NOT_FOUND`), evento inexistente (404 `EVENT_NOT_FOUND`), evento en `borrador` (409 `EVENT_NOT_AVAILABLE`), inventario insuficiente (409 `INSUFFICIENT_INVENTORY`, pidiendo más cantidad que `disponibles`), categoría inexistente (422 `VALIDATION_ERROR`), y cantidad inválida (422 `VALIDATION_ERROR`, `cantidad=0` rechazada por Pydantic antes de arrancar la SAGA).
+
+Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failStep`) en vez del booleano `finalOk` que tenía antes (que fallaba siempre "en el anteúltimo paso", sin relación real con dónde fallaba la SAGA). Para el botón manual "Reservar" (formulario libre, no sabemos de antemano qué va a fallar) se agregó `stepForError()`, que mapea el `error_code` de la respuesta al paso real.
+
+**Verificación:** los 7 escenarios se corrieron de punta a punta con un script de Node (`fetch` nativo, misma lógica que el JS del navegador) contra el stack reconstruido — los 7 dieron el status/código y el paso del pipeline exactamente esperados, sin necesidad de abrir un navegador.
+
+**Tags:** #demo #failure-scenarios #saga #testing #claude-sonnet-5
