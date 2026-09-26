@@ -1,10 +1,12 @@
 import asyncio
 import logging
+import time
 from typing import Awaitable, Callable, Optional
 
 import httpx
 
 from src.config import get_settings
+from src.services.metrics import set_circuit_breaker_state
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +14,24 @@ _usuarios_client: Optional[httpx.AsyncClient] = None
 _eventos_client: Optional[httpx.AsyncClient] = None
 _circuit_breakers = {"usuarios_service": "closed", "eventos_service": "closed"}
 _failure_counts = {"usuarios_service": 0, "eventos_service": 0}
+# Momento (time.monotonic()) en que cada breaker paso a "open"; usado para
+# calcular cuando corresponde probar half-open.
+_circuit_opened_at = {"usuarios_service": 0.0, "eventos_service": 0.0}
+# Evita que mas de una request de prueba concurrente entre en half-open a
+# la vez ("Half-Open: Limited requests allowed (1 at a time)" en spec.md).
+_half_open_probe_in_flight = {"usuarios_service": False, "eventos_service": False}
 
 # Backoff exponencial para reintentos HTTP a Usuarios/Eventos, por spec.md
 # ("Timeouts y Reintentos": 3 reintentos, 0.5s/1s/2s).
 _RETRY_BACKOFFS_S = (0.5, 1.0, 2.0)
+
+# "Open (Tripped)... After 30s timeout -> Half-Open" (spec.md, Circuit
+# Breaker State Machine).
+_HALF_OPEN_TIMEOUT_S = 30.0
+
+
+class CircuitBreakerOpenError(httpx.HTTPError):
+    """El circuit breaker esta abierto: se falla rapido sin llamar al servicio."""
 
 
 async def _con_reintentos(
@@ -79,35 +95,85 @@ async def close_http_clients() -> None:
 
 
 async def check_circuit_breaker(service_name: str) -> bool:
-    """Verificar si circuit breaker está abierto."""
-    return _circuit_breakers.get(service_name) != "open"
+    """True si la request puede intentarse; False si debe fallar rápido.
+
+    Closed: siempre True. Open: True solo si ya pasaron 30s (transiciona a
+    half-open y reserva el único "probe" permitido); si no, False. Half-open:
+    True solo si no hay ya un probe en curso (1 a la vez), si no False.
+    """
+    state = _circuit_breakers.get(service_name, "closed")
+    if state == "closed":
+        return True
+    if state == "half-open":
+        if _half_open_probe_in_flight.get(service_name):
+            return False
+        _half_open_probe_in_flight[service_name] = True
+        return True
+    # state == "open"
+    if time.monotonic() - _circuit_opened_at.get(service_name, 0.0) >= _HALF_OPEN_TIMEOUT_S:
+        _circuit_breakers[service_name] = "half-open"
+        _half_open_probe_in_flight[service_name] = True
+        set_circuit_breaker_state(service_name, "half-open")
+        logger.warning(f"Circuit breaker {service_name}: open -> half-open (probe)")
+        return True
+    return False
 
 
 def record_success(service_name: str) -> None:
-    """Registrar éxito y resetear contador."""
+    """Registrar éxito: resetea contador y cierra el breaker si estaba probando."""
     _failure_counts[service_name] = 0
-    if _circuit_breakers.get(service_name) == "half-open":
+    _half_open_probe_in_flight[service_name] = False
+    if _circuit_breakers.get(service_name) in ("half-open", "open"):
         _circuit_breakers[service_name] = "closed"
+        set_circuit_breaker_state(service_name, "closed")
         logger.info(f"Circuit breaker {service_name} cerrado")
 
 
 def record_failure(service_name: str) -> None:
-    """Registrar fallo y abrir circuit breaker si es necesario."""
+    """Registrar fallo y abrir circuit breaker si es necesario.
+
+    Un fallo durante el probe de half-open reabre inmediatamente (no espera
+    a 5 fallos de nuevo), por spec.md ("Half-Open... Failure -> Open").
+    """
     _failure_counts[service_name] = _failure_counts.get(service_name, 0) + 1
-    if _failure_counts[service_name] >= 5:
+    _half_open_probe_in_flight[service_name] = False
+    if _circuit_breakers.get(service_name) == "half-open":
         _circuit_breakers[service_name] = "open"
+        _circuit_opened_at[service_name] = time.monotonic()
+        set_circuit_breaker_state(service_name, "open")
+        logger.warning(f"Circuit breaker {service_name}: probe de half-open fallo -> ABIERTO de nuevo")
+    elif _failure_counts[service_name] >= 5:
+        _circuit_breakers[service_name] = "open"
+        _circuit_opened_at[service_name] = time.monotonic()
+        set_circuit_breaker_state(service_name, "open")
         logger.warning(f"Circuit breaker {service_name} ABIERTO")
 
 
 def get_circuit_breaker_state() -> dict:
-    return _circuit_breakers.copy()
+    """Estado de los breakers para reporting (ej. health check).
+
+    Un breaker "open" cuyo timeout de 30s ya paso se reporta como
+    "half-open" aunque la transición real (que reserva el probe) recién
+    ocurre en la próxima llamada real vía check_circuit_breaker().
+    """
+    now = time.monotonic()
+    result = {}
+    for name, state in _circuit_breakers.items():
+        if state == "open" and now - _circuit_opened_at.get(name, 0.0) >= _HALF_OPEN_TIMEOUT_S:
+            result[name] = "half-open"
+        else:
+            result[name] = state
+    return result
 
 
 async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[dict]:
     """GET /api/usuarios/{id} en Usuarios Service. None si no existe (404).
 
     Reintenta 3x con backoff exponencial ante timeout/error de red o 5xx.
+    Falla rápido (sin llamar al servicio) si el circuit breaker está abierto.
     """
+    if not await check_circuit_breaker("usuarios_service"):
+        raise CircuitBreakerOpenError("Circuit breaker abierto para usuarios_service")
     client = await get_usuarios_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
     try:
@@ -129,7 +195,10 @@ async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[dict]
     """GET /api/eventos/{id} en Eventos Service. None si no existe (404).
 
     Reintenta 3x con backoff exponencial ante timeout/error de red o 5xx.
+    Falla rápido (sin llamar al servicio) si el circuit breaker está abierto.
     """
+    if not await check_circuit_breaker("eventos_service"):
+        raise CircuitBreakerOpenError("Circuit breaker abierto para eventos_service")
     client = await get_eventos_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
     try:
@@ -160,7 +229,10 @@ async def decrementar_inventario_evento(
     excepcion en caso de error - el llamador decide como compensar.
 
     Reintenta 3x con backoff exponencial ante timeout/error de red o 5xx.
+    Falla rápido (sin llamar al servicio) si el circuit breaker está abierto.
     """
+    if not await check_circuit_breaker("eventos_service"):
+        raise CircuitBreakerOpenError("Circuit breaker abierto para eventos_service")
     client = await get_eventos_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
     try:

@@ -16,6 +16,8 @@ description: "Task list for Reservation & Payment feature implementation"
 
 **Actualización (2026-09-26, remediación E1):** T010 marcada `[x]` — se implementaron reintentos reales (`_con_reintentos` en `src/services/http_clients.py`) para `get_usuario`, `get_evento` y `decrementar_inventario_evento`: 3 reintentos con backoff exponencial 0.5s/1s/2s ante timeout/error de red o 5xx, sin reintentar 4xx. Cubierto por `tests/unit/test_http_clients_retries.py` (6 tests, backoffs mockeados para no ralentizar la suite).
 
+**Actualización (2026-09-26, remediación E2):** T014e/T068/T100/T135 marcadas `[x]` — el circuit breaker antes solo registraba fallos y abría (closed→open a los 5 fallos), pero nunca hacía la transición open→half-open, y ninguna función lo consultaba antes de llamar al servicio (`check_circuit_breaker` existía pero no se usaba en ningún lado). Se implementó la máquina de estados completa en `src/services/http_clients.py`: open→half-open automático tras 30s, half-open permite 1 sola request de prueba a la vez, éxito→closed, fallo→open inmediato. `get_usuario`/`get_evento`/`decrementar_inventario_evento` ahora consultan el breaker y fallan rápido (`CircuitBreakerOpenError`, sin llamar al servicio) si está abierto. Se conectó `set_circuit_breaker_state` (definida en `metrics.py`, nunca llamada) en cada transición para que el gauge de Prometheus refleje el estado real. Cubierto por `tests/unit/test_circuit_breaker.py` (10 tests).
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
@@ -44,7 +46,7 @@ description: "Task list for Reservation & Payment feature implementation"
 - [x] T014b Implement RFC 7807 error response middleware in `src/api/middleware.py`: format all errors per spec, include correlation_id, type URI
 - [ ] T014c Configure API versioning in FastAPI: prefix `/api/v1` for all routes, accept header parsing
 - [x] T014d Implement distributed tracing middleware: X-Correlation-ID extraction, propagation, logging
-- [ ] T014e Implement circuit breaker for HTTP clients: closed/open/half-open states, threshold 5 failures, 30s half-open
+- [x] T014e Implement circuit breaker for HTTP clients: closed/open/half-open states, threshold 5 failures, 30s half-open
 - [x] T014f Implement Prometheus metrics endpoint `/metrics` in `src/api/metrics.py`:
     - `saga_duration_seconds` histogram (step, status)
     - `saga_total` counter (status)
@@ -185,7 +187,7 @@ description: "Task list for Reservation & Payment feature implementation"
 - [x] T065 [P] Quickstart validation: docker compose up full stack, test SAGA end-to-end
 - [x] T066 Code cleanup: type hints, remove unused, docstrings
 - [x] T067 [P] Load test: 100 req/s concurrentes, verificar 0 doble ventas, 0 inventario negativo
-- [ ] T068 Circuit breaker verification: test closed/open/half-open transitions
+- [x] T068 Circuit breaker verification: test closed/open/half-open transitions
 - [ ] T069 Security: validación estricta inputs, no PII en logs, correlation_id tracking
 - [x] T071 [P] Health check three-state per dependency: healthy/degraded/unhealthy
 - [x] T072 [P] Docker build verification: `docker compose build reservas-service` succeeds, no critical vulnerabilities
@@ -287,7 +289,7 @@ description: "Task list for Reservation & Payment feature implementation"
 
 ### High - Health Check & Circuit Breaker
 
-- [ ] T100 [US1] Add circuit breaker state transition tests (closed→open→half-open→closed)
+- [x] T100 [US1] Add circuit breaker state transition tests (closed→open→half-open→closed)
 - [ ] T101 [US1] Add HTTP client timeout to health check timeouts table
 - [x] T102 [US1] Add `degraded` state for HTTP clients in health check
 - [x] T103 [US1] Add `half-open` state to circuit breaker health check
@@ -343,7 +345,7 @@ description: "Task list for Reservation & Payment feature implementation"
 - [x] T132 [US1] Instrument Prometheus metrics in saga steps: add `record_saga_step_duration`, `record_saga_total`, `record_saga_compensation` calls in `src/chain/validators.py` handlers per `metrics.py` functions
 - [x] T133 [US1] Instrument Prometheus metrics in HTTP layer: add `record_http_request_duration` calls in `src/api/routes.py` and `src/services/http_clients.py` per `metrics.py` functions
 - [x] T134 [US1] Instrument Prometheus metrics in DB operations: add `record_db_operation_duration` calls in `src/services/mongo.py`, `src/services/redis_pago.py`, `src/services/postgresql.py` per `metrics.py` functions
-- [ ] T135 [US1] Instrument circuit breaker metrics: add `set_circuit_breaker_state` calls in `src/api/circuit_breaker.py` state transitions per `metrics.py` functions
+- [x] T135 [US1] Instrument circuit breaker metrics: add `set_circuit_breaker_state` calls in `src/api/circuit_breaker.py` state transitions per `metrics.py` functions
 - [x] T136 [US1] Instrument idempotency metrics: add `record_idempotency_hit` call in `src/utils/idempotency.py` per `metrics.py` functions
 
 ### High - OpenAPI Documentation Compliance (RP-FR-001, Constitution II)
