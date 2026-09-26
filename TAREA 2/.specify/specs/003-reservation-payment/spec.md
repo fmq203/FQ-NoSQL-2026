@@ -15,15 +15,15 @@ Usuario compra entradas: valida usuario, valida evento+aforo, procesa pago atóm
 
 **Why this priority**: Core business flow - genera revenue, requiere consistencia fuerte.
 
-**Independent Test**: POST `/api/v1/reservar` con usuario_id válido, evento_id con aforo, cantidad, metodo_pago → 201 con reserva_id, estado=confirmada, numero_confirmacion. Verificar: MongoDB reserva, Redis pago, PostgreSQL audit log, inventario decrementado.
+**Independent Test**: POST `/api/reservar` con usuario_id válido, evento_id con aforo, cantidad, metodo_pago → 201 con reserva_id, estado=confirmada, numero_confirmacion. Verificar: MongoDB reserva, Redis pago, PostgreSQL audit log, inventario decrementado.
 
 **Acceptance Scenarios**:
-1. **Given** Usuario existe, Evento publicado con aforo>=cantidad, **When** POST `/api/v1/reservar`, **Then** 201 Reserva confirmada, inventario decrementado, pago en Redis, audit en PostgreSQL
-2. **Given** Usuario no existe, **When** POST `/api/v1/reservar`, **Then** 404 "Usuario no encontrado", SAGA termina sin compensación
-3. **Given** Evento no existe, **When** POST `/api/v1/reservar`, **Then** 404 "Evento no encontrado"
-4. **Given** Aforo insuficiente (disponibles < cantidad), **When** POST `/api/v1/reservar`, **Then** 409 "Inventario insuficiente"
-5. **Given** Fallo MongoDB al guardar reserva, **When** POST `/api/v1/reservar`, **Then** 500, compensación automática: Redis INCRBY inventario + DEL pago
-6. **Given** Fallo PostgreSQL auditoría, **When** POST `/api/v1/reservar`, **Then** 201 (reserva OK), warning log, NO rollback
+1. **Given** Usuario existe, Evento publicado con aforo>=cantidad, **When** POST `/api/reservar`, **Then** 201 Reserva confirmada, inventario decrementado, pago en Redis, audit en PostgreSQL
+2. **Given** Usuario no existe, **When** POST `/api/reservar`, **Then** 404 "Usuario no encontrado", SAGA termina sin compensación
+3. **Given** Evento no existe, **When** POST `/api/reservar`, **Then** 404 "Evento no encontrado"
+4. **Given** Aforo insuficiente (disponibles < cantidad), **When** POST `/api/reservar`, **Then** 409 "Inventario insuficiente"
+5. **Given** Fallo MongoDB al guardar reserva, **When** POST `/api/reservar`, **Then** 500, compensación automática: Redis INCRBY inventario + DEL pago
+6. **Given** Fallo PostgreSQL auditoría, **When** POST `/api/reservar`, **Then** 201 (reserva OK), warning log, NO rollback
 
 ---
 
@@ -155,9 +155,9 @@ db.reservas.createIndex(
 ```
 
 **Read Queries (Operational):**
-- `GET /api/v1/reservar/{reserva_id}` → find by `_id`
-- `GET /api/v1/reservar?usuario_id=...` → find by `usuario_id` + sort `creado_en DESC`
-- `GET /api/v1/reservar?evento_id=...&estado=confirmada` → find by `evento_id` + `estado`
+- `GET /api/reservar/{reserva_id}` → find by `_id`
+- `GET /api/reservar?usuario_id=...` → find by `usuario_id` + sort `creado_en DESC`
+- `GET /api/reservar?evento_id=...&estado=confirmada` → find by `evento_id` + `estado`
 ```
 
 ## Success Criteria
@@ -185,8 +185,10 @@ db.reservas.createIndex(
 
 ## API Versioning Strategy
 
+**Estado real (2026-09-26):** el MVP implementado NO versiona la API — las rutas son `/api/reservar` sin prefijo `v1`, alineadas al contrato exacto del PDF de la tarea (`POST /api/reservar`, `GET /api/reservar/{reserva_id}`). `APIVersioningMiddleware` existe como código (`src/api/middleware/versioning.py`) pero nunca se agrega a la app (`main.py` no lo registra) — es una decisión consciente de simplicidad (Principio VIII, YAGNI) para un MVP de un solo grupo de estudiantes, no un descuido. La estrategia de abajo queda documentada como diseño para cuando el versionado sea realmente necesario (breaking change futuro), no como algo implementado hoy.
+
 ### Version Location
-- **URL Path**: `/api/v1/reservar`, `/api/v1/reservar/{reserva_id}`, etc.
+- **URL Path**: `/api/reservar`, `/api/reservar/{reserva_id}`, etc.
 - **Header**: `Accept: application/vnd.eventflow.v1+json` (optional, for future)
 
 ### Versioning Rules
@@ -317,7 +319,7 @@ Formato RFC 7807 con `X-Correlation-ID` header:
 ### Implementation Requirements
 - All endpoints MUST return errors in RFC 7807 format exactly as specified
 - `correlation_id` in error response MUST match `X-Correlation-ID` header
-- `instance` field MUST be the request path (e.g., `/api/v1/reservar`)
+- `instance` field MUST be the request path (e.g., `/api/reservar`)
 - `type` URI MUST use `https://eventflow.example.com/errors/{error-code}` pattern
 
 ## Structured Logging Schema (Mandatory per Constitution Principle IV)
@@ -500,7 +502,7 @@ El campo `monto_total` en la reserva se calcula como: `precio_unitario * cantida
 - El `ProcesadorPago` calcula: `monto_total = precio_categoria_seleccionada * cantidad`
 - **MVP (v1)**: Se usa la primera categoría disponible; campo `categoria` en request es opcional
 - **Post-MVP (v2+)**: Cliente especifica `categoria` en request para selección explícita
-  - **Acceptance Criteria v2**: POST `/api/v1/reservar` acepta campo opcional `categoria`; si se provee, validar que existe en `precios[]` del evento; si no, usar primera categoría; rechazar con 400 si categoría no existe
+  - **Acceptance Criteria v2**: POST `/api/reservar` acepta campo opcional `categoria`; si se provee, validar que existe en `precios[]` del evento; si no, usar primera categoría; rechazar con 400 si categoría no existe
   - **Requerimiento**: Endpoint Eventos Service actualizado para incluir `categoria` en response (ya incluido)
 
 **Validación**: El `ProcesadorPago` verifica que `monto_total` coincida con `precio * cantidad` antes de ejecutar Lua script.
