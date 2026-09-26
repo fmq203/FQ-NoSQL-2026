@@ -19,6 +19,10 @@ def _reset_circuit_breaker_state():
     http_clients._circuit_breakers["eventos_service"] = "closed"
     http_clients._failure_counts["usuarios_service"] = 0
     http_clients._failure_counts["eventos_service"] = 0
+    http_clients._circuit_opened_at["usuarios_service"] = 0.0
+    http_clients._circuit_opened_at["eventos_service"] = 0.0
+    http_clients._half_open_probe_in_flight["usuarios_service"] = False
+    http_clients._half_open_probe_in_flight["eventos_service"] = False
     yield
 
 
