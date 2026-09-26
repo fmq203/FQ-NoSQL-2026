@@ -79,9 +79,9 @@ brain/
 | **Chain of Responsibility** | ✅ Done | [`chain-of-responsibility.md`](./patterns/chain-of-responsibility.md) |
 | **Docker Setup** | ✅ Done | [`docker-setup.md`](./deployment/docker-setup.md) |
 | **docker-compose.yml** | ✅ Done | [`docker-compose.md`](./deployment/docker-compose.md) |
-| **Event Sourcing/CQRS** | ⏳ Opcional | (Investigar después de MVP) |
-| **Implementación Código** | 🔲 Next | (Developers: usar este brain como referencia) |
-| **Tests** | 🔲 Next | (Unit + integration) |
+| **Event Sourcing/CQRS** | ✅ Done | Vistas `ventas_por_evento`/`tasa_exito_saga`/`compensaciones_por_tipo` + índice GIN en `reservas-service/src/services/postgresql.py::init_pg_schema()` |
+| **Implementación Código** | ✅ Done | usuarios-service, eventos-service, reservas-service (SAGA + Chain of Responsibility) implementados y corriendo vía `docker compose` |
+| **Tests** | ✅ Done | usuarios 38/38, eventos 80/80, reservas 100/104 (4 skipped, 1 flaky de performance) — ver `learnings.md` |
 
 ---
 
@@ -226,3 +226,5 @@ Para mantener trazabilidad y reproducibilidad, todas las interacciones significa
 ---
 
 ## 📝 Última Actualización
+
+**2026-09-26** — Remediación completa de los hallazgos de `/speckit.analyze` sobre `003-reservation-payment` (11 hallazgos: retries HTTP, circuit breaker completo, vistas CQRS, filtros de listado, códigos de error específicos, PII en logs, alineación spec/código) más el barrido de tests conocidos rotos en usuarios-service y eventos-service (middleware de correlation-id, boundary de health check, normalización de email, `test_openapi_compliance.py` reparado de raíz, chequeo de evento duplicado). Detalle completo en [`learnings/learnings.md`](./learnings/learnings.md). Los tres servicios pasan su suite completa (ver tabla de arriba).
