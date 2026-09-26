@@ -1,6 +1,6 @@
 """Endpoint POST /api/reservar - inicia la SAGA completa de compra de entradas."""
 import logging
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request, Response, status
@@ -127,10 +127,20 @@ async def crear_reserva(request: Request, response: Response, solicitud: Reserva
 async def listar_reservas(
     skip: int = Query(0, ge=0, description="Saltar N registros"),
     limit: int = Query(10, ge=1, le=100, description="Maximo de registros a retornar"),
+    usuario_id: Optional[UUID] = Query(None, description="Filtrar por usuario"),
+    evento_id: Optional[UUID] = Query(None, description="Filtrar por evento"),
+    estado: Optional[str] = Query(None, description="Filtrar por estado de la reserva"),
 ) -> List[ReservaResponse]:
-    """Listar reservas, mas recientes primero (paginado)."""
+    """Listar reservas, mas recientes primero (paginado, con filtros opcionales)."""
     collection = await get_reservas_collection()
-    cursor = collection.find().sort("creado_en", -1).skip(skip).limit(limit)
+    filtro = {}
+    if usuario_id is not None:
+        filtro["usuario_id"] = usuario_id
+    if evento_id is not None:
+        filtro["evento_id"] = evento_id
+    if estado is not None:
+        filtro["estado"] = estado
+    cursor = collection.find(filtro).sort("creado_en", -1).skip(skip).limit(limit)
     docs = await cursor.to_list(length=limit)
     return [
         ReservaResponse(

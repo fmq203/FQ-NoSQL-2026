@@ -65,6 +65,26 @@ class TestReservasOpenAPI:
         assert isinstance(data, list)
 
     @pytest.mark.contract
+    async def test_list_reservas_filtros_opcionales(self, client: AsyncClient):
+        """GET /api/reservar acepta usuario_id/evento_id/estado como filtros (E4)."""
+        response = await client.get(
+            "/api/reservar",
+            params={
+                "usuario_id": str(uuid4()),
+                "evento_id": str(uuid4()),
+                "estado": "confirmada",
+            },
+        )
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @pytest.mark.contract
+    async def test_list_reservas_filtro_uuid_invalido_rechazado(self, client: AsyncClient):
+        """Un usuario_id/evento_id que no es UUID valido debe rechazarse con 422."""
+        response = await client.get("/api/reservar", params={"usuario_id": "not-a-uuid"})
+        assert response.status_code == 422
+
+    @pytest.mark.contract
     async def test_error_response_format_rfc7807(self, client: AsyncClient):
         """Test error responses follow RFC 7807 format."""
         # Test with invalid UUID
