@@ -1,7 +1,7 @@
 """
 Modelos de dominio para Usuarios Service.
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
@@ -20,6 +20,14 @@ class UsuarioBase(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def _normalizar_email(cls, value: str) -> str:
+        """Normaliza a minúsculas: evita que 'A@x.com'/'a@x.com' se traten
+        como emails distintos para la verificación de unicidad
+        (usuario_service.py::crear_usuario)."""
+        return value.lower()
 
 
 class UsuarioCreate(UsuarioBase):
