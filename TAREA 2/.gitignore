@@ -93,4 +93,5 @@ pnpm-lock.yaml
 
 # Reports
 *.html
+!demo/*.html
 reports/
