@@ -14,6 +14,8 @@ description: "Task list for Reservation & Payment feature implementation"
 
 **Estado (2026-09-26):** Checkboxes actualizados a partir de `/speckit.analyze` verificado contra el código real (no contra memoria) — 119/145 tareas confirmadas implementadas y probadas (`brain/learnings/learnings.md`, entrada 2026-09-26). Las 26 que quedan sin marcar son gaps reales, no pendientes de verificación: HTTP retries (T010), versionado `/api/v1` (T014c/T014g), circuit breaker con timer half-open (T014e/T068/T100/T135), inmutabilidad del contexto (T051/T052), vistas SQL analíticas + índice GIN + particionamiento (T055/T062/T063/T091/T095-T099/T130/T131/T141), sanitización real de PII en logs (T069/T120/T142), y `testcontainers` declarado pero sin uso real (T143).
 
+**Actualización (2026-09-26, remediación E1):** T010 marcada `[x]` — se implementaron reintentos reales (`_con_reintentos` en `src/services/http_clients.py`) para `get_usuario`, `get_evento` y `decrementar_inventario_evento`: 3 reintentos con backoff exponencial 0.5s/1s/2s ante timeout/error de red o 5xx, sin reintentar 4xx. Cubierto por `tests/unit/test_http_clients_retries.py` (6 tests, backoffs mockeados para no ralentizar la suite).
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
@@ -34,7 +36,7 @@ description: "Task list for Reservation & Payment feature implementation"
 - [x] T007 [P] Create MongoDB indexes on startup: usuario_id+creado_en, evento_id+estado, numero_confirmacion unique, estado+creado_en, TTL 24h para pendiente/fallida
 - [x] T008 [P] Setup Redis connection (`src/services/redis_pago.py`): async redis-py, register Lua scripts (pago + compensación)
 - [x] T009 [P] Setup PostgreSQL connection (`src/services/postgresql.py`): asyncpg pool, prepared statements for event_log inserts
-- [ ] T010 [P] Setup HTTP clients (`src/services/http_clients.py`): httpx.AsyncClient para Usuarios (8001) y Eventos (8002) con timeouts, retries 3x
+- [x] T010 [P] Setup HTTP clients (`src/services/http_clients.py`): httpx.AsyncClient para Usuarios (8001) y Eventos (8002) con timeouts, retries 3x
 - [x] T011 [P] Configure structured JSON logging with correlation_id
 - [x] T012 [P] Create Pydantic models (`src/models/reserva.py`): EstadoReserva, MetodoPago enums, ReservaRequest, ReservaResponse, ReservaContext (dataclass para cadena)
 - [x] T013 [P] Create Chain of Responsibility base (`src/chain/handler.py`): Handler abstracto, set_next, ReservaContext dataclass
