@@ -433,3 +433,17 @@
 **Resultado:** Actualizados ambos README con la información real y verificada (rutas, códigos de error, resiliencia HTTP, CQRS, y el estado actual de las 3 suites de test). `brain/README.md` ahora enlaza a esta entrada de `learnings.md` como fuente de detalle. Ningún cambio de código — es documentación puesta al día con lo que ya está implementado y probado.
 
 **Tags:** #documentation-drift #readme #brain #claude-sonnet-5
+
+---
+
+### 2026-09-26 — Demo GUI HTML para mostrar el funcionamiento del sistema
+
+**Contexto:** Tras dejar los tres servicios verdes y push a GitHub, se preguntó si era factible armar una GUI HTML para mostrar el funcionamiento (pensando en la defensa). Se prefirió un archivo local en el repo antes que un Artifact publicado.
+
+**Decisión:** `demo/index.html` — un único archivo HTML estático (sin build, sin dependencias externas, CSS/JS inline) que llama directo a las tres APIs vía `fetch()` desde el navegador, aprovechando que las tres ya tienen CORS abierto (`allow_origins=["*"]`). Incluye: tarjetas de estado en vivo de `/health` por servicio, un pipeline visual animado de los 6 pasos de la SAGA/Chain of Responsibility, formularios para crear usuario → evento → reserva (autocompletando los IDs entre pasos), un botón de reintento con el mismo `reserva_id` para demostrar idempotencia (200 vs 201), un botón que dispara un error real (evento inexistente → 404 RFC 7807 con `EVENT_NOT_FOUND`), y un botón de "demo de un click" que encadena los tres pasos con datos aleatorios.
+
+**Hallazgo real durante la verificación:** al probar contra `docker compose up -d` (sin `--build`), los contenedores seguían corriendo con imágenes construidas el 2026-09-25 — **antes de todos los fixes de hoy** (I3 códigos de error, E1 retries, E2 circuit breaker, E3 vistas CQRS). El error de "evento inexistente" devolvía `not-found` genérico en vez de `EVENT_NOT_FOUND`. Todo el testing de esta sesión corrió contra pytest importando `src.*` directamente (venv local), nunca contra las imágenes Docker, así que este desfasaje no se había detectado. Se reconstruyó con `docker compose up -d --build` y se re-verificó todo el flujo (usuario, evento, reserva, retry idempotente, error 404, las 3 vistas CQRS creadas en Postgres) con `curl` antes de dar por buena la demo. Se documentó explícitamente en `demo/README.md` que `--build` es obligatorio, no opcional.
+
+**Verificación:** sintaxis JS validada con `node --check`; todos los `id` referenciados en el script confirmados contra los definidos en el HTML (36, ninguno faltante); flujo completo probado con `curl` usando exactamente los mismos payloads que arma el JS; servido con `python3 -m http.server` y confirmado que responde 200.
+
+**Tags:** #demo #html #fetch #cors #docker-image-staleness #claude-sonnet-5

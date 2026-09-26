@@ -64,6 +64,14 @@ make up
 docker compose up -d
 ```
 
+### Demo visual
+
+Página HTML estática (sin build, sin dependencias) que llama a las tres APIs en vivo desde el navegador: crear usuario → crear evento → reservar (SAGA), con pipeline animado, idempotencia y un botón de error real. Ver [`demo/README.md`](./demo/README.md).
+
+```bash
+cd demo && python3 -m http.server 8080   # abrir http://localhost:8080
+```
+
 ### Verificar que todo funciona
 
 ```bash
@@ -342,6 +350,7 @@ TAREA 2/
 ├── Makefile                    # Comandos unificados
 ├── docker-compose.yml          # Stack completo (3 DBs + 3 servicios)
 ├── README.md                   # Este archivo
+├── demo/                       # GUI HTML estática para mostrar el funcionamiento
 ├── .gitignore
 ├── .specify/                   # Spec-kit (especificaciones)
 │   └── specs/
