@@ -39,6 +39,7 @@ class TestEventoService:
     
     @pytest.mark.asyncio
     async def test_create_event_success(self, service, mock_collection, valid_evento):
+        mock_collection.find_one = AsyncMock(return_value=None)
         mock_collection.insert_one = AsyncMock()
         
         result = await service.create_event(valid_evento)
@@ -56,7 +57,11 @@ class TestEventoService:
     
     @pytest.mark.asyncio
     async def test_create_event_duplicate_key(self, service, mock_collection, valid_evento):
+        """Fallback: si el pre-check de find_one no atrapa la carrera (dos
+        requests casi simultaneas), el DuplicateKeyError del indice unico
+        de Mongo en insert_one() sigue devolviendo 409 igual."""
         from pymongo.errors import DuplicateKeyError
+        mock_collection.find_one = AsyncMock(return_value=None)
         mock_collection.insert_one = AsyncMock(side_effect=DuplicateKeyError("duplicate key"))
         
         with pytest.raises(EventFlowHTTPException) as exc_info:
@@ -64,9 +69,25 @@ class TestEventoService:
         
         assert exc_info.value.error_code == "DUPLICATE_EVENT"
         assert exc_info.value.status_code == 409
-    
+
+    @pytest.mark.asyncio
+    async def test_create_event_duplicate_nombre_precheck(self, service, mock_collection, valid_evento):
+        """Camino principal: find_one encuentra un evento con el mismo
+        nombre -> 409 sin llegar a intentar el insert_one (spec.md
+        002-eventos-crud: 'evento with same nombre exists -> 409 Conflict')."""
+        mock_collection.find_one = AsyncMock(return_value={"nombre": valid_evento.nombre})
+        mock_collection.insert_one = AsyncMock()
+
+        with pytest.raises(EventFlowHTTPException) as exc_info:
+            await service.create_event(valid_evento)
+
+        assert exc_info.value.error_code == "DUPLICATE_EVENT"
+        assert exc_info.value.status_code == 409
+        mock_collection.insert_one.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_create_event_generic_error(self, service, mock_collection, valid_evento):
+        mock_collection.find_one = AsyncMock(return_value=None)
         mock_collection.insert_one = AsyncMock(side_effect=Exception("DB error"))
         
         with pytest.raises(EventFlowHTTPException) as exc_info:
