@@ -39,9 +39,15 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
+    # Orden importa: Starlette hace wrap del ultimo add_middleware() hacia
+    # afuera, asi que el ULTIMO agregado es el que corre PRIMERO en el
+    # pre-procesamiento de la request. StructuredLoggingMiddleware lee
+    # request.state.correlation_id (con un fallback a un uuid4() propio si
+    # no existe todavia), asi que CorrelationIDMiddleware -que lo setea-
+    # debe agregarse DESPUES para quedar mas afuera y correr antes.
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-    app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(StructuredLoggingMiddleware)
+    app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(MetricsMiddleware)
 
     register_exception_handlers(app)
