@@ -101,7 +101,7 @@ class UsuarioService:
         }
 
         await self.collection.insert_one(doc)
-        logger.info(f"✅ Usuario creado: {usuario_id} - {usuario.email}")
+        logger.info(f"✅ Usuario creado: {usuario_id}")
 
         return UsuarioResponse(
             usuario_id=usuario_id,
