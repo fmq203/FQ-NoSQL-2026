@@ -419,3 +419,17 @@
 **Patrón transversal (se repite en esta sesión y en la anterior):** cada vez que se investigó un hallazgo "menor" hasta el fondo en vez de aplicar el fix obvio, apareció algo más grande debajo — el boundary de 500ms escondía una contradicción entre dos tests; arreglar el test roto de schemathesis expuso que ninguna ruta de eventos-service documentaba sus errores; el "nombre duplicado" no tenía ni un chequeo real. Vale la pena seguir verificando contra el código y el spec, no conformarse con que un test individual pase.
 
 **Tags:** #usuarios-service #eventos-service #reservas-service #middleware-order #correlation-id #health-check #circuit-breaker #schemathesis #openapi #duplicate-check #mock-truthy #claude-sonnet-5
+
+---
+
+### 2026-09-26 — "¿Los README están actualizados?": README.md y brain/README.md realineados
+
+**Contexto:** Tras cerrar los dos batches de remediación de la sesión (hallazgos de `/speckit.analyze` + tests rotos de usuarios/eventos), se preguntó si los README estaban al día. Verificación honesta: ninguno de los dos se había tocado desde 2026-09-25, antes de los ~19 commits de ambos batches.
+
+**Hallazgos:**
+- `README.md` (raíz): documentaba `POST /api/v1/reservar` (la ruta real es `/api/reservar`, ya corregida dos veces esta sesión en spec-kit pero nunca en el README de usuario), el ejemplo de error RFC 7807 usaba el código genérico viejo (`validation-error` en vez de `VALIDATION_ERROR`), y no mencionaba nada del trabajo de hoy: reintentos HTTP, circuit breaker completo, vistas CQRS, filtros de `GET /api/reservar`, códigos de error específicos por escenario.
+- `brain/README.md`: la tabla de estado marcaba "Event Sourcing/CQRS ⏳ Opcional" (ya implementado hoy) y "Tests 🔲 Next" / "Implementación Código 🔲 Next" (ambos completos hace tiempo, y ahora con evidencia concreta de que pasan). La sección "Última Actualización" al final estaba vacía.
+
+**Resultado:** Actualizados ambos README con la información real y verificada (rutas, códigos de error, resiliencia HTTP, CQRS, y el estado actual de las 3 suites de test). `brain/README.md` ahora enlaza a esta entrada de `learnings.md` como fuente de detalle. Ningún cambio de código — es documentación puesta al día con lo que ya está implementado y probado.
+
+**Tags:** #documentation-drift #readme #brain #claude-sonnet-5

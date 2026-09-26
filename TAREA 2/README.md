@@ -147,25 +147,35 @@ curl -X POST http://localhost:8002/api/eventos \
 
 ### Reservas Service (`http://localhost:8003`)
 
+> **Nota:** el MVP no versiona la API — las rutas son `/api/reservar` sin
+> prefijo `v1`, alineadas al contrato exacto de la tarea. `APIVersioningMiddleware`
+> existe como código pero no está registrado en `main.py` (decisión consciente,
+> YAGNI); ver `.specify/specs/003-reservation-payment/spec.md`.
+
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/api/v1/reservar` | Iniciar SAGA reserva |
-| GET | `/api/v1/reservar/{id}` | Obtener reserva |
+| POST | `/api/reservar` | Iniciar SAGA reserva (idempotente por `reserva_id`) |
+| GET | `/api/reservar/{id}` | Obtener reserva por ID |
+| GET | `/api/reservar` | Listar reservas (paginado; filtros opcionales `usuario_id`, `evento_id`, `estado`) |
 | GET | `/health` | Health check con dependencias |
 | GET | `/metrics` | Métricas Prometheus |
 
 **Ejemplo crear reserva:**
 ```bash
-curl -X POST http://localhost:8003/api/v1/reservar \
+curl -X POST http://localhost:8003/api/reservar \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: unique-key-123" \
   -d '{
     "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
     "evento_id": "550e8400-e29b-41d4-a716-446655440001",
     "cantidad": 2,
-    "categoria": "General"
+    "categoria": "general",
+    "metodo_pago": "tarjeta"
   }'
 ```
+
+**Resiliencia HTTP a Usuarios/Eventos Service** (`src/services/http_clients.py`):
+- Reintentos: 3x con backoff exponencial (0.5s, 1s, 2s) ante timeout/error de red/5xx.
+- Circuit breaker: `closed` → `open` tras 5 fallos consecutivos → `half-open` automático a los 30s (1 sola request de prueba) → `closed` si tiene éxito, `open` de nuevo si falla.
 
 ---
 
@@ -256,20 +266,36 @@ Request ──▶ ValidadorDatos ──▶ ValidadorInventario ──▶ Procesa
 
 ## 🛡️ RFC 7807 Error Handling
 
-Todos los errores siguen **RFC 7807 Problem Details**:
+Todos los errores siguen **RFC 7807 Problem Details**, con códigos específicos por escenario (no genéricos por status HTTP):
 
 ```json
 {
-  "type": "https://eventflow.example.com/errors/validation-error",
-  "title": "Validation Error",
-  "status": 422,
-  "detail": "entradas_disponibles cannot exceed aforo_total",
-  "instance": "/api/eventos",
+  "type": "https://eventflow.example.com/errors/INSUFFICIENT_INVENTORY",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "Inventario insuficiente",
+  "instance": "/api/reservar",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
+**Códigos principales (Reservas Service):** `VALIDATION_ERROR` (400/422), `USER_NOT_FOUND`/`EVENT_NOT_FOUND`/`RESERVA_NOT_FOUND` (404), `EVENT_NOT_AVAILABLE`/`INSUFFICIENT_INVENTORY` (409), `PAYMENT_FAILED`/`RESERVATION_FAILED`/`INTERNAL_ERROR` (500), `SERVICE_UNAVAILABLE` (503 — dependencia caída o circuit breaker abierto).
+
 **Headers de tracing:** `X-Correlation-ID`, `X-Trace-ID` en todas las respuestas.
+
+---
+
+## 📈 CQRS Analítico (Reservas Service)
+
+Además del modelo operativo (MongoDB), `event_log` en PostgreSQL expone vistas de solo lectura para consultas de negocio, creadas en `init_pg_schema()`:
+
+| Vista | Contenido |
+|-------|-----------|
+| `ventas_por_evento` | Reservas confirmadas, entradas e ingreso total por evento (últimos 30 días) |
+| `tasa_exito_saga` | % de SAGAs exitosas vs fallidas por día (últimos 7 días) |
+| `compensaciones_por_tipo` | Compensaciones ejecutadas agrupadas por paso (últimas 24h) |
+
+Más un índice GIN (`idx_event_log_payload_gin`) para acelerar los filtros por campos del `payload` JSONB. El particionamiento mensual de `event_log` queda documentado pero sin implementar — su propio criterio de activación (>10M eventos/mes) no se alcanza en este proyecto.
 
 ---
 
@@ -293,11 +319,19 @@ make test-contract
 ```
 servicio/
 ├── tests/
-│   ├── contract/      # Tests de contrato (API)
-│   ├── integration/   # Tests de integración (BD real)
+│   ├── contract/      # Tests de contrato (API, RFC 7807, OpenAPI/schemathesis)
+│   ├── integration/   # Tests de integración (BD real vía docker-compose)
 │   ├── unit/          # Tests unitarios (mocked)
 │   └── performance/   # Tests de latencia (p95/p99)
 ```
+
+**Estado (2026-09-26), suite completa contra `docker compose up -d`:**
+
+| Servicio | Resultado |
+|----------|-----------|
+| usuarios-service | 38/38 ✅ |
+| eventos-service | 80/80 ✅ |
+| reservas-service | 100 passed / 4 skipped / 1 flaky (test de p99 bajo carga concurrente — timing-sensitive, confirmado que pasa en corridas aisladas) |
 
 ---
 
