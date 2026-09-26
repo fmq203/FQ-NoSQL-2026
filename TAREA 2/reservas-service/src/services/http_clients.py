@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 import httpx
 
@@ -11,6 +12,37 @@ _usuarios_client: Optional[httpx.AsyncClient] = None
 _eventos_client: Optional[httpx.AsyncClient] = None
 _circuit_breakers = {"usuarios_service": "closed", "eventos_service": "closed"}
 _failure_counts = {"usuarios_service": 0, "eventos_service": 0}
+
+# Backoff exponencial para reintentos HTTP a Usuarios/Eventos, por spec.md
+# ("Timeouts y Reintentos": 3 reintentos, 0.5s/1s/2s).
+_RETRY_BACKOFFS_S = (0.5, 1.0, 2.0)
+
+
+async def _con_reintentos(
+    hacer_request: Callable[[], Awaitable[httpx.Response]]
+) -> httpx.Response:
+    """Ejecuta una request HTTP con hasta 3 reintentos y backoff exponencial.
+
+    Reintenta ante error de red/timeout (httpx.HTTPError) o respuesta 5xx.
+    No reintenta 4xx: son errores del cliente (ej. 404, 400), un reintento
+    no cambia el resultado.
+    """
+    ultimo_exc: Optional[Exception] = None
+    for intento, delay in enumerate((0.0,) + _RETRY_BACKOFFS_S):
+        if delay:
+            logger.warning(f"Reintentando request (intento {intento + 1}) tras {delay}s")
+            await asyncio.sleep(delay)
+        try:
+            resp = await hacer_request()
+        except httpx.HTTPError as e:
+            ultimo_exc = e
+            continue
+        if resp.status_code < 500:
+            return resp
+        ultimo_exc = httpx.HTTPStatusError(
+            f"{resp.status_code} Server Error", request=resp.request, response=resp
+        )
+    raise ultimo_exc
 
 
 async def get_usuarios_client() -> httpx.AsyncClient:
@@ -72,11 +104,16 @@ def get_circuit_breaker_state() -> dict:
 
 
 async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[dict]:
-    """GET /api/usuarios/{id} en Usuarios Service. None si no existe (404)."""
+    """GET /api/usuarios/{id} en Usuarios Service. None si no existe (404).
+
+    Reintenta 3x con backoff exponencial ante timeout/error de red o 5xx.
+    """
     client = await get_usuarios_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
     try:
-        resp = await client.get(f"/api/usuarios/{usuario_id}", headers=headers)
+        resp = await _con_reintentos(
+            lambda: client.get(f"/api/usuarios/{usuario_id}", headers=headers)
+        )
     except httpx.HTTPError:
         record_failure("usuarios_service")
         raise
@@ -89,11 +126,16 @@ async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[dic
 
 
 async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[dict]:
-    """GET /api/eventos/{id} en Eventos Service. None si no existe (404)."""
+    """GET /api/eventos/{id} en Eventos Service. None si no existe (404).
+
+    Reintenta 3x con backoff exponencial ante timeout/error de red o 5xx.
+    """
     client = await get_eventos_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
     try:
-        resp = await client.get(f"/api/eventos/{evento_id}", headers=headers)
+        resp = await _con_reintentos(
+            lambda: client.get(f"/api/eventos/{evento_id}", headers=headers)
+        )
     except httpx.HTTPError:
         record_failure("eventos_service")
         raise
@@ -116,14 +158,22 @@ async def decrementar_inventario_evento(
     que efectivamente se vendio, para que GET /api/eventos/{id} no siga
     mostrando el aforo original despues de vender entradas. Propaga la
     excepcion en caso de error - el llamador decide como compensar.
+
+    Reintenta 3x con backoff exponencial ante timeout/error de red o 5xx.
     """
     client = await get_eventos_client()
     headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
-    resp = await client.post(
-        f"/api/eventos/{evento_id}/decrementar-inventario",
-        json={"categoria": categoria, "cantidad": cantidad},
-        headers=headers,
-    )
+    try:
+        resp = await _con_reintentos(
+            lambda: client.post(
+                f"/api/eventos/{evento_id}/decrementar-inventario",
+                json={"categoria": categoria, "cantidad": cantidad},
+                headers=headers,
+            )
+        )
+    except httpx.HTTPError:
+        record_failure("eventos_service")
+        raise
     resp.raise_for_status()
     record_success("eventos_service")
     return resp.json()
