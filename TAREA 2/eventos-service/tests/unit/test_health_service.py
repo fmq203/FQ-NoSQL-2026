@@ -63,10 +63,15 @@ class TestHealthService:
     
     @pytest.mark.asyncio
     async def test_check_health_boundary_degraded(self, service, mock_ping):
-        """Test boundary: exactly 500ms should be unhealthy"""
+        """Test boundary: exactly 500ms should still be degraded.
+
+        spec.md (002-eventos-crud) es explicito: "latencia 50ms-500ms
+        (inclusive)" -> degraded. Solo > 500ms (ping lento mas alla del
+        umbral) o un ping fallido/timeout pasan a unhealthy.
+        """
         mock_ping.return_value = (True, 500.0)
-        
+
         result = await service.check_health()
-        
-        assert result.status == HealthStatus.UNHEALTHY
-        assert result.checks["mongodb"] == MongoDBHealth.DOWN
+
+        assert result.status == HealthStatus.DEGRADED
+        assert result.checks["mongodb"] == MongoDBHealth.SLOW
