@@ -72,62 +72,63 @@ Implementar **Reservas & Pagos Service** como **Orquestador SAGA** con **Chain o
 
 ## Project Structure
 
+**Nota (2026-09-26):** árbol actualizado a la estructura real tras la sesión de reescritura de `reservas-service` (ver `brain/learnings/learnings.md`, 2026-09-25). Diferencias principales vs el diseño original: `api/routes.py` y `api/middleware.py` (archivos sueltos) fueron reemplazados por paquetes `api/routes/` y `api/middleware/` — Python resuelve un paquete por sobre un módulo del mismo nombre en el mismo directorio, así que tener ambos a la vez causaba que el código "muerto" (el archivo suelto) quedara sin ejecutarse nunca sin que nadie lo notara; se consolidó en un solo camino real.
+
 ```
 reservas-service/
-├── docker-compose.yml          # Local dev stack: MongoDB, Redis, PostgreSQL, Usuarios, Eventos
+├── docker-compose.yml          # (en la raíz del repo, no por servicio - ver ../docker-compose.yml)
 ├── Dockerfile
 ├── requirements.txt
 ├── src/
 │   ├── __init__.py
 │   ├── main.py
+│   ├── config.py                # pydantic-settings: env vars
 │   ├── models/
-│   │   ├── __init__.py
-│   │   ├── reserva.py           # Pydantic: ReservaRequest, ReservaResponse, ReservaContext
-│   │   └── enums.py             # EstadoReserva, MetodoPago
+│   │   ├── __init__.py          # ReservaCreate, ReservaResponse (modelo "vivo", usado por routes)
+│   │   ├── reserva.py           # ReservaCreateRequest, ReservaContext, SagaStep, EventType, RFC7807Error
+│   │   └── enums.py              # MetodoPago, EstadoReserva
 │   ├── chain/
 │   │   ├── __init__.py
-│   │   ├── handler.py           # Base Handler abstracto + ReservaContext
-│   │   ├── validators.py        # 6 handlers: ValidadorDatos, ValidadorUsuario, ValidadorEvento, ProcesadorPago, ConfirmadorReserva, Auditor
-│   │   └── builder.py           # Construir cadena encadenada
+│   │   ├── handler.py           # Handler/BaseHandler abstractos
+│   │   ├── validators.py        # 6 handlers: ValidadorDeDatos, ValidadorInventario, ValidadorEvento, ProcesadorPago, ConfirmadorReserva, Auditor
+│   │   └── builder.py           # ChainBuilder: encadena los 6 handlers
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── mongo.py             # MongoDB connection + indexes
-│   │   ├── redis_pago.py        # Redis Lua scripts (pago + compensación)
-│   │   ├── postgresql.py        # AsyncPG pool + event_log inserts
-│   │   ├── http_clients.py      # httpx.AsyncClient para Usuarios/Eventos
-│   │   └── saga_orchestrator.py # Orquestador SAGA: ejecuta cadena, maneja errores, dispara compensaciones
+│   │   ├── mongo.py             # Motor client dedicado (usado por chain/validators.py, lazy-connect vía env var)
+│   │   ├── mongodb.py           # Motor client genérico (health check, lifespan-dependent)
+│   │   ├── redis_pago.py        # Lua scripts: reservar/liberar (legado) + pagar_y_decrementar/compensar (activos)
+│   │   ├── postgresql.py        # asyncpg pool + event_log (insert_event_log, get_events_by_aggregate, get_saga_success_rate)
+│   │   ├── http_clients.py      # httpx.AsyncClient + get_usuario/get_evento + decrementar/incrementar_inventario_evento
+│   │   ├── saga_orchestrator.py # SagaOrchestrator: ejecuta la cadena, dispara compensaciones
+│   │   ├── metrics.py           # Prometheus: saga_duration_seconds, saga_total, etc.
+│   │   └── logging_config.py    # ⚠️ huérfano - no conectado a main.py (ver brain/learnings.md, hallazgo E5)
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── routes.py            # POST /api/v1/reservar, GET /api/v1/reservar/{id}
-│   │   └── middleware.py        # RFC 7807, versioning, tracing, circuit breaker
+│   │   ├── routes/              # paquete (no routes.py suelto)
+│   │   │   ├── __init__.py      # monta reservas_router en /api, health_router en /
+│   │   │   ├── reservas.py      # POST/GET /reservar, GET /reservar/{id}
+│   │   │   ├── health.py
+│   │   │   └── metrics.py       # GET /metrics
+│   │   └── middleware/          # paquete (no middleware.py suelto)
+│   │       ├── __init__.py
+│   │       ├── correlation.py   # CorrelationIDMiddleware
+│   │       ├── logging.py       # StructuredLoggingMiddleware
+│   │       ├── metrics.py       # MetricsMiddleware
+│   │       └── versioning.py    # APIVersioningMiddleware - definido, nunca registrado en main.py
 │   └── utils/
 │       ├── __init__.py
-│       └── idempotency.py       # Clave idempotencia reserva_id
+│       ├── errors.py            # EventFlowHTTPException + RFC 7807 handlers
+│       └── idempotency.py       # check_idempotency (Mongo=fuente de verdad, Redis/PG=best-effort)
 ├── tests/
-│   ├── __init__.py
-│   ├── contract/
-│   │   ├── __init__.py
-│   │   └── test_reservas_openapi.py
-│   ├── integration/
-│   │   ├── __init__.py
-│   │   ├── test_saga_happy_path.py
-│   │   ├── test_saga_compensations.py
-│   │   ├── test_chain_of_responsibility.py
-│   │   ├── test_double_booking.py
-│   │   ├── test_negative_inventory.py
-│   │   ├── test_compensation_success.py
-│   │   ├── test_all_event_types.py
-│   │   └── test_audit_completeness.py
-│   ├── performance/
-│   │   ├── __init__.py
-│   │   ├── test_saga_performance.py
-│   │   ├── test_saga_p99.py
-│   │   └── test_saga_success_rate.py
-│   └── unit/
-│       ├── __init__.py
-│       ├── test_lua_scripts.py
-│       ├── test_handlers.py
-│       └── test_idempotency.py
+│   ├── contract/                # test_reservar_post.py, test_reservas_openapi.py, test_openapi_docs.py
+│   ├── integration/             # test_saga_happy_path.py, test_saga_compensations.py, test_double_booking.py,
+│   │                             # test_negative_inventory.py, test_compensation_success.py, test_all_event_types.py,
+│   │                             # test_audit_completeness.py, test_quickstart.py
+│   ├── performance/              # test_saga_performance.py, test_saga_p99.py, test_saga_success_rate.py, test_load.py
+│   ├── unit/                     # test_lua_scripts.py, test_handlers.py
+│   ├── quality/                  # test_code_quality.py
+│   ├── security/                 # test_security.py, test_vulnerability_scan.py
+│   └── docker/                   # test_docker_build.py
 └── pytest.ini
 ```
 
@@ -261,7 +262,7 @@ CREATE INDEX idx_event_log_payload_gin ON event_log USING GIN(payload);
 ### Contracts (OpenAPI)
 
 Auto-generado en `/openapi.json`. Endpoint principal:
-- POST `/api/v1/reservar` - Inicia SAGA completa
+- POST `/api/reservar` - Inicia SAGA completa
 
 ### Quickstart
 
@@ -278,7 +279,7 @@ docker compose up -d
 pytest -v
 
 # Test SAGA happy path
-curl -X POST http://localhost:8003/api/v1/reservar \
+curl -X POST http://localhost:8003/api/reservar \
   -H "Content-Type: application/json" \
   -d '{"usuario_id":"...", "evento_id":"...", "cantidad":2, "metodo_pago":"tarjeta"}'
 
