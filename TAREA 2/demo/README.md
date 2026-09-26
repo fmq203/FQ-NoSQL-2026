@@ -36,7 +36,19 @@ xdg-open index.html   # o doble click en el Finder/Explorador
 5. **Reservar** → `POST /api/reservar` (usuario_id/evento_id se autocompletan de los pasos anteriores).
 6. **Reintentar con el mismo `reserva_id`** → demuestra idempotencia (200, no 201, sin doble cobro).
 7. **Botón de error real** → dispara una reserva con `evento_id` inexistente y muestra el RFC 7807 completo (`EVENT_NOT_FOUND`, 404).
-8. **Demo de un click** → corre los 3 pasos en secuencia con datos random.
+8. **Escenarios de un click** → 7 botones, cada uno auto-contenido (crea su propio usuario/evento, sin tocar los formularios de arriba) y anima el pipeline marcando exactamente en qué paso ocurre el resultado:
+
+   | Escenario | Resultado esperado | Falla en el paso |
+   |-----------|---------------------|-------------------|
+   | ✅ Camino feliz | 201 Created, reserva confirmada | — |
+   | ❌ Usuario inexistente | 404 `USER_NOT_FOUND` | Validar Usuario |
+   | ❌ Evento inexistente | 404 `EVENT_NOT_FOUND` | Validar Evento |
+   | ❌ Evento no publicado | 409 `EVENT_NOT_AVAILABLE` (evento en `borrador`) | Validar Evento |
+   | ❌ Inventario insuficiente | 409 `INSUFFICIENT_INVENTORY` (se pide más de lo disponible) | Validar Evento |
+   | ❌ Categoría inexistente | 422 `VALIDATION_ERROR` (la categoría pedida no existe en el evento) | Validar Evento |
+   | ❌ Cantidad inválida | 422 `VALIDATION_ERROR` (`cantidad=0`, rechazada por Pydantic antes de arrancar la SAGA) | Validar Datos |
+
+   Los 7 se probaron de punta a punta contra el stack real (`node` simulando el mismo flujo del navegador) antes de darlos por buenos — ver `brain/learnings/learnings.md`.
 
 Las URLs base (por si corrés los servicios en otros puertos) son editables arriba de la página.
 
