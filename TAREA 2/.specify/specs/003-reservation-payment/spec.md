@@ -500,9 +500,9 @@ El campo `monto_total` en la reserva se calcula como: `precio_unitario * cantida
 - Response incluye `precios[]` con `categoria`, `precio`, `disponibles`
 - El `ValidadorEvento` obtiene y almacena `evento_data.precios` en `ReservaContext`
 - El `ProcesadorPago` calcula: `monto_total = precio_categoria_seleccionada * cantidad`
-- **MVP (v1)**: Se usa la primera categoría disponible; campo `categoria` en request es opcional
-- **Post-MVP (v2+)**: Cliente especifica `categoria` en request para selección explícita
-  - **Acceptance Criteria v2**: POST `/api/reservar` acepta campo opcional `categoria`; si se provee, validar que existe en `precios[]` del evento; si no, usar primera categoría; rechazar con 400 si categoría no existe
+- **Estado real (2026-09-26)**: el MVP implementado NO tiene el fallback "primera categoría disponible" descrito abajo como diseño original. El campo `categoria` es **requerido** desde el día uno (`ReservaCreateRequest.categoria: str = Field(..., min_length=1)` en `src/models/reserva.py`), y el `ValidadorEvento` siempre valida que la `categoria` provista exista en `precios[]` del evento, rechazando con 400 si no existe. No existe código que seleccione una categoría por defecto cuando el campo falta — Pydantic rechaza la request antes de llegar a la lógica de negocio. Se documenta como decisión consciente (Principio VIII, YAGNI): exigir `categoria` explícita es más simple de implementar y probar que una regla implícita de "primera disponible" cuyo orden no está definido en ningún contrato, y evita ambigüedad sobre qué categoría se cobra quen un evento con precios distintos por categoría.
+- **Diseño original (no implementado)**: la idea inicial de fases era permitir `categoria` opcional en v1 (usando la primera disponible) y hacerla explícita recién en v2+. Se mantiene documentado abajo por trazabilidad histórica, pero el código y los tests de contrato (`tests/contract/test_reservas_openapi.py`) siempre envían `categoria` explícita — el comportamiento "v2" es, en la práctica, lo único que existe.
+  - **Acceptance Criteria (implementado)**: POST `/api/reservar` requiere campo `categoria`; se valida que existe en `precios[]` del evento; se rechaza con 400 si la categoría no existe.
   - **Requerimiento**: Endpoint Eventos Service actualizado para incluir `categoria` en response (ya incluido)
 
 **Validación**: El `ProcesadorPago` verifica que `monto_total` coincida con `precio * cantidad` antes de ejecutar Lua script.
