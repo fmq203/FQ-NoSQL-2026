@@ -340,3 +340,37 @@
 - eventos-service `test_openapi_compliance.py`: falla la colección con `AttributeError: module 'schemathesis' has no attribute 'from_path'` — la versión instalada de schemathesis ya no tiene esa API. No investigado.
 
 **Tags:** #reservas-service #usuarios-service #testing #mocking #patch-where-used #lifespan #mongodb #openapi #metrics #dockerfile #healthcheck #claude-sonnet-5
+
+---
+
+### 2026-09-26 — `/speckit.analyze` sobre 003-reservation-payment: spec/plan/tasks desalineados con el código real (Claude Sonnet 5)
+
+**Contexto:** Se pidió correr `/speckit.analyze` para chequear el estado final tras el trabajo intensivo de las dos sesiones anteriores (auditoría + reescritura de reservas-service + limpieza de tests). No existe un skill nativo de Claude Code instalado para el comando (`.claude/skills/speckit-analyze/` está referenciado en `.specify/integrations/claude.manifest.json` pero el directorio nunca se creó — solo `.opencode/commands/speckit.analyze.md` existe en disco). Se replicó manualmente el procedimiento descrito ahí: cargar `spec.md`/`plan.md`/`tasks.md` de la feature activa (`003-reservation-payment`, la que apunta `.specify/feature.json`) + `constitution.md`, y contrastar contra el código real en vez de contra memoria.
+
+**Problema/Decisión:** Determinar si los artefactos de spec-kit siguen siendo confiables como referencia para la pre-defensa, dado que el código de `reservas-service` cambió sustancialmente en las últimas dos sesiones.
+
+**Análisis — hallazgos verificados contra el código, no solo contra el texto del spec:**
+
+1. **CRITICAL — Ruta versionada.** `spec.md`, `plan.md` y `tasks.md` (30+ referencias) especifican `POST /api/v1/reservar`. El código real es `POST /api/reservar` (sin versionar), alineado a propósito al contrato del PDF de la tarea desde la sesión del 2026-09-25. Ningún artefacto de spec-kit refleja este cambio.
+2. **CRITICAL — tasks.md completamente desactualizado.** Las 145 tareas (T001-T145, 13 fases) están **todas sin marcar** (`[ ]`), incluyendo trabajo que está implementado y verificado en vivo (orquestador SAGA, 6 handlers, compensaciones, Lua scripts, event_log completo, idempotencia 200/201, `/metrics`, health check, responses OpenAPI). Un revisor que abra `tasks.md` hoy concluiría que el proyecto no arrancó — falso y contraproducente para la defensa.
+3. **HIGH — `categoria` opcional vs requerido.** El spec dice "MVP v1: `categoria` es opcional, se usa la primera categoría disponible". El código (`models/reserva.py:17`) la exige (`Field(..., min_length=1)`). Decisión real tomada pero no documentada.
+4. **HIGH — Retries HTTP nunca implementados.** Spec/tasks piden 3 reintentos con backoff exponencial (0.5s/1s/2s) para las llamadas a Usuarios/Eventos Service. `services/http_clients.py` no tiene ningún retry — un fallo transitorio de red tira la SAGA al primer intento.
+5. **HIGH — `logging_config.py` aparenta sanitizar PII sin hacerlo.** El archivo tiene un comentario/intención de remover PII de logs (Principio VII de la constitution, tasks T120/T142), pero es un formatter JSON plano sin ningún filtro real, y **ni siquiera está conectado** — `main.py` usa `api/middleware/logging.py::setup_json_logging`, una función distinta. Es el hallazgo más delicado porque aparenta cumplir un principio constitucional MUST sin cumplirlo.
+6. **MEDIUM — Circuit breaker incompleto.** Solo tiene 2 estados reales (`closed`→`open` tras 5 fallos). Nunca transiciona automáticamente a `half-open` tras 30s como especifica el spec — una vez abierto, queda abierto hasta reiniciar el proceso.
+7. **MEDIUM — Vistas SQL analíticas ausentes.** `ventas_por_evento`, `tasa_exito_saga`, `compensaciones_por_tipo` (CQRS de lectura) nunca se crearon en `init_pg_schema()`. `get_saga_success_rate()` existe pero es una query ad-hoc, no una vista, y no implementa la ventana rolling de 7 días que pide RP-SC-006.
+8. **LOW — `GET /api/reservar` sin filtros.** El spec pide filtrar por `usuario_id`/`evento_id`/`estado`; el endpoint agregado esta sesión solo pagina (`skip`/`limit`).
+9. **LOW — `testcontainers` declarado pero no usado.** Está en `requirements.txt` pero solo aparece mencionado en comentarios de test ("esto se verificaría con testcontainers..."), nunca se importa de verdad.
+10. **LOW — Códigos de error genéricos vs específicos.** El spec pide `USER_NOT_FOUND`/`EVENT_NOT_FOUND`/`INSUFFICIENT_INVENTORY`/etc. por escenario; el código usa slugs genéricos por status HTTP (`not-found`, `conflict`, `validation-error`). Funciona igual de bien, pero es otra divergencia no documentada.
+11. **LOW — Latencia de health check inconsistente consigo misma.** RP-FR-008 pide `<10ms` total, pero los thresholds por dependencia individual ya suman más que eso si se consultan en serie (Mongo/PG `>100ms`=degraded, Redis `>50ms`=degraded).
+
+**Positivo confirmado:** RP-FR-001 a 004, 006, 007 y todos los RP-SC de performance/compensación/double-booking (001-004, 007) tienen implementación real y tests que pasan — la desalineación es de **documentación**, no de que el core del sistema (SAGA + Chain of Responsibility, lo que pesa en la nota) esté roto o sin hacer.
+
+**Decisión/Resultado:** Análisis puramente de lectura (como exige el propio comando `/speckit.analyze` — "STRICTLY READ-ONLY"), no se modificó `spec.md`/`plan.md`/`tasks.md`/código. Se entregó el reporte completo al usuario (tabla de hallazgos con severidad, cobertura por requirement, próximas acciones) y se ofreció proponer ediciones concretas para los top-3 (D1 tasks.md, I1 ruta versionada, E5 logging_config.py huérfano) — pendiente de que el usuario decida si procede.
+
+**Próximos pasos:**
+- Decidir y ejecutar la actualización de `tasks.md` (marcar `[x]` lo hecho) antes de la pre-defensa del 5/11 — es el hallazgo con más impacto en cómo se ve el repo ante un revisor.
+- Decidir si `spec.md`/`plan.md` se actualizan a `/api/reservar` (código real) o si se documenta explícitamente la divergencia.
+- Evaluar si vale la pena implementar sanitización real de PII en logs o simplemente borrar `logging_config.py` (código muerto que aparenta cumplir Principio VII).
+- El resto de los hallazgos (retries HTTP, circuit breaker de 3 estados, vistas SQL, filtros en GET /reservar, testcontainers real) son mejoras opcionales — ninguno bloquea la demo del core SAGA/Chain of Responsibility.
+
+**Tags:** #speckit-analyze #spec-kit #reservas-service #003-reservation-payment #documentation-drift #tasks-staleness #constitution-alignment #claude-sonnet-5
