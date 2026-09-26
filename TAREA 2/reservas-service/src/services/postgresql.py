@@ -72,8 +72,56 @@ async def init_pg_schema() -> None:
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_event_log_correlation ON event_log(correlation_id)
         """)
+        # Soporte para queries analiticas que filtran/agregan por campos
+        # dentro de payload (JSONB) - ver "CQRS Read Models / SQL Views"
+        # en spec.md.
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_event_log_payload_gin ON event_log USING GIN(payload)
+        """)
 
-    logger.info("✅ PostgreSQL schema inicializado (pagos + event_log)")
+        # Modelo analitico (CQRS): vistas de solo lectura sobre event_log
+        # para consultas de negocio sin tocar el modelo operativo (Mongo).
+        # CREATE OR REPLACE VIEW es idempotente entre reinicios del servicio.
+        await conn.execute("""
+            CREATE OR REPLACE VIEW ventas_por_evento AS
+            SELECT
+                payload->>'evento_id' as evento_id,
+                COUNT(*) as total_reservas,
+                SUM((payload->>'cantidad')::int) as total_entradas,
+                SUM((payload->>'monto_total')::numeric) as ingreso_total
+            FROM event_log
+            WHERE event_type = 'RESERVA_CONFIRMADA'
+              AND timestamp > NOW() - INTERVAL '30 days'
+            GROUP BY payload->>'evento_id'
+        """)
+        await conn.execute("""
+            CREATE OR REPLACE VIEW tasa_exito_saga AS
+            SELECT
+                DATE_TRUNC('day', timestamp) as dia,
+                COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') as exitosas,
+                COUNT(*) FILTER (WHERE event_type = 'SAGA_FAILED') as fallidas,
+                ROUND(
+                    COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') * 100.0 /
+                    NULLIF(COUNT(*) FILTER (WHERE event_type IN ('SAGA_COMPLETED', 'SAGA_FAILED')), 0), 2
+                ) as tasa_exito_pct
+            FROM event_log
+            WHERE event_type IN ('SAGA_COMPLETED', 'SAGA_FAILED')
+              AND timestamp > NOW() - INTERVAL '7 days'
+            GROUP BY DATE_TRUNC('day', timestamp)
+            ORDER BY dia DESC
+        """)
+        await conn.execute("""
+            CREATE OR REPLACE VIEW compensaciones_por_tipo AS
+            SELECT
+                payload->>'paso_compensado' as paso,
+                COUNT(*) as total_compensaciones
+            FROM event_log
+            WHERE event_type = 'COMPENSACION_EJECUTADA'
+              AND timestamp > NOW() - INTERVAL '24 hours'
+            GROUP BY payload->>'paso_compensado'
+        """)
+
+    logger.info("✅ PostgreSQL schema inicializado (pagos + event_log + vistas analíticas)")
 
 
 async def close_pg_pool() -> None:

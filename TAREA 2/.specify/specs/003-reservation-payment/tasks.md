@@ -20,6 +20,10 @@ description: "Task list for Reservation & Payment feature implementation"
 
 **Actualización (2026-09-26, remediación E4/I3):** No correspondían a ningún task ID sin marcar (gaps no representados en tasks.md). E4: `GET /api/reservar` ahora acepta `usuario_id`/`evento_id`/`estado` como filtros opcionales (ver `spec.md`, `## Error Response Format`). I3: los códigos de error genéricos por status HTTP (`not-found`, `conflict`, `validation-error`) fueron reemplazados por los códigos específicos de `spec.md` (`USER_NOT_FOUND`, `EVENT_NOT_FOUND`, `INSUFFICIENT_INVENTORY`, `PAYMENT_FAILED`, `RESERVATION_FAILED`, más `EVENT_NOT_AVAILABLE`/`RESERVA_NOT_FOUND` nuevos) vía el nuevo campo `ReservaContext.error_code`.
 
+**Actualización (2026-09-26, remediación E3):** T055/T062/T091/T095-T098/T130/T131 marcadas `[x]` — se crearon las 3 vistas analíticas (`ventas_por_evento`, `tasa_exito_saga`, `compensaciones_por_tipo`) y el índice GIN sobre `event_log.payload` en `init_pg_schema()` (`src/services/postgresql.py`), con el SQL exacto de `spec.md` (`CREATE OR REPLACE VIEW`, idempotente entre reinicios). En el camino se encontró y corrigió un bug real: el evento `RESERVA_CONFIRMADA` (emitido en `ConfirmadorReserva`, `src/chain/validators.py`) nunca incluía `evento_id` en su payload, así que `ventas_por_evento` (que agrupa por `payload->>'evento_id'`) habría agrupado todo bajo `NULL` — se agregó `evento_id` al payload del evento. Probado end-to-end contra el PostgreSQL real de `docker-compose` en `tests/integration/test_analytics_views.py` (5 tests: cada vista + el índice GIN), sin mockear `init_pg_schema()`/`get_pg_pool()` como el resto de la suite (que no puede, porque el lifespan de FastAPI nunca corre bajo `AsyncClient(app=app, ...)` — ver nota de E6 más abajo).
+
+T063/T099/T141 (particionamiento mensual de `event_log`) se dejan sin marcar a propósito: `spec.md` ya documenta su propio criterio de activación explícito ("Activar cuando `event_log` supere 10M eventos/mes o latencia de consultas analíticas > 500ms"), que un proyecto de curso de un solo grupo no alcanza. Implementar particionamiento ahora sería sobre-ingeniería sin ese volumen (Principio VIII, YAGNI) — el gap real no es la falta de código, es que estaba mal clasificado como pendiente cuando en realidad ya está correctamente diferido por su propio criterio documentado.
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
@@ -163,7 +167,7 @@ description: "Task list for Reservation & Payment feature implementation"
 
 - [x] T053 [P] [US4] Integration test: Verificar 7 eventos ordenados en PG tras reserva exitosa
 - [x] T054 [P] [US4] Integration test: Verificar SAGA_FAILED + COMPENSACION en PG tras fallo
-- [ ] T055 [P] [US4] Unit test: Query analítica `ventas_por_evento` retorna agregados correctos
+- [x] T055 [P] [US4] Unit test: Query analítica `ventas_por_evento` retorna agregados correctos
 - [x] T056 [P] [US4] Integration test: Verificar TODOS los event types (SAGA_STARTED, USUARIO_VALIDADO, EVENTO_VALIDADO, PAGO_PROCESADO, INVENTARIO_DECREMENTADO, RESERVA_CONFIRMADA, SAGA_COMPLETED, SAGA_FAILED, COMPENSACION_EJECUTADA) en `tests/integration/test_all_event_types.py`
 - [x] T057 [P] [US4] Test: Audit log 100% completo (RP-SC-005) in `tests/integration/test_audit_completeness.py`
 - [x] T058 [P] [US4] Test: SAGA success rate > 99.9% measurement (RP-SC-006) in `tests/performance/test_saga_success_rate.py`
@@ -179,7 +183,7 @@ description: "Task list for Reservation & Payment feature implementation"
   - SAGA_STARTED, USUARIO_VALIDADO, EVENTO_VALIDADO, PAGO_PROCESADO, INVENTARIO_DECREMENTADO, RESERVA_CONFIRMADA, SAGA_COMPLETED
 - [x] T060 [US4] Payloads JSONB completos con todos los datos relevantes
 - [x] T061 [US4] Metadata: correlation_id, service name, timestamp
-- [ ] T062 [US4] Vista materializada / query analítica: `ventas_por_evento`, `tasa_exito_saga`, `compensaciones_por_tipo` (ver plan.md SQL)
+- [x] T062 [US4] Vista materializada / query analítica: `ventas_por_evento`, `tasa_exito_saga`, `compensaciones_por_tipo` (ver plan.md SQL)
 - [ ] T063 [US4] Particionamiento mensual event_log (opcional, activar si >10M eventos/mes o latencia analítica >500ms)
 - [ ] **CHECKPOINT**: Run `pytest tests/` - ALL US4 tests must PASS
 
@@ -276,17 +280,17 @@ description: "Task list for Reservation & Payment feature implementation"
 
 - [x] T089 [US4] Integration test: 7 eventos ordenados en PG tras reserva exitosa
 - [x] T090 [US4] Integration test: SAGA_FAILED + COMPENSACION en PG tras fallo
-- [ ] T091 [US4] Unit test: Query analítica `ventas_por_evento` retorna agregados correctos
+- [x] T091 [US4] Unit test: Query analítica `ventas_por_evento` retorna agregados correctos
 - [x] T092 [US4] Integration test: TODOS los event types in `tests/integration/test_all_event_types.py`
 - [x] T093 [US4] Test: Audit log 100% completo (RP-SC-005) in `tests/integration/test_audit_completeness.py`
 - [x] T094 [US4] Test: SAGA success rate > 99.9% (RP-SC-006) in `tests/performance/test_saga_success_rate.py`
 
 ### High - Missing SQL Views & Partitioning
 
-- [ ] T095 [US4] Create SQL view `ventas_por_evento` in PostgreSQL `init_pg_schema()`
-- [ ] T096 [US4] Create SQL view `tasa_exito_saga` in PostgreSQL `init_pg_schema()`
-- [ ] T097 [US4] Create SQL view `compensaciones_por_tipo` in PostgreSQL `init_pg_schema()`
-- [ ] T098 [US4] Create GIN index `idx_event_log_payload_gin` on `event_log.payload`
+- [x] T095 [US4] Create SQL view `ventas_por_evento` in PostgreSQL `init_pg_schema()`
+- [x] T096 [US4] Create SQL view `tasa_exito_saga` in PostgreSQL `init_pg_schema()`
+- [x] T097 [US4] Create SQL view `compensaciones_por_tipo` in PostgreSQL `init_pg_schema()`
+- [x] T098 [US4] Create GIN index `idx_event_log_payload_gin` on `event_log.payload`
 - [ ] T099 [US4] Implement monthly partitioning activation logic for `event_log`
 
 ### High - Health Check & Circuit Breaker
@@ -333,8 +337,8 @@ description: "Task list for Reservation & Payment feature implementation"
 - [x] T127 [US4] Add PostgreSQL event_log correlation_id index verification
 - [x] T128 [US4] Implement SAGA_STARTED event emission at SAGA start
 - [x] T129 [US4] Implement SAGA_FAILED event emission on SAGA failure
-- [ ] T130 [US4] Verify SQL views created and queryable
-- [ ] T131 [US4] Verify GIN index created on event_log.payload
+- [x] T130 [US4] Verify SQL views created and queryable
+- [x] T131 [US4] Verify GIN index created on event_log.payload
 
 ---
 
