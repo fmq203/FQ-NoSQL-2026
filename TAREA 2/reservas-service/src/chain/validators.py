@@ -359,6 +359,7 @@ class ConfirmadorReserva(BaseHandler):
                 aggregate_id=context.reserva_id,
                 payload={
                     "reserva_id": str(context.reserva_id),
+                    "evento_id": str(context.evento_id),
                     "numero_confirmacion": numero_confirmacion,
                     "cantidad": context.cantidad,
                     "monto_total": reserva_doc["monto_total"]
