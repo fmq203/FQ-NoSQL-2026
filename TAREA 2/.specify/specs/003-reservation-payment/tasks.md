@@ -18,6 +18,8 @@ description: "Task list for Reservation & Payment feature implementation"
 
 **Actualización (2026-09-26, remediación E2):** T014e/T068/T100/T135 marcadas `[x]` — el circuit breaker antes solo registraba fallos y abría (closed→open a los 5 fallos), pero nunca hacía la transición open→half-open, y ninguna función lo consultaba antes de llamar al servicio (`check_circuit_breaker` existía pero no se usaba en ningún lado). Se implementó la máquina de estados completa en `src/services/http_clients.py`: open→half-open automático tras 30s, half-open permite 1 sola request de prueba a la vez, éxito→closed, fallo→open inmediato. `get_usuario`/`get_evento`/`decrementar_inventario_evento` ahora consultan el breaker y fallan rápido (`CircuitBreakerOpenError`, sin llamar al servicio) si está abierto. Se conectó `set_circuit_breaker_state` (definida en `metrics.py`, nunca llamada) en cada transición para que el gauge de Prometheus refleje el estado real. Cubierto por `tests/unit/test_circuit_breaker.py` (10 tests).
 
+**Actualización (2026-09-26, remediación E4/I3):** No correspondían a ningún task ID sin marcar (gaps no representados en tasks.md). E4: `GET /api/reservar` ahora acepta `usuario_id`/`evento_id`/`estado` como filtros opcionales (ver `spec.md`, `## Error Response Format`). I3: los códigos de error genéricos por status HTTP (`not-found`, `conflict`, `validation-error`) fueron reemplazados por los códigos específicos de `spec.md` (`USER_NOT_FOUND`, `EVENT_NOT_FOUND`, `INSUFFICIENT_INVENTORY`, `PAYMENT_FAILED`, `RESERVATION_FAILED`, más `EVENT_NOT_AVAILABLE`/`RESERVA_NOT_FOUND` nuevos) vía el nuevo campo `ReservaContext.error_code`.
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)

@@ -309,12 +309,17 @@ Formato RFC 7807 con `X-Correlation-ID` header:
 | 400 | `VALIDATION_ERROR` | Validation Error | UUIDs inválidos, cantidad <= 0, método pago inválido |
 | 404 | `USER_NOT_FOUND` | Not Found | Usuario no existe (Paso 2) |
 | 404 | `EVENT_NOT_FOUND` | Not Found | Evento no existe (Paso 3) |
-| 409 | `INSUFFICIENT_INVENTORY` | Conflict | Aforo insuficiente (Paso 3) |
+| 404 | `RESERVA_NOT_FOUND` | Not Found | GET /api/reservar/{id} con id inexistente (no forma parte de la SAGA) |
+| 409 | `EVENT_NOT_AVAILABLE` | Conflict | Evento existe pero no está `publicado` (Paso 3) |
+| 409 | `INSUFFICIENT_INVENTORY` | Conflict | Aforo insuficiente (Paso 3, o Paso 4 si Redis detecta divergencia) |
+| 422 | `VALIDATION_ERROR` | Unprocessable Entity | Categoria inexistente en el evento (Paso 3), o error de Pydantic |
 | 200 | `IDEMPOTENCY_OK` | OK | reserva_id ya procesado (retorna reserva existente) |
 | 500 | `PAYMENT_FAILED` | Internal Server Error | Fallo Lua script Redis (Paso 4) |
 | 500 | `RESERVATION_FAILED` | Internal Server Error | Fallo MongoDB insert (Paso 5) |
 | 500 | `INTERNAL_ERROR` | Internal Server Error | Error inesperado |
 | 503 | `SERVICE_UNAVAILABLE` | Service Unavailable | Usuarios/Eventos service down, Redis/MongoDB/PG down, circuit breaker open |
+
+**Estado real (2026-09-26, remediación I3):** hasta esta fecha, todos los errores de negocio (404/409/422/500 lanzados desde la cadena) usaban códigos genéricos por status HTTP (`not-found`, `conflict`, `validation-error`) en vez de los códigos específicos de esta tabla — el `type` URI no distinguía "usuario no encontrado" de "evento no encontrado", por ejemplo. Se agregó `ReservaContext.error_code` (seteado por cada validator en el punto exacto donde detecta el fallo) y `_raise_from_context` en `src/api/routes/reservas.py` ahora lo usa como código RFC 7807, con el mapeo genérico por status como fallback solo para rutas no cubiertas explícitamente. `EVENT_NOT_AVAILABLE` y `RESERVA_NOT_FOUND` son códigos nuevos (no estaban en la tabla original) para dos condiciones reales del código que no tenían código específico: evento no publicado, y GET de una reserva por id inexistente.
 
 ### Implementation Requirements
 - All endpoints MUST return errors in RFC 7807 format exactly as specified
