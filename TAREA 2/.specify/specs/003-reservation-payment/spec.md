@@ -91,7 +91,7 @@ Registro inmutable de todos los pasos SAGA en PostgreSQL para compliance y debug
 - **RP-FR-005**: System MUST separar lectura/escritura (CQRS): Escritura→PostgreSQL, Lectura operativa→MongoDB, Analítica→SQL views
 - **RP-FR-006**: System MUST generar numero_confirmacion formato CONF-YYYYMMDD-XXXXXXXX
 - **RP-FR-007**: System MUST validar idempotencia via reserva_id (UUID v4)
-- **RP-FR-008**: System MUST responder health check en `/health` con latencia < 10ms, verificando conectividad MongoDB + Redis + PostgreSQL + HTTP clients (Usuarios/Eventos services), reportando degradación por dependencia
+- **RP-FR-008**: System MUST responder health check en `/health` verificando conectividad MongoDB + Redis + PostgreSQL + HTTP clients (Usuarios/Eventos services), reportando degradación por dependencia según los umbrales de "Health Check States" (Mongo/PG > 100ms, Redis > 50ms → esa dependencia se marca "degraded"; overall latency observada en `docker compose` local: 14-28ms para las 5 dependencias chequeadas secuencialmente)
 
 ### Key Entities
 
@@ -217,6 +217,8 @@ If absent, defaults to latest stable (`v1`).
 - `healthy`: All dependencies healthy
 - `degraded`: One or more dependencies degraded, none unhealthy
 - `unhealthy`: One or more dependencies unhealthy
+
+**Estado real (2026-09-26, remediación A1):** RP-FR-008 (más arriba, en "Functional Requirements") originalmente exigía que todo `/health` respondiera en < 10ms, lo cual era inconsistente con esta misma tabla: chequear MongoDB + PostgreSQL ya permite hasta 100ms cada uno antes de marcarse "degraded" (no "unhealthy" - siguen respondiendo, solo más lento), y `check_health()` en `health_service.py` los ejecuta secuencialmente (Mongo, Redis, PostgreSQL, luego 2 HTTP clients) - la suma de sus latencias individuales puede superar 10ms aunque cada una esté "healthy". Medido contra el `docker compose` local: 14-28ms por request a `/health`, sin ninguna dependencia degradada. Se eliminó el límite de <10ms de RP-FR-008 (era aspiracional pero nunca implementado ni probado - ningún test asertaba latencia del endpoint) y se dejó como única fuente de verdad esta tabla de umbrales por dependencia, que sí está implementada y probada (`tests/unit/test_health_service.py`).
 
 **Response Format**:
 ```json
