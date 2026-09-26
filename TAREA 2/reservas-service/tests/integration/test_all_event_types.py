@@ -78,12 +78,15 @@ class TestAllEventTypes:
             "SAGA_COMPLETED"
         ]
         
-        # In a real test with testcontainers, we would query PostgreSQL:
-        # events = await get_events_by_aggregate(UUID(reserva_id))
-        # event_types = [e["event_type"] for e in events]
-        # assert event_types == expected_events
-        
-        # For now, verify the Auditor handler was called with SAGA_COMPLETED.
+        # insert_event_log esta mockeado (mock_services) para aislar esta
+        # asercion del call site, sin round-trip real a PostgreSQL. Los
+        # tests de integracion contra Mongo/Redis/PostgreSQL reales corren
+        # via docker-compose (ver README), no via testcontainers - no hace
+        # falta un motor de contenedores efimeros separado cuando el
+        # docker-compose del proyecto ya deja las 3 bases arriba para toda
+        # la suite.
+
+        # Verificar que el Auditor handler fue llamado con SAGA_COMPLETED.
         # Read the mock from mock_services, not a fresh
         # `from src.services.postgresql import insert_event_log` - that
         # import would return the real, unpatched function, since the mock

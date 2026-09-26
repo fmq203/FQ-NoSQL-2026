@@ -367,7 +367,7 @@ description: "Task list for Reservation & Payment feature implementation"
 
 ### Medium - Test Infrastructure (T117)
 
-- [ ] T143 [US1] Add `testcontainers` to `requirements.txt` for real integration tests with MongoDB/Redis/PostgreSQL
+- [ ] T143 [US1] ~~Add `testcontainers` to `requirements.txt`~~ **Decisión (2026-09-26, remediación E6):** se agregó `testcontainers==4.6.0` a `requirements.txt` en algún momento pero nunca se usó (0 imports reales; solo 2 comentarios en tests que lo mencionaban como aspiración). Se removió la dependencia: el proyecto ya cubre integración real contra MongoDB/Redis/PostgreSQL vía `docker-compose` (las 3 bases quedan arriba para toda la suite), lo que hace innecesario un motor de contenedores efímeros aparte para este MVP de un solo grupo (Principio VIII, YAGNI). Los comentarios que mencionaban testcontainers en `test_all_event_types.py`/`test_saga_happy_path.py` se corrigieron para explicar la razón real por la que esos asserts no verifican PostgreSQL de verdad (mock de `insert_event_log`, o lifespan que no se dispara bajo `AsyncClient(app=app, ...)` - no falta de testcontainers).
 - [x] T144 [US1] Add code quality checks (ruff/flake8) and dependency vulnerability scan (pip-audit/safety) to CI pipeline
 
 ### Medium - Correlation ID Index Verification (T127)

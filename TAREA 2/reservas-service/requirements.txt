@@ -23,7 +23,6 @@ httpx==0.26.0
 pytest==7.4.4
 pytest-asyncio==0.23.3
 fakeredis==2.20.0
-testcontainers==4.6.0
 pyflakes==3.2.0
 
 # Observability

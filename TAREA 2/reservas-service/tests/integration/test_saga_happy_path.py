@@ -66,7 +66,9 @@ class TestSAGAHappyPath:
 
     @pytest.fixture
     def mock_mongo(self):
-        """MongoDB is tested with real connection via testcontainers in real env."""
+        """No-op a proposito: MongoDB no se mockea, se usa la conexion real
+        contra el MongoDB de docker-compose (no via testcontainers - el
+        proyecto no usa un motor de contenedores efimeros aparte)."""
         pass
 
     @pytest.fixture
@@ -141,8 +143,17 @@ class TestSAGAHappyPath:
         # Verify Redis was called (pago + inventory decrement)
         mock_redis.assert_called_once()
 
-        # Verify PostgreSQL event_log has 7 events
-        # This would be verified in a real integration test with testcontainers
+        # insert_event_log no esta mockeado aqui (a diferencia de
+        # test_all_event_types.py), asi que en un deploy real escribiria a
+        # PostgreSQL de verdad. Bajo este test client especifico no se
+        # puede verificar por lectura: `AsyncClient(app=app, ...)` no
+        # dispara el lifespan de FastAPI, asi que `_pg_pool` nunca se
+        # inicializa y `insert_event_log` solo deja un warning
+        # ("PostgreSQL no inicializado") en vez de escribir. No es un
+        # problema de falta de testcontainers - es que el test client no
+        # ejecuta el lifespan; corregirlo requeriria un fixture que invoque
+        # init_pg_schema() explicitamente, fuera del alcance de esta
+        # limpieza.
 
     @pytest.mark.integration
     async def test_saga_idempotency(
