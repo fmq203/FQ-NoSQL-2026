@@ -98,3 +98,13 @@ class AjusteInventarioResponse(BaseModel):
     categoria: str
     disponibles: int
     entradas_disponibles: int
+
+
+class RFC7807Error(BaseModel):
+    """Formato de error estandar (RFC 7807) usado por todos los servicios de EventFlow."""
+    type: str = Field(..., example="https://eventflow.example.com/errors/not-found")
+    title: str = Field(..., example="Not Found")
+    status: int = Field(..., example=404)
+    detail: str = Field(..., example="Evento no encontrado")
+    instance: str = Field(..., example="/api/eventos")
+    correlation_id: str = Field(..., example="550e8400-e29b-41d4-a716-446655440000")

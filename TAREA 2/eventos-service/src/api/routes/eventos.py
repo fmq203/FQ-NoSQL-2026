@@ -1,5 +1,11 @@
 from fastapi import APIRouter, Depends, status
-from src.models.evento import EventoCreate, EventoResponse, AjusteInventarioRequest, AjusteInventarioResponse
+from src.models.evento import (
+    EventoCreate,
+    EventoResponse,
+    AjusteInventarioRequest,
+    AjusteInventarioResponse,
+    RFC7807Error,
+)
 from src.services.evento_service import EventoService
 from src.utils.errors import EventFlowHTTPException
 from uuid import UUID
@@ -11,7 +17,17 @@ def get_evento_service() -> EventoService:
     return EventoService()
 
 
-@router.post("", response_model=EventoResponse, status_code=status.HTTP_201_CREATED, summary="Crear evento")
+@router.post(
+    "",
+    response_model=EventoResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear evento",
+    responses={
+        409: {"description": "Ya existe un evento con ese _id", "model": RFC7807Error},
+        422: {"description": "Datos invalidos (validacion)", "model": RFC7807Error},
+        500: {"description": "Error interno al crear el evento", "model": RFC7807Error},
+    },
+)
 async def crear_evento(
     evento: EventoCreate,
     service: EventoService = Depends(get_evento_service),
@@ -19,7 +35,15 @@ async def crear_evento(
     return await service.create_event(evento)
 
 
-@router.get("/{evento_id}", response_model=EventoResponse, summary="Obtener evento por ID")
+@router.get(
+    "/{evento_id}",
+    response_model=EventoResponse,
+    summary="Obtener evento por ID",
+    responses={
+        404: {"description": "Evento no encontrado", "model": RFC7807Error},
+        422: {"description": "evento_id con formato UUID invalido", "model": RFC7807Error},
+    },
+)
 async def obtener_evento(
     evento_id: UUID,
     service: EventoService = Depends(get_evento_service),
@@ -31,6 +55,11 @@ async def obtener_evento(
     "/{evento_id}/decrementar-inventario",
     response_model=AjusteInventarioResponse,
     summary="Registrar una venta confirmada (uso interno, llamado por reservas-service)",
+    responses={
+        404: {"description": "Evento no encontrado", "model": RFC7807Error},
+        409: {"description": "Inventario insuficiente en la categoria", "model": RFC7807Error},
+        422: {"description": "Categoria inexistente en el evento, o UUID invalido", "model": RFC7807Error},
+    },
 )
 async def decrementar_inventario(
     evento_id: UUID,
@@ -54,6 +83,10 @@ async def decrementar_inventario(
     "/{evento_id}/incrementar-inventario",
     response_model=AjusteInventarioResponse,
     summary="Compensacion SAGA: revertir una venta que no se pudo confirmar (uso interno)",
+    responses={
+        404: {"description": "Evento no encontrado", "model": RFC7807Error},
+        422: {"description": "Categoria inexistente en el evento, o UUID invalido", "model": RFC7807Error},
+    },
 )
 async def incrementar_inventario(
     evento_id: UUID,
