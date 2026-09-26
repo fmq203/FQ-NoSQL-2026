@@ -21,7 +21,6 @@ from .http_clients import (
     get_circuit_breaker_state,
 )
 from .health_service import HealthService
-from .logging_config import setup_logging
 
 __all__ = [
     "connect_to_mongodb",
@@ -44,5 +43,4 @@ __all__ = [
     "record_failure",
     "get_circuit_breaker_state",
     "HealthService",
-    "setup_logging",
 ]
