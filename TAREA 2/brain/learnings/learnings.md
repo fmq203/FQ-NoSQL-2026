@@ -461,3 +461,23 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Verificación:** los 7 escenarios se corrieron de punta a punta con un script de Node (`fetch` nativo, misma lógica que el JS del navegador) contra el stack reconstruido — los 7 dieron el status/código y el paso del pipeline exactamente esperados, sin necesidad de abrir un navegador.
 
 **Tags:** #demo #failure-scenarios #saga #testing #claude-sonnet-5
+
+---
+
+### 2026-09-26 — Escenario de compensación real, auditoría PostgreSQL y diagrama de infraestructura en el demo
+
+**Contexto:** Se pidió, sobre el mismo `demo/index.html`, (1) un escenario de falla a mitad de camino de la reserva que muestre que el sistema vuelve a un estado consistente, (2) mostrar la auditoría de PostgreSQL al final de la página, y (mensaje enviado durante la ejecución de la tarea) (3) agregar el diagrama de infraestructura.
+
+**Problema con (1), investigado antes de tocar código:** todos los checks externos de la SAGA (usuario, evento) ocurren ANTES de cualquier mutación (Chain of Responsibility valida todo primero), y las dos mutaciones reales (Redis en `ProcesadorPago`, Mongo en `ConfirmadorReserva`) están seguidas cada una por su propia llamada de sincronización/verificación. Confirmado empíricamente: parar `eventos-service` (`docker stop eventflow_eventos`) y reservar hace fallar el paso 3 (Validar Evento, que también llama a eventos-service para el GET) en ~10.7s de reintentos - **nunca llega al paso 4**, así que no hace falta compensar nada (fail-fast, no fail-then-repair). Para que específicamente el paso 4 falle (Redis ya cobró, la sincronización posterior con eventos-service es la que falla) haría falta que eventos-service se caiga en una ventana de milisegundos entre los pasos 3 y 4 dentro de una misma request - no reproducible con un comando manual.
+
+**Decisión:** en vez de fingir el escenario o descartarlo, se agregó un query param de solo-demo (`POST /api/reservar?simular_fallo=sync_pago`) que en `ProcesadorPago` (`src/chain/validators.py`) fuerza una excepción justo en el punto donde normalmente iría la llamada real a `decrementar_inventario_evento` - el resto del código (la compensación real via `ejecutar_compensar_pago_inventario`, el 503, el `context.error_code`) es exactamente el mismo que correría ante una caída real. Se documentó como fault injection explícito, tanto en el código (`ReservaContext.simular_fallo_sync`) como en `demo/README.md`, para no presentar algo sintético como si fuera un fallo orgánico.
+
+**Bug real encontrado al verificar:** al probar el escenario, la auditoría (`event_log`) NO mostraba `COMPENSACION_EJECUTADA` para este camino - solo lo hace el compensación de `ConfirmadorReserva` (paso 5), pero `ProcesadorPago` (paso 4) revertía Redis vía `ejecutar_compensar_pago_inventario` sin nunca loguear el evento en PostgreSQL. Esto significa que la vista CQRS `compensaciones_por_tipo` (creada en la remediación E3 de hoy) **nunca hubiera visto este tipo de compensación** - un gap real, no solo de la demo. Se agregó el `insert_event_log(event_type="COMPENSACION_EJECUTADA", ...)` faltante en ese except block.
+
+**Decisión con (2):** `get_events_by_aggregate()` ya existía en `postgresql.py` desde hace tiempo pero no estaba conectado a ninguna ruta (solo se usaba en tests). Se agregó `GET /api/reservar/{reserva_id}/audit` en `reservas-service`, sin depender de que exista un documento en Mongo (una SAGA fallida-y-compensada también queda registrada en `event_log`, aunque nunca llegue a confirmarse). El demo la muestra al pie de página como una timeline, con el campo `reserva_id` autocompletado del último intento (éxito o falla) de cualquier botón de la página.
+
+**(3):** diagrama estático (HTML/CSS, sin canvas/SVG) con los 3 servicios + sus bases de datos propias (database-per-service), insertado debajo del panel de estado en vivo.
+
+**Verificación:** tests nuevos (`test_audit_endpoint.py`, `test_fault_injection_demo.py`) + toda la suite de reservas-service (105 passed, 4 skipped, sin fallas ni siquiera en el test de performance normalmente flaky). Reconstruido el contenedor y probado de punta a punta contra el stack real con un script de Node: crea evento con 5 disponibles, dispara `simular_fallo=sync_pago`, confirma 503, confirma que los disponibles siguen en 5, y confirma que la auditoría muestra `SAGA_STARTED → USUARIO_VALIDADO → EVENTO_VALIDADO → COMPENSACION_EJECUTADA → SAGA_FAILED` en orden.
+
+**Tags:** #demo #saga #compensation #fault-injection #cqrs #audit #event-log #postgresql #infrastructure-diagram #claude-sonnet-5
