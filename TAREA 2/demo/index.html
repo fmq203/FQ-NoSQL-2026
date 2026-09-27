@@ -75,6 +75,30 @@
   .pipeline .step.fail { border-color: var(--err); color: var(--err); background: #2a1414; }
   .pipeline .arrow { align-self: center; color: var(--panel-border); font-size: 16px; }
 
+  .infra {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch;
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 10px; padding: 18px; margin-bottom: 18px;
+  }
+  .infra .svc-col {
+    flex: 1; min-width: 170px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .infra .box {
+    border-radius: 8px; padding: 10px 12px; text-align: center; font-size: 12.5px;
+  }
+  .infra .box.svc { background: #182036; border: 1px solid var(--accent); color: var(--text); }
+  .infra .box.svc b { display: block; font-size: 13px; }
+  .infra .box.svc .port { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+  .infra .box.db { background: #0c111c; border: 1px dashed var(--panel-border); color: var(--muted); }
+  .infra .conn { text-align: center; color: var(--panel-border); font-size: 14px; }
+  .infra .orchestrator-note {
+    flex-basis: 100%; text-align: center; font-size: 11.5px; color: var(--muted); margin-top: 4px;
+  }
+  .infra .cross-arrows {
+    flex-basis: 100%; display: flex; justify-content: center; gap: 40px;
+    font-size: 11px; color: var(--muted); margin-top: -4px;
+  }
+
   section.card {
     background: var(--panel); border: 1px solid var(--panel-border);
     border-radius: 10px; padding: 18px 20px; margin-bottom: 18px;
@@ -116,6 +140,19 @@
   .badge.ok { background: #0f2419; color: var(--ok); }
   .badge.err { background: #2a1414; color: var(--err); }
 
+  .timeline-event {
+    display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px;
+    background: #0c111c; border: 1px solid var(--panel-border); margin-bottom: 6px; font-size: 12px;
+  }
+  .timeline-event .ev-type {
+    font-family: var(--mono); font-weight: 700; min-width: 200px; color: var(--accent);
+  }
+  .timeline-event.compensacion .ev-type, .timeline-event.failed .ev-type { color: var(--warn); }
+  .timeline-event .ev-time { color: var(--muted); font-size: 11px; min-width: 90px; }
+  .timeline-event .ev-payload { font-family: var(--mono); color: var(--muted); font-size: 11px; word-break: break-word; }
+  .consistency-ok { color: var(--ok); }
+  .consistency-bad { color: var(--err); }
+
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 32px; }
   footer a { color: var(--accent); }
   @media (prefers-color-scheme: light) {
@@ -138,6 +175,30 @@
   </div>
 
   <div class="services" id="services"></div>
+
+  <h3 style="font-size:13px; color:var(--muted); margin:0 0 8px;">Infraestructura (bases de datos poliglotas)</h3>
+  <div class="infra">
+    <div class="svc-col">
+      <div class="box svc"><b>Usuarios Service</b><span class="port">:8001</span></div>
+      <div class="box db">MongoDB<br>(usuarios, historial)</div>
+    </div>
+    <div class="conn">⇄</div>
+    <div class="svc-col">
+      <div class="box svc"><b>Eventos Service</b><span class="port">:8002</span></div>
+      <div class="box db">MongoDB<br>(eventos, inventario)</div>
+    </div>
+    <div class="conn">⇄</div>
+    <div class="svc-col">
+      <div class="box svc"><b>Reservas Service</b><span class="port">:8003</span><br><span class="port">orquestador SAGA</span></div>
+      <div class="box db">Redis<br>(pago + inventario atómico)</div>
+      <div class="box db">PostgreSQL<br>(event_log / auditoría CQRS)</div>
+    </div>
+    <div class="cross-arrows">
+      <span>Reservas → Usuarios (validar usuario)</span>
+      <span>Reservas → Eventos (validar/sincronizar aforo)</span>
+    </div>
+    <div class="orchestrator-note">Cada servicio tiene su propia base de datos (Database per Service) — Reservas coordina la SAGA llamando a Usuarios y Eventos por HTTP, con reintentos + circuit breaker.</div>
+  </div>
 
   <div class="pipeline" id="pipeline">
     <div class="step" data-step="datos"><b>1</b>Validar Datos</div>
@@ -225,7 +286,20 @@
     <p class="hint">Cada botón crea por su cuenta lo que necesita (usuario/evento propios, sin tocar los formularios de arriba) y anima el pipeline marcando exactamente en qué paso de la SAGA ocurre el resultado.</p>
     <div class="actions" id="scenario-buttons"></div>
     <div id="scenario-label" style="margin-top:10px; font-size:12.5px; color:var(--muted);"></div>
+    <div id="scenario-consistency" style="margin-top:8px; font-size:13px;"></div>
     <pre class="result" id="res-scenario" style="display:none"></pre>
+  </section>
+
+  <section class="card">
+    <h2>Auditoría (PostgreSQL / event_log)</h2>
+    <p class="hint">Modelo de auditoría CQRS: cada paso de cada SAGA (incluso las que fallan y se compensan) queda como un evento inmutable en PostgreSQL, independiente del modelo operativo en MongoDB. <code>GET /api/reservar/&#123;reserva_id&#125;/audit</code> — reservas-service.</p>
+    <div class="grid-form">
+      <div class="field" style="flex:1; min-width:280px;"><label>reserva_id</label><input id="audit-reserva-id" placeholder="Se autocompleta con la última reserva intentada"></div>
+    </div>
+    <div class="actions">
+      <button id="btn-consultar-audit">Consultar auditoría</button>
+    </div>
+    <div id="audit-timeline" style="margin-top:14px;"></div>
   </section>
 
   <footer>
@@ -409,6 +483,13 @@ $('btn-crear-evento').addEventListener('click', async () => {
 
 let lastReservaId = null;
 
+/** Recuerda el ultimo reserva_id usado (exito o falla) y lo deja
+ * precargado en el visor de auditoria del pie de pagina. */
+function setLastReserva(reserva_id) {
+  lastReservaId = reserva_id;
+  $('audit-reserva-id').value = reserva_id;
+}
+
 async function hacerReserva(overrides = {}) {
   const c = cfg();
   const reserva_id = overrides.reserva_id || uuidv4();
@@ -423,7 +504,7 @@ async function hacerReserva(overrides = {}) {
   const r = await callApi(`${c.reservas}/api/reservar`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
-  lastReservaId = reserva_id;
+  setLastReserva(reserva_id);
   return r;
 }
 
@@ -488,16 +569,29 @@ async function crearEventoAPI(overrides = {}) {
 
 async function reservarAPI(usuario_id, evento_id, extra = {}) {
   const c = cfg();
+  const reserva_id = extra.reserva_id || uuidv4();
   const payload = {
     usuario_id, evento_id,
     cantidad: extra.cantidad ?? 1,
     categoria: extra.categoria ?? 'general',
     metodo_pago: 'tarjeta',
-    reserva_id: uuidv4(),
+    reserva_id,
   };
-  return await callApi(`${c.reservas}/api/reservar`, {
+  const query = extra.simular_fallo ? `?simular_fallo=${extra.simular_fallo}` : '';
+  const r = await callApi(`${c.reservas}/api/reservar${query}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
+  setLastReserva(reserva_id);
+  r.reserva_id = reserva_id;
+  return r;
+}
+
+/** Suma total de `disponibles` entre todas las categorias de un evento. */
+async function getDisponiblesTotal(evento_id) {
+  const c = cfg();
+  const r = await callApi(`${c.eventos}/api/eventos/${evento_id}`);
+  if (!r.ok || !r.body?.precios) return null;
+  return r.body.precios.reduce((sum, p) => sum + p.disponibles, 0);
 }
 
 const SCENARIOS = [
@@ -562,6 +656,21 @@ const SCENARIOS = [
       return await reservarAPI(u.body.usuario_id, e.body.evento_id, { cantidad: 0 });
     },
   },
+  {
+    key: 'compensacion', label: '🔄 Falla a mitad de camino (compensación real)', cls: 'danger', failStep: 'pago',
+    expect: '503 SERVICE_UNAVAILABLE — Redis ya había cobrado y decrementado inventario cuando la sincronización con Eventos Service falla; se compensa (revierte) automáticamente y el aforo del evento queda exactamente como antes.',
+    run: async () => {
+      const u = await crearUsuarioAPI();
+      const e = await crearEventoAPI({ aforo_total: 5, entradas_disponibles: 5, disponibles: 5 });
+      const antes = await getDisponiblesTotal(e.body.evento_id);
+      const r = await reservarAPI(u.body.usuario_id, e.body.evento_id, {
+        cantidad: 2, simular_fallo: 'sync_pago',
+      });
+      const despues = await getDisponiblesTotal(e.body.evento_id);
+      r.consistencyCheck = { antes, despues };
+      return r;
+    },
+  },
 ];
 
 $('scenario-buttons').innerHTML = SCENARIOS.map(s =>
@@ -573,15 +682,60 @@ document.querySelectorAll('#scenario-buttons button').forEach(btn => {
     const scenario = SCENARIOS.find(s => s.key === btn.dataset.scenario);
     document.querySelectorAll('#scenario-buttons button').forEach(b => b.disabled = true);
     $('scenario-label').textContent = `Esperado: ${scenario.expect}`;
+    $('scenario-consistency').innerHTML = '';
     try {
       const r = await scenario.run();
       showResult('res-scenario', r);
       await animatePipeline(r.ok ? null : scenario.failStep);
+      if (r.consistencyCheck) {
+        const { antes, despues } = r.consistencyCheck;
+        const ok = antes === despues;
+        $('scenario-consistency').innerHTML =
+          `<span class="${ok ? 'consistency-ok' : 'consistency-bad'}">` +
+          `${ok ? '✅' : '⚠️'} Entradas disponibles del evento — antes: <b>${antes}</b>, después: <b>${despues}</b>. ` +
+          `${ok ? 'Estado consistente: la compensación revirtió el pago/inventario por completo.' : 'INCONSISTENCIA detectada.'}` +
+          `</span><br><span style="color:var(--muted)">(La falla se disparó con <code>?simular_fallo=sync_pago</code> — un hook de demo que fuerza el mismo punto de fallo que una caída real de eventos-service justo después de que Redis ya cobró, para no depender de un timing imposible de reproducir a mano. La compensación que corre es 100% real.)</span>`;
+      }
+      $('audit-reserva-id').value = r.reserva_id || lastReservaId || '';
     } finally {
       document.querySelectorAll('#scenario-buttons button').forEach(b => b.disabled = false);
     }
   });
 });
+
+// ---- Auditoría PostgreSQL (event_log) ----
+
+function renderAuditTimeline(eventos) {
+  if (!eventos || eventos.length === 0) {
+    return '<p style="color:var(--muted); font-size:12.5px;">Sin eventos para ese reserva_id (¿probaste algún escenario arriba primero?).</p>';
+  }
+  return eventos.map(e => {
+    const cls = e.event_type === 'SAGA_FAILED' ? 'failed' : e.event_type === 'COMPENSACION_EJECUTADA' ? 'compensacion' : '';
+    const hora = new Date(e.timestamp).toLocaleTimeString('es-AR', { hour12: false, fractionalSecondDigits: 3 });
+    return `<div class="timeline-event ${cls}">
+      <div class="ev-type">${e.event_type}</div>
+      <div class="ev-time">${hora}</div>
+      <div class="ev-payload">${JSON.stringify(e.payload)}</div>
+    </div>`;
+  }).join('');
+}
+
+async function consultarAuditoria() {
+  const c = cfg();
+  const reservaId = $('audit-reserva-id').value.trim();
+  if (!reservaId) {
+    $('audit-timeline').innerHTML = '<p style="color:var(--muted); font-size:12.5px;">Pegá un reserva_id, o corré algún escenario de arriba primero (se autocompleta).</p>';
+    return;
+  }
+  const r = await callApi(`${c.reservas}/api/reservar/${reservaId}/audit`);
+  if (!r.ok) {
+    $('audit-timeline').innerHTML = `<pre class="result err">${JSON.stringify(r.body, null, 2)}</pre>`;
+    return;
+  }
+  $('audit-timeline').innerHTML = renderAuditTimeline(r.body.eventos);
+}
+
+$('btn-consultar-audit').addEventListener('click', consultarAuditoria);
 </script>
 </body>
 </html>
