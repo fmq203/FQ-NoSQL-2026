@@ -243,6 +243,9 @@ class ProcesadorPago(BaseHandler):
             # seguga mostrando el aforo original. Si falla, se revierte el
             # decremento en Redis para no dejar los dos sistemas divergidos.
             try:
+                if context.simular_fallo_sync:
+                    # Fault injection de demo (ver ReservaContext.simular_fallo_sync)
+                    raise RuntimeError("Fallo simulado (demo): Eventos Service no responde")
                 await decrementar_inventario_evento(
                     str(context.evento_id), context.categoria, context.cantidad, str(context.correlation_id)
                 )
@@ -252,6 +255,17 @@ class ProcesadorPago(BaseHandler):
                     reserva_id=str(context.reserva_id),
                     cantidad=context.cantidad,
                 )
+                # Registrar la compensacion en el audit trail (event_log) -
+                # sin esto, compensaciones_por_tipo (vista CQRS analitica)
+                # nunca veria este camino de compensacion, solo el de
+                # ConfirmadorReserva.
+                await insert_event_log(
+                    event_type="COMPENSACION_EJECUTADA",
+                    aggregate_id=context.reserva_id,
+                    payload={"paso_compensado": "PROCESAR_PAGO", "accion": "REVERTIR_REDIS", "resultado": "OK"},
+                    correlation_id=context.correlation_id,
+                )
+                record_saga_compensation(self._step_name.value)
                 context.error = f"Error sincronizando inventario con Eventos Service: {e}"
                 context.error_code = "SERVICE_UNAVAILABLE"
                 context.status_code = 503
