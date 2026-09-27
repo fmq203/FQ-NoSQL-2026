@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query, Request, Response, status
 from src.chain.builder import ChainBuilder
 from src.models.reserva import ReservaContext, ReservaCreateRequest, ReservaResponse, RFC7807Error
 from src.services.mongo import get_reservas_collection
+from src.services.postgresql import get_events_by_aggregate
 from src.services.saga_orchestrator import (
     SagaOrchestrator,
     compensate_step_4_payment,
@@ -78,7 +79,17 @@ def _raise_from_context(context: ReservaContext, instance: str) -> None:
         }
     },
 )
-async def crear_reserva(request: Request, response: Response, solicitud: ReservaCreateRequest) -> ReservaResponse:
+async def crear_reserva(
+    request: Request,
+    response: Response,
+    solicitud: ReservaCreateRequest,
+    simular_fallo: Optional[str] = Query(
+        None,
+        description="Solo demo/QA: 'sync_pago' fuerza que ProcesadorPago falle "
+        "justo despues de que Redis decremente el pago/inventario, para mostrar "
+        "la compensacion real (revierte Redis) de forma determinista.",
+    ),
+) -> ReservaResponse:
     """
     Inicia la transaccion SAGA de compra de entradas.
 
@@ -111,6 +122,7 @@ async def crear_reserva(request: Request, response: Response, solicitud: Reserva
         metodo_pago=solicitud.metodo_pago.value,
         categoria=solicitud.categoria,
         reserva_id=solicitud.reserva_id,
+        simular_fallo_sync=(simular_fallo == "sync_pago"),
     )
     correlation_id = getattr(request.state, "correlation_id", None)
     if correlation_id:
@@ -182,3 +194,18 @@ async def obtener_reserva(reserva_id: UUID) -> ReservaResponse:
         estado=doc.get("estado", ""),
         numero_confirmacion=doc.get("numero_confirmacion", ""),
     )
+
+
+@router.get("/reservar/{reserva_id}/audit", summary="Auditoría (Event Sourcing / PostgreSQL) de una reserva")
+async def auditar_reserva(reserva_id: UUID) -> dict:
+    """Timeline completa de `event_log` para un `reserva_id` (CQRS: modelo
+    de auditoría en PostgreSQL, separado del modelo operativo en MongoDB).
+
+    Devuelve la lista de eventos aunque la reserva nunca haya llegado a
+    confirmarse en MongoDB (ej. una SAGA que falló y se compensó igual
+    queda registrada acá: SAGA_STARTED, el paso que falló, y
+    COMPENSACION_EJECUTADA) - por eso no depende de que exista un
+    documento en `reservas`, a diferencia de GET /reservar/{id}.
+    """
+    eventos = await get_events_by_aggregate(reserva_id)
+    return {"reserva_id": str(reserva_id), "eventos": eventos}

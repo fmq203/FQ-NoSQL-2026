@@ -90,6 +90,14 @@ class ReservaContext:
     status_code: int = 200
     saga_log: List[Dict] = field(default_factory=list)
     compensation_triggered: bool = False
+    simular_fallo_sync: bool = False
+    """Fault injection solo para demo/QA (?simular_fallo=sync_pago en
+    POST /api/reservar): fuerza que ProcesadorPago falle justo despues de
+    que Redis ya decremento el pago/inventario, para poder mostrar la
+    compensacion real (revierte Redis) de forma determinista en vez de
+    depender de una caida real de eventos-service con timing imposible de
+    reproducir a mano. El resto del codigo de compensacion es exactamente
+    el que corre ante un fallo real - solo el disparador es sintetico."""
 
 
 class SagaStep(str, Enum):
