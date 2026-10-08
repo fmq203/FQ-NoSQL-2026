@@ -374,10 +374,17 @@
     if(!medidor || Number.isNaN(valor)) return;
 
     const ahora = new Date();
-    const id = 'lectura:' + ahora.toISOString().slice(0,10) + ':' + String(Date.now()).slice(-6);
+    // _id = dia + medidor: dos inspectores que midan el mismo medidor el mismo
+    // dia escriben el MISMO _id, y eso es lo que CouchDB detecta como conflicto.
+    const id = 'lectura:' + ahora.toISOString().slice(0,10) + ':' + medidor.toUpperCase().replace(/\s+/g, '');
     try{
+      // Si ya cargue este medidor hoy en esta tablet, es una correccion mia:
+      // se actualiza sobre la revision vigente (no es un conflicto).
+      let _rev;
+      try{ _rev = (await local.get(id))._rev; }catch(_){ /* no existe: es nueva */ }
       await local.put({
         _id: id,
+        ...(_rev ? { _rev } : {}),
         type: 'lectura_medidor',
         medidor_id: medidor,
         zona,

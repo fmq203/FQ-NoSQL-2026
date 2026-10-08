@@ -70,6 +70,21 @@ Ninguna de las dos vio a la otra: cada una arrancó su propio historial de
 revisiones para esos documentos. Apenas las dos repliquen al central, esos
 dos documentos quedan en conflicto, sin que haya que editar nada a mano.
 
+### Conflicto en vivo con el mismo medidor
+
+Las lecturas nuevas usan `_id = lectura:<día>:<medidor>` (por ejemplo
+`lectura:2026-10-07:OSE-3390`). Si dos inspectores cargan el mismo medidor el
+mismo día escriben el mismo `_id`, y al replicar CouchDB lo detecta como
+conflicto:
+
+1. Poner las dos tablets **sin conexión**.
+2. Cargar el mismo medidor en cada una con valores distintos (crecientes: la
+   regla `validate_doc_update` no deja que un medidor retroceda).
+3. Ponerlas en línea y sincronizar. En el central aparece el conflicto.
+
+Cargar dos veces el mismo medidor en la *misma* tablet no genera conflicto: es
+una corrección y se actualiza sobre la revisión vigente.
+
 ## Guion para presentar
 
 1. **Levantar los nodos**
@@ -96,7 +111,11 @@ dos documentos quedan en conflicto, sin que haya que editar nada a mano.
    contra IndexedDB, sin red de por medio.
 
 5. **Tablet A sincroniza** — switch a "En línea" y botón **Sincronizar con
-   central**. El panel central se puebla solo. Todavía no hay conflictos.
+   central**. Sube y baja en un solo clic (dos `POST /_replicate`: tablet →
+   central y central → tablet). El panel central se puebla solo. Todavía no
+   hay conflictos. Después del sync la tablet marca sus lecturas como
+   `sincronizado: true`, y esa escritura sube la `_rev` a 2 (llega al central
+   en el sync siguiente).
 
 6. **Tablet B se conecta** — acá no hay botón que apretar: al poner el
    switch en "EN LÍNEA" arranca `db.sync(remoto, {live:true, retry:true})`
