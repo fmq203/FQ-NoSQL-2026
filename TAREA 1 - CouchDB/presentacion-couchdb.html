@@ -404,7 +404,7 @@
       <li><b>Embeber vs. referenciar:</b> se embebe cuando el sub‑dato se lee siempre junto al padre y no crece sin límite (ej. dirección dentro de un cliente); se referencia por <code class="inline">_id</code> cuando el dato es compartido por muchos documentos o puede crecer indefinidamente (evita documentos gigantes).</li>
       <li><b>Campo discriminador <code class="inline">type</code>:</b> como no hay tablas, cada documento declara su "clase" (<code class="inline">"type":"lectura_medidor"</code>) para poder filtrarlo en vistas y consultas.</li>
       <li><b>Diseño orientado a las consultas ("query‑first"):</b> las vistas son índices pre‑calculados, así que conviene decidir qué preguntas se van a hacer <i>antes</i> de escribir el modelo, no después.</li>
-      <li><b><code class="inline">_id</code> con significado:</b> usar prefijos tipo <code class="inline">zona:fecha:secuencia</code> permite recorrer rangos de <code class="inline">_id</code> ordenados de forma eficiente, sin índice extra.</li>
+      <li><b><code class="inline">_id</code> con significado:</b> un <code class="inline">_id</code> compuesto tipo <code class="inline">tipo:fecha:clave</code> permite recorrer rangos ordenados sin índice extra. Además decide qué es un conflicto: dos réplicas que escriben el mismo <code class="inline">_id</code> chocan; con <code class="inline">_id</code> aleatorios (UUID) nunca chocan, pero tampoco se detecta que representan la misma cosa.</li>
       <li><b>Documentos pequeños y de responsabilidad única</b> reducen la probabilidad de conflicto cuando hay escritura multi‑maestro, y facilitan el merge manual si igual ocurre.</li>
       <li><b><code class="inline">_design</code> documents</b> agrupan vistas, filtros de replicación y reglas de validación (<code class="inline">validate_doc_update</code>): en la práctica, son "el esquema" de la base.</li>
     </ul>
@@ -438,9 +438,9 @@
     </div>
     <p class="dek" style="max-width:none; margin-bottom:4px;">Cada tablet corre <b>PouchDB</b> (el hermano JavaScript de CouchDB) de forma local. El inspector carga lecturas todo el día sin señal; al volver a una zona con cobertura, la app sincroniza automáticamente contra el servidor central.</p>
     <div class="code">
-      <div class="bar">documento · lecturas/00234-2026-09-13</div>
+      <div class="bar">documento · lectura:2026-09-13:OSE-4471</div>
       <pre><code>{
-  <span class="k">"_id"</span><span class="p">:</span> <span class="s">"lectura:2026-09-13:00234"</span><span class="p">,</span>
+  <span class="k">"_id"</span><span class="p">:</span> <span class="s">"lectura:2026-09-13:OSE-4471"</span><span class="p">,</span>
   <span class="k">"_rev"</span><span class="p">:</span> <span class="s">"1-8a3f21c9"</span><span class="p">,</span>
   <span class="k">"type"</span><span class="p">:</span> <span class="s">"lectura_medidor"</span><span class="p">,</span>
   <span class="k">"medidor_id"</span><span class="p">:</span> <span class="s">"OSE-4471"</span><span class="p">,</span>
