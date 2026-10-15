@@ -509,7 +509,18 @@ servicio/
 | eventos-service | 93 passed |
 | reservas-service | 112 passed, 4 skipped |
 
-La carga de rendimiento sigue la especificación RP-SC-007: **100 req/s sostenidos** (una request cada 10 ms durante 1 s), con p99 medido ≈ 175–335 ms (límite: 1 s).
+Los tests de rendimiento de `pytest` siguen RP-SC-007 (**100 req/s sostenidos**, una request cada 10 ms) con p99 ≈ 175–335 ms, pero con las dependencias externas mockeadas: miden la lógica de Reservas, no el sistema completo.
+
+### Pruebas de carga con JMeter
+
+```bash
+make jmeter      # doble venta, SAGA sostenida y lecturas contra el stack real (~2 min)
+```
+
+Plan en [`jmeter/`](./jmeter/README.md). Resultados (máquina de desarrollo, un nodo, JMeter compartiendo CPU):
+- **Doble venta:** 300 intentos contra un stock de 50 → exactamente **50 compras y 250 rechazos**, inventario final 0.
+- **Lecturas** (con caché): ≈ 174 req/s por endpoint, p99 < 200 ms.
+- **SAGA completa:** satura en ≈ 50 req/s (≈ 31 req/s con 20 hilos, p99 ≈ 0.9 s). **No se alcanza el objetivo de 100 req/s con p99 < 1 s de RP-SC-007 de punta a punta**; el detalle de lo medido y de las hipótesis descartadas está en `jmeter/README.md`.
 
 ---
 
@@ -521,6 +532,7 @@ TAREA 2/
 ├── docker-compose.yml          # Stack completo (3 DBs + 3 servicios)
 ├── README.md                   # Este archivo
 ├── demo/                       # GUI HTML estática para mostrar el funcionamiento
+├── jmeter/                     # Plan de pruebas de carga (JMeter) + resumen de resultados
 ├── .gitignore
 ├── .specify/                   # Spec-kit (especificaciones)
 │   └── specs/

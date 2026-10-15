@@ -532,3 +532,22 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Límites que quedan documentados:** sin k-anonimato (un historial muy particular + datos externos podría re-identificar); cifrado en reposo y TLS no implementados.
 
 **Tags:** #privacidad #anonimizacion #seudonimizacion #hmac #gdpr #csv #event-log #claude-sonnet-5
+
+---
+
+### 2026-10-15 — Bloque 4: caché AP de lecturas y pruebas de carga con JMeter
+
+**Contexto:** El enunciado pide lecturas "extremadamente rápidas y escalables" con prioridad de disponibilidad y tolerancia a particiones (consistencia eventual), y valora pruebas con JMeter. El análisis previo había marcado que el AP estaba solo "en el papel": `secondaryPreferred` configurado sobre un único nodo Mongo, sin caché.
+
+**Decisión:** caché Redis con política *stale-if-error* en los GET de Usuarios y Eventos (HIT/MISS/STALE/BYPASS vía `X-Cache`), en vez de un replica set: es determinista, no rompe los tests que corren contra `localhost:27017` y permite una demo real (con MongoDB detenido el GET sigue respondiendo). El camino transaccional queda fuera: la SAGA manda `Cache-Control: no-cache` y nunca recibe datos vencidos. Las escrituras que cambian el dato invalidan la entrada.
+
+**Hallazgos honestos:**
+- El caché **no baja la latencia** de un lookup por `_id` en un Mongo local (p50 ≈ 10 ms con caché vs ≈ 8 ms sin él). Su valor es disponibilidad, no velocidad; el README lo dice así.
+- Cachear el perfil del usuario pone una copia de datos personales en Redis (vence a los 10 min). Lo que había afirmado la sección de privacidad ("PII en un único lugar") dejó de ser cierto, así que se corrigió.
+- Los tests de carga de `pytest` (con dependencias mockeadas) daban p99 ≈ 175-335 ms a 100 req/s, pero **de punta a punta la SAGA satura en ≈ 50 req/s** y RP-SC-007 (p99 < 1 s a 100 req/s) no se cumple en esta máquina. Una SAGA aislada tarda ≈ 100 ms; con 20 hilos ≈ 48 req/s, con 80 ≈ 52 req/s y p99 2.4 s (la latencia sube, el rendimiento no).
+- Dos hipótesis medidas y descartadas: CPU de Python (4 workers uvicorn en los tres servicios → 46 req/s) y commit sincrónico de PostgreSQL (`synchronous_commit=off` → 49 req/s). Los workers se revirtieron porque no aportaban nada medido. El cuello de botella **sigue sin identificar** (sospechas sin comprobar: escrituras `majority`+`journal` de Mongo, `docker-proxy` en WSL2, JMeter compartiendo CPU).
+- El plan JMeter demuestra lo importante del requisito de consistencia: 300 intentos contra un stock de 50 → exactamente 50 ventas y 250 rechazos, con inventario final 0 verificado en un `tearDown` sin caché.
+
+**Herramientas/entorno:** JMeter 5.5 en Docker (`make jmeter`, una carpeta por corrida, sin borrar nada); `resumen.py` sin dependencias que además falla si se vendió distinto del stock. `docker stats`/`docker top` devuelven CPU 0 en este WSL2, así que no sirvieron para medir. Un comando mío con `rm -rf` fue bloqueado por la verificación de seguridad de Claude Code; se resolvió cambiando el diseño (carpeta por corrida) y no insistiendo.
+
+**Tags:** #jmeter #carga #cache #ap #stale-if-error #doble-venta #rendimiento #claude-sonnet-5
