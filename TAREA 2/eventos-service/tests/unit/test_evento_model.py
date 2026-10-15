@@ -61,6 +61,7 @@ class TestEventoModel:
                 PrecioCategoria(categoria="VIP", precio=Decimal("15000.00"), disponibles=100),
                 PrecioCategoria(categoria="General", precio=Decimal("5000.00"), disponibles=4900)
             ],
+            fecha="2026-12-01T20:00:00Z",
             ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina", direccion="Estadio Luna Park")
         )
         assert evento.nombre == "Concierto Rock 2026"
@@ -69,6 +70,17 @@ class TestEventoModel:
         assert evento.entradas_disponibles == 5000
         assert len(evento.precios) == 2
     
+    def test_evento_create_requires_fecha(self):
+        with pytest.raises(ValueError, match="fecha"):
+            EventoCreate(
+                nombre="Sin fecha",
+                estado=EstadoEvento.PUBLICADO,
+                aforo_total=10,
+                entradas_disponibles=10,
+                precios=[PrecioCategoria(categoria="General", precio=Decimal("100.00"), disponibles=10)],
+                ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina"),
+            )
+
     def test_evento_create_aforo_exceeded(self):
         with pytest.raises(ValueError, match="entradas_disponibles cannot exceed aforo_total"):
             EventoCreate(
@@ -77,6 +89,7 @@ class TestEventoModel:
                 aforo_total=100,
                 entradas_disponibles=200,
                 precios=[PrecioCategoria(categoria="VIP", precio=Decimal("100.00"), disponibles=200)],
+                fecha="2026-12-01T20:00:00Z",
                 ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina")
             )
     
@@ -91,6 +104,7 @@ class TestEventoModel:
                     PrecioCategoria(categoria="VIP", precio=Decimal("100.00"), disponibles=50),
                     PrecioCategoria(categoria="VIP", precio=Decimal("200.00"), disponibles=50)
                 ],
+                fecha="2026-12-01T20:00:00Z",
                 ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina")
             )
     
@@ -105,6 +119,7 @@ class TestEventoModel:
                     PrecioCategoria(categoria="VIP", precio=Decimal("100.00"), disponibles=60),
                     PrecioCategoria(categoria="General", precio=Decimal("50.00"), disponibles=60)
                 ],
+                fecha="2026-12-01T20:00:00Z",
                 ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina")
             )
     
@@ -115,6 +130,7 @@ class TestEventoModel:
             aforo_total=0,
             entradas_disponibles=0,
             precios=[PrecioCategoria(categoria="Gratis", precio=Decimal("0.00"), disponibles=0)],
+            fecha="2026-12-01T20:00:00Z",
             ubicacion=Ubicacion(ciudad="Montevideo", pais="Uruguay")
         )
         assert evento.aforo_total == 0
@@ -127,6 +143,7 @@ class TestEventoModel:
             aforo_total=100,
             entradas_disponibles=100,
             precios=[PrecioCategoria(categoria="General", precio=Decimal("0.00"), disponibles=100)],
+            fecha="2026-12-01T20:00:00Z",
             ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina")
         )
         assert evento.precios[0].precio == Decimal("0.00")
@@ -139,5 +156,6 @@ class TestEventoModel:
                 aforo_total=100,
                 entradas_disponibles=100,
                 precios=[PrecioCategoria(categoria="VIP", precio=Decimal("100.00"), disponibles=100)],
+                fecha="2026-12-01T20:00:00Z",
                 ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina")
             )

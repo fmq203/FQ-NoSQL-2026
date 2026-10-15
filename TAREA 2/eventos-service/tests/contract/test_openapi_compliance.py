@@ -66,6 +66,7 @@ class TestOpenAPICompliance:
                 {"categoria": "VIP", "precio": 15000.00, "disponibles": 10},
                 {"categoria": "General", "precio": 5000.00, "disponibles": 90},
             ],
+            "fecha": "2026-12-01T20:00:00Z",
             "ubicacion": {
                 "ciudad": "Buenos Aires",
                 "pais": "Argentina",
@@ -86,6 +87,7 @@ class TestOpenAPICompliance:
             "aforo_total": 100,
             "entradas_disponibles": 100,
             "precios": [{"categoria": "General", "precio": 5000.00, "disponibles": 100}],
+            "fecha": "2026-12-01T20:00:00Z",
             "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
         }
         create_response = await async_client.post("/api/eventos", json=valid_event)

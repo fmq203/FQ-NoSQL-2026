@@ -76,6 +76,7 @@ async def created_event_id(async_client):
             "precios": [
                 {"categoria": "General", "precio": 100.00, "disponibles": 100}
             ],
+            "fecha": "2026-12-01T20:00:00Z",
             "ubicacion": {
                 "ciudad": "Buenos Aires",
                 "pais": "Argentina"

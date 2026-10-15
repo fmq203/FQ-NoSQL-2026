@@ -54,6 +54,7 @@ class TestRFC7807ErrorFormat:
             "aforo_total": 100,
             "entradas_disponibles": 100,
             "precios": [{"categoria": "General", "precio": 1000.00, "disponibles": 100}],
+            "fecha": "2026-12-01T20:00:00Z",
             "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
         }
         await async_client.post("/api/eventos", json=event_data)

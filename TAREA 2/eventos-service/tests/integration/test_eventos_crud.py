@@ -18,6 +18,7 @@ class TestEventosCRUDIntegration:
                     {"categoria": "VIP", "precio": 5000.00, "disponibles": 100},
                     {"categoria": "General", "precio": 1000.00, "disponibles": 900}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Córdoba",
                     "pais": "Argentina",
@@ -44,6 +45,9 @@ class TestEventosCRUDIntegration:
         assert retrieved_event["ubicacion"]["ciudad"] == "Córdoba"
         assert retrieved_event["ubicacion"]["pais"] == "Argentina"
         assert retrieved_event["ubicacion"]["direccion"] == "Estadio Kempes"
+        # La fecha del evento sobrevive el round-trip POST -> Mongo -> GET (en UTC)
+        assert retrieved_event["fecha"] == created_event["fecha"]
+        assert retrieved_event["fecha"].startswith("2026-12-01T20:00:00")
     
     @pytest.mark.asyncio
     async def test_create_event_with_correlation_id(self, async_client: AsyncClient):
@@ -58,6 +62,7 @@ class TestEventosCRUDIntegration:
                 "precios": [
                     {"categoria": "General", "precio": 100.00, "disponibles": 100}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina"
@@ -83,6 +88,7 @@ class TestEventosCRUDIntegration:
                 "precios": [
                     {"categoria": "General", "precio": 100.00, "disponibles": 100}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina"

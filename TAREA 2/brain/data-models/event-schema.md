@@ -25,6 +25,7 @@ metadata:
     "pais": "España",
     "coordenadas": { "lat": 40.4168, "lng": -3.7038 }
   },
+  "fecha": "2026-12-01T20:00:00Z",
   "aforo_total": 50000,
   "entradas_disponibles": 48500,
   "precios": [
@@ -50,6 +51,7 @@ metadata:
 | `descripcion` | String | No | Max 2000 chars |
 | `fecha` | DateTime | Sí | Futura, ISO 8601 |
 | `ubicacion` | Object | Sí | Ver subdocumento |
+| `fecha` | DateTime (ISO 8601) | Sí | Entre los años 1970 y 2100; se normaliza a UTC |
 | `aforo_total` | Int | Sí | > 0 |
 | `entradas_disponibles` | Int | Sí | 0 <= x <= aforo_total |
 | `precios` | Array | Sí | Ver subdocumento |

@@ -17,6 +17,7 @@ class TestEventosPostContract:
                     {"categoria": "VIP", "precio": 15000.00, "disponibles": 100},
                     {"categoria": "General", "precio": 5000.00, "disponibles": 4900}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina",
@@ -48,6 +49,7 @@ class TestEventosPostContract:
                 "precios": [
                     {"categoria": "General", "precio": 100.00, "disponibles": 200}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina"
@@ -71,6 +73,7 @@ class TestEventosPostContract:
                 "precios": [
                     {"categoria": "VIP", "precio": -100.00, "disponibles": 50}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina"
@@ -94,6 +97,7 @@ class TestEventosPostContract:
                     {"categoria": "VIP", "precio": 100.00, "disponibles": 50},
                     {"categoria": "VIP", "precio": 200.00, "disponibles": 50}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina"
@@ -116,6 +120,7 @@ class TestEventosPostContract:
                 "precios": [
                     {"categoria": "VIP", "precio": 100.00, "disponibles": 100}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina"
@@ -139,6 +144,7 @@ class TestEventosPostContract:
                     {"categoria": "VIP", "precio": 100.00, "disponibles": 60},
                     {"categoria": "General", "precio": 50.00, "disponibles": 60}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Buenos Aires",
                     "pais": "Argentina"
@@ -161,6 +167,7 @@ class TestEventosPostContract:
                 "precios": [
                     {"categoria": "Gratis", "precio": 0.00, "disponibles": 0}
                 ],
+                "fecha": "2026-12-01T20:00:00Z",
                 "ubicacion": {
                     "ciudad": "Montevideo",
                     "pais": "Uruguay"
@@ -173,3 +180,71 @@ class TestEventosPostContract:
         assert data["entradas_disponibles"] == 0
         # Price can be "0.0" or "0.00" depending on JSON serialization
         assert float(data["precios"][0]["precio"]) == 0.0
+
+    @pytest.mark.asyncio
+    async def test_create_event_sin_fecha_es_422(self, async_client: AsyncClient):
+        """El enunciado define al evento con fecha: es un campo requerido."""
+        response = await async_client.post(
+            "/api/eventos",
+            json={
+                "nombre": "Evento sin fecha",
+                "estado": "publicado",
+                "aforo_total": 10,
+                "entradas_disponibles": 10,
+                "precios": [{"categoria": "General", "precio": 100.00, "disponibles": 10}],
+                "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
+            },
+        )
+        assert response.status_code == 422
+        assert "fecha" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_create_event_fecha_invalida_es_422(self, async_client: AsyncClient):
+        response = await async_client.post(
+            "/api/eventos",
+            json={
+                "nombre": "Evento fecha mala",
+                "estado": "publicado",
+                "fecha": "no-es-una-fecha",
+                "aforo_total": 10,
+                "entradas_disponibles": 10,
+                "precios": [{"categoria": "General", "precio": 100.00, "disponibles": 10}],
+                "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
+            },
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("fecha", ["0001-01-01T00:00:00+05:00", "9999-12-31T23:59:59-05:00", "1969-12-31T00:00:00Z"])
+    async def test_create_event_fecha_fuera_de_rango_es_422(self, async_client: AsyncClient, fecha):
+        """Fechas extremas deben rechazarse con 422, no desbordar en Mongo (500)."""
+        response = await async_client.post(
+            "/api/eventos",
+            json={
+                "nombre": f"Evento rango {fecha}",
+                "estado": "publicado",
+                "fecha": fecha,
+                "aforo_total": 10,
+                "entradas_disponibles": 10,
+                "precios": [{"categoria": "General", "precio": 100.00, "disponibles": 10}],
+                "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
+            },
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_event_fecha_con_offset_se_normaliza_a_utc(self, async_client: AsyncClient):
+        response = await async_client.post(
+            "/api/eventos",
+            json={
+                "nombre": "Evento con offset",
+                "estado": "publicado",
+                "fecha": "2026-12-01T20:00:00-03:00",
+                "aforo_total": 10,
+                "entradas_disponibles": 10,
+                "precios": [{"categoria": "General", "precio": 100.00, "disponibles": 10}],
+                "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina"},
+            },
+        )
+        assert response.status_code == 201
+        assert response.json()["fecha"] == "2026-12-01T23:00:00Z"

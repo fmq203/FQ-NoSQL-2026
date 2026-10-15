@@ -40,6 +40,7 @@ Gestiona información de eventos, disponibilidad de entradas (aforo) y consultas
     "ciudad": "string",
     "pais": "string"
   },
+  "fecha": "datetime (ISO 8601, UTC)",
   "aforo_total": "int",
   "entradas_disponibles": "int",
   "precios": [
@@ -89,6 +90,7 @@ db.eventos.createIndex({ "nombre": "text", "descripcion": "text" })
     "ciudad": "Madrid",
     "pais": "España"
   },
+  "fecha": "2026-12-01T20:00:00Z",
   "aforo_total": 50000,
   "precios": [
     { "categoria": "VIP", "precio": 200.0, "disponibles": 1000 },
@@ -103,6 +105,7 @@ db.eventos.createIndex({ "nombre": "text", "descripcion": "text" })
   "evento_id": "550e8400-e29b-41d4-a716-446655440001",
   "nombre": "Concierto Rock 2026",
   "fecha": "2026-12-15T20:00:00Z",
+  "fecha": "2026-12-01T20:00:00Z",
   "aforo_total": 50000,
   "entradas_disponibles": 50000,
   "estado": "borrador"
@@ -118,6 +121,7 @@ db.eventos.createIndex({ "nombre": "text", "descripcion": "text" })
   "descripcion": "Gran festival de rock",
   "fecha": "2026-12-15T20:00:00Z",
   "ubicacion": { "venue": "Estadio Central", "ciudad": "Madrid", "pais": "España" },
+  "fecha": "2026-12-01T20:00:00Z",
   "aforo_total": 50000,
   "entradas_disponibles": 48500,
   "precios": [
@@ -162,6 +166,7 @@ async def obtener_disponibilidad(evento_id: UUID):
 |-------|--------|
 | `nombre` | Requerido, 1-200 chars |
 | `fecha` | ISODate, futura |
+| `fecha` | ISO 8601, entre 1970 y 2100 (se normaliza a UTC) |
 | `aforo_total` | Entero > 0 |
 | `precios[].categoria` | Único por evento |
 | `precios[].precio` | Float >= 0 |

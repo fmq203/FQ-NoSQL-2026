@@ -12,6 +12,7 @@
   "_id": UUID("..."),                    // PK, MongoDB _id as UUID v4
   "nombre": "string (1-200 chars)",       // Required, non-empty
   "estado": "borrador|publicado|cancelado|finalizado",  // Enum, required
+  "fecha": "2026-12-01T20:00:00Z",            // datetime ISO 8601, required, año 1970-2100, normalizada a UTC
   "aforo_total": 5000,                    // int >= 0, required
   "entradas_disponibles": 5000,           // int >= 0, <= aforo_total, required
   "precios": [                            // Array, non-empty, required
@@ -66,6 +67,7 @@ class Ubicacion(BaseModel):
 class EventoCreate(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=200)
     estado: EstadoEvento
+    fecha: datetime = Field(..., description="Fecha y hora de realizacion del evento (ISO 8601)")
     aforo_total: int = Field(..., ge=0)
     entradas_disponibles: int = Field(..., ge=0)
     precios: List[PrecioCategoria] = Field(..., min_length=1)

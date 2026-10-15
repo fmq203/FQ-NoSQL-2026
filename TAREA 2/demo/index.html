@@ -241,6 +241,7 @@
       <div class="field"><label>Estado</label>
         <select id="e-estado"><option value="publicado">publicado</option><option value="borrador">borrador</option></select>
       </div>
+      <div class="field"><label>Fecha (ISO 8601)</label><input id="e-fecha"></div>
       <div class="field"><label>Aforo total</label><input id="e-aforo" value="100"></div>
       <div class="field"><label>Entradas disponibles</label><input id="e-entradas" value="100"></div>
       <div class="field"><label>Categoría</label><input id="e-categoria" value="general"></div>
@@ -314,6 +315,13 @@ const cfg = () => ({
   eventos: $('cfg-eventos').value.replace(/\/$/, ''),
   reservas: $('cfg-reservas').value.replace(/\/$/, ''),
 });
+
+/** Fecha de evento a 30 dias vista (ISO 8601, UTC). */
+function fechaFutura() {
+  const d = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+  d.setUTCHours(20, 0, 0, 0);
+  return d.toISOString();
+}
 
 function randSuffix() {
   return Math.random().toString(36).slice(2, 8);
@@ -451,12 +459,14 @@ $('btn-crear-usuario').addEventListener('click', async () => {
 // ---- Paso 2: evento ----
 
 $('e-nombre').value = `Concierto Demo ${randSuffix()}`;
+$('e-fecha').value = fechaFutura();
 
 $('btn-crear-evento').addEventListener('click', async () => {
   const c = cfg();
   const payload = {
     nombre: $('e-nombre').value,
     estado: $('e-estado').value,
+    fecha: $('e-fecha').value,
     aforo_total: parseInt($('e-aforo').value, 10),
     entradas_disponibles: parseInt($('e-entradas').value, 10),
     precios: [{
@@ -552,6 +562,7 @@ async function crearEventoAPI(overrides = {}) {
   const payload = {
     nombre: `Evento Escenario ${randSuffix()}`,
     estado: overrides.estado || 'publicado',
+    fecha: overrides.fecha || fechaFutura(),
     aforo_total: overrides.aforo_total ?? 100,
     entradas_disponibles: overrides.entradas_disponibles ?? 100,
     precios: [{

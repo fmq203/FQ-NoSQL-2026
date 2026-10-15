@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
+from datetime import datetime
 from decimal import Decimal
 from src.models.evento import (
     EstadoEvento,
@@ -34,6 +35,7 @@ class TestEventoService:
                 PrecioCategoria(categoria="VIP", precio=Decimal("5000.00"), disponibles=100),
                 PrecioCategoria(categoria="General", precio=Decimal("1000.00"), disponibles=900)
             ],
+            fecha="2026-12-01T20:00:00Z",
             ubicacion=Ubicacion(ciudad="Buenos Aires", pais="Argentina", direccion="Estadio Test")
         )
     
@@ -109,6 +111,7 @@ class TestEventoService:
                 {"categoria": "VIP", "precio": "5000.00", "disponibles": 100},
                 {"categoria": "General", "precio": "1000.00", "disponibles": 900}
             ],
+            "fecha": datetime(2026, 12, 1, 20, 0),
             "ubicacion": {
                 "ciudad": "Buenos Aires",
                 "pais": "Argentina",

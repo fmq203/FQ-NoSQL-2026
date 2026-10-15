@@ -139,6 +139,7 @@ curl -X POST http://localhost:8002/api/eventos \
   -d '{
     "nombre": "Concierto Rock 2026",
     "estado": "publicado",
+    "fecha": "2026-12-01T20:00:00Z",
     "aforo_total": 5000,
     "entradas_disponibles": 5000,
     "precios": [

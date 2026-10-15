@@ -6,7 +6,7 @@
 
 **Status**: Complete
 
-**Input**: User description: "Eventos Service: CRUD eventos en MongoDB con health check, modelo: nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion. Endpoints: POST /api/eventos, GET /api/eventos/{id}, GET /health. MongoDB Motor async."
+**Input**: User description: "Eventos Service: CRUD eventos en MongoDB con health check, modelo: nombre, estado, fecha, aforo_total, entradas_disponibles, precios[], ubicacion. Endpoints: POST /api/eventos, GET /api/eventos/{id}, GET /health. MongoDB Motor async."
 
 ## User Scenarios & Testing
 
@@ -18,7 +18,7 @@ Un organizador crea un nuevo evento con nombre, estado, aforo total, entradas di
 **Independent Test**: POST `/api/eventos` con JSON válido → 201 con evento creado + UUID. Verificar en MongoDB que documento existe.
 
 **Acceptance Scenarios**:
-1. **Given** JSON válido con nombre, estado, aforo_total, entradas_disponibles, precios[], ubicacion, **When** POST `/api/eventos`, **Then** 201 con evento_id, creado_en
+1. **Given** JSON válido con nombre, estado, fecha, aforo_total, entradas_disponibles, precios[], ubicacion, **When** POST `/api/eventos`, **Then** 201 con evento_id, creado_en
 2. **Given** aforo_total < entradas_disponibles, **When** POST `/api/eventos`, **Then** 422 Validation Error
 3. **Given** precio negativo en precios[], **When** POST `/api/eventos`, **Then** 422 Validation Error
 4. **Given** estado no válido, **When** POST `/api/eventos`, **Then** 422 Validation Error
@@ -70,6 +70,7 @@ Verificar disponibilidad del servicio y conectividad a MongoDB.
 
 ### Functional Requirements
 
+- **EC-FR-000**: System MUST exigir `fecha` (ISO 8601, año 1970-2100, normalizada a UTC) en todo evento; 422 si falta, es inválida o está fuera de rango (el enunciado define al evento con fecha, lugar, aforo y entradas)
 - **EC-FR-001**: System MUST crear evento con validación de aforo_total >= entradas_disponibles >= 0
 - **EC-FR-002**: System MUST validar precios[] con categoria única, precio >= 0, disponibles >= 0
 - **EC-FR-003**: System MUST validar estado en enum: borrador, publicado, cancelado, finalizado

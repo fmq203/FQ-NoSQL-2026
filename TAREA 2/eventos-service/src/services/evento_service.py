@@ -11,6 +11,12 @@ from src.utils.errors import EventFlowHTTPException
 logger = logging.getLogger(__name__)
 
 
+def _como_utc(valor: datetime) -> datetime:
+    """Mongo devuelve datetimes naive (siempre en UTC); se reetiquetan como
+    UTC para que el JSON de GET lleve la misma zona ('Z') que el de POST."""
+    return valor if valor.tzinfo else valor.replace(tzinfo=timezone.utc)
+
+
 class EventoService:
     def __init__(self):
         self.collection = get_collection()
@@ -37,6 +43,7 @@ class EventoService:
             "_id": evento_id,
             "nombre": evento.nombre,
             "estado": evento.estado.value,
+            "fecha": evento.fecha,
             "aforo_total": evento.aforo_total,
             "entradas_disponibles": evento.entradas_disponibles,
             "precios": [
@@ -78,6 +85,7 @@ class EventoService:
                 evento_id=evento_id,
                 nombre=evento.nombre,
                 estado=evento.estado,
+                fecha=evento.fecha,
                 aforo_total=evento.aforo_total,
                 entradas_disponibles=evento.entradas_disponibles,
                 precios=evento.precios,
@@ -136,6 +144,7 @@ class EventoService:
             evento_id=document["_id"],
             nombre=document["nombre"],
             estado=document["estado"],
+            fecha=_como_utc(document["fecha"]),
             aforo_total=document["aforo_total"],
             entradas_disponibles=document["entradas_disponibles"],
             precios=precios,

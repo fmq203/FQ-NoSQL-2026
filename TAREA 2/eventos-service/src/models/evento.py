@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 
@@ -35,10 +35,26 @@ class Ubicacion(BaseModel):
 class EventoCreate(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=200)
     estado: EstadoEvento
+    fecha: datetime = Field(..., description="Fecha y hora de realizacion del evento (ISO 8601)")
     aforo_total: int = Field(..., ge=0)
     entradas_disponibles: int = Field(..., ge=0)
     precios: List[PrecioCategoria] = Field(..., min_length=1)
     ubicacion: Ubicacion
+
+    @field_validator('fecha')
+    @classmethod
+    def validate_fecha_rango_y_utc(cls, v: datetime) -> datetime:
+        """Acota la fecha a un rango razonable y la normaliza a UTC.
+
+        Sin el acotado, fechas extremas con offset (ej. 0001-01-01+05:00)
+        desbordan al convertirse en pymongo y terminaban en un 500 en vez
+        de un 422.
+        """
+        if not 1970 <= v.year <= 2100:
+            raise ValueError('fecha must be between years 1970 and 2100')
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v.astimezone(timezone.utc)
 
     @model_validator(mode='after')
     def validate_aforo_y_entradas(self) -> 'EventoCreate':

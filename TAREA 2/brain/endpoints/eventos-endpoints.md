@@ -43,6 +43,7 @@ metadata:
     "pais": "España",
     "coordenadas": {"lat": 40.4168, "lng": -3.7038}
   },
+  "fecha": "2026-12-01T20:00:00Z",
   "aforo_total": 50000,
   "precios": [
     {"categoria": "VIP", "precio": 200.0, "disponibles": 1000},
@@ -59,6 +60,7 @@ metadata:
   "evento_id": "550e8400-e29b-41d4-a716-446655440001",
   "nombre": "Concierto Rock 2026",
   "fecha": "2026-12-15T20:00:00Z",
+  "fecha": "2026-12-01T20:00:00Z",
   "aforo_total": 50000,
   "entradas_disponibles": 50000,
   "estado": "borrador"
