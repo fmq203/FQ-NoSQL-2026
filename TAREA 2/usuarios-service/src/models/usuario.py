@@ -4,7 +4,7 @@ Modelos de dominio para Usuarios Service.
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 
@@ -74,13 +74,24 @@ class UsuarioResponse(UsuarioBase):
         from_attributes = True
 
 
+class CompraAnonimizada(BaseModel):
+    """Compra del historial sin ningun dato que identifique a la persona
+    (se omite reserva_id y la fecha se generaliza al dia)."""
+    evento_id: UUID
+    evento_nombre: str
+    fecha_compra: date
+    entradas: int
+    total_pagado: float
+    estado: str
+
+
 class UsuarioAnonimizado(BaseModel):
-    """Usuario con datos anonimizados para exportación GDPR."""
-    usuario_id_hash: str
+    """Usuario para analisis. Minimizacion de datos: no incluye nombre,
+    apellido, email ni nro_documento (ni siquiera hasheados: son datos de
+    baja entropia y un hash se revierte por diccionario). Solo queda lo que
+    sirve para analizar: un pseudonimo para agrupar compras del mismo
+    usuario, la categoria del documento, el mes de alta y el historial."""
+    pseudonimo: str
     tipo_documento: TipoDocumento
-    nro_documento_hash: str
-    nombre_hash: str
-    apellido_hash: str
-    email_hash: str
-    creado_en: datetime
-    historial_compras: List[HistorialCompra] = []
+    mes_alta: str
+    historial_compras: List[CompraAnonimizada] = []

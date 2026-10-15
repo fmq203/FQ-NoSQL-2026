@@ -98,14 +98,14 @@ class ValidadorInventario(BaseHandler):
                 return
 
             context.usuario_data = usuario
-            self._add_saga_log(context, self._step_name, True, f"Usuario validado: {usuario.get('nombre', '')}")
+            self._add_saga_log(context, self._step_name, True, "Usuario validado")
 
             # Emit event
             db_start = time.perf_counter()
             await insert_event_log(
                 event_type=EventType.USUARIO_VALIDADO,
                 aggregate_id=context.reserva_id,
-                payload={"usuario_id": str(context.usuario_id), "nombre": usuario.get("nombre", "")},
+                payload={"usuario_id": str(context.usuario_id)},
                 correlation_id=context.correlation_id
             )
             record_db_operation_duration("postgresql", "insert", "success", time.perf_counter() - db_start)

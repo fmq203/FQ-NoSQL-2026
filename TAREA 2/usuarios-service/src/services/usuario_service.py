@@ -1,20 +1,56 @@
+import csv
+import hmac
+import io
 import logging
+import secrets
 from typing import Optional, List
 from uuid import UUID, uuid4
 from datetime import datetime, timezone
-from hashlib import sha256
 from src.services.mongodb import get_collection, get_database
 from src.config import get_settings
 from src.models.usuario import (
     UsuarioCreate,
     UsuarioResponse,
     UsuarioAnonimizado,
+    CompraAnonimizada,
     HistorialCompra,
     TipoDocumento,
 )
 from src.utils.errors import EventFlowHTTPException
 
 logger = logging.getLogger(__name__)
+
+# Clave por proceso para los pseudonimos cuando no se configura EXPORT_PSEUDONYM_KEY
+_clave_efimera: Optional[bytes] = None
+
+CSV_COLUMNAS = [
+    "pseudonimo", "tipo_documento", "mes_alta",
+    "evento_id", "evento_nombre", "fecha_compra", "entradas", "total_pagado", "estado",
+]
+
+
+def _celda_segura(valor) -> str:
+    """Evita CSV/formula injection: Excel ejecuta celdas que empiezan con = + - @."""
+    texto = "" if valor is None else str(valor)
+    return "'" + texto if texto[:1] in ("=", "+", "-", "@") else texto
+
+
+def usuarios_anonimizados_a_csv(usuarios: List[UsuarioAnonimizado]) -> str:
+    """Una fila por compra; los usuarios sin compras salen en una fila con las
+    columnas de compra vacias (para no perderlos del analisis)."""
+    salida = io.StringIO()
+    writer = csv.writer(salida)
+    writer.writerow(CSV_COLUMNAS)
+    for u in usuarios:
+        base = [u.pseudonimo, u.tipo_documento.value, u.mes_alta]
+        if not u.historial_compras:
+            writer.writerow([_celda_segura(c) for c in base + [""] * 6])
+        for c in u.historial_compras:
+            writer.writerow([_celda_segura(x) for x in base + [
+                c.evento_id, c.evento_nombre, c.fecha_compra.isoformat(),
+                c.entradas, c.total_pagado, c.estado,
+            ]])
+    return salida.getvalue()
 
 
 class UsuarioService:
@@ -26,9 +62,18 @@ class UsuarioService:
     def collection(self):
         return get_collection(self._collection_name)
 
-    def _hash_pii(self, value: str) -> str:
-        """Hash irreversible para anonimización GDPR."""
-        return sha256(value.encode()).hexdigest()[:16]
+    def _clave_pseudonimos(self) -> bytes:
+        global _clave_efimera
+        if self.settings.export_pseudonym_key:
+            return self.settings.export_pseudonym_key.encode()
+        if _clave_efimera is None:
+            _clave_efimera = secrets.token_bytes(32)
+        return _clave_efimera
+
+    def _pseudonimo(self, usuario_id: UUID) -> str:
+        """HMAC-SHA256 del usuario_id (un UUID v4 aleatorio: no se puede
+        enumerar ni adivinar), truncado a 128 bits."""
+        return hmac.new(self._clave_pseudonimos(), str(usuario_id).encode(), "sha256").hexdigest()[:32]
 
     def _to_response(self, doc: dict) -> UsuarioResponse:
         """Convertir documento MongoDB a response model."""
@@ -47,17 +92,21 @@ class UsuarioService:
         )
 
     def _to_anonimizado(self, doc: dict) -> UsuarioAnonimizado:
-        """Convertir documento a versión anonimizada."""
+        """Convertir documento a version anonimizada (sin datos personales)."""
         return UsuarioAnonimizado(
-            usuario_id_hash=self._hash_pii(str(doc["_id"])),
+            pseudonimo=self._pseudonimo(doc["_id"]),
             tipo_documento=doc["tipo_documento"],
-            nro_documento_hash=self._hash_pii(doc["nro_documento"]),
-            nombre_hash=self._hash_pii(doc["nombre"]),
-            apellido_hash=self._hash_pii(doc["apellido"]),
-            email_hash=self._hash_pii(doc["email"]),
-            creado_en=doc["creado_en"],
+            mes_alta=doc["creado_en"].strftime("%Y-%m"),
             historial_compras=[
-                HistorialCompra(**h) for h in doc.get("historial_compras", [])
+                CompraAnonimizada(
+                    evento_id=h["evento_id"],
+                    evento_nombre=h["evento_nombre"],
+                    fecha_compra=h["fecha_compra"].date(),
+                    entradas=h["entradas"],
+                    total_pagado=h["total_pagado"],
+                    estado=h["estado"],
+                )
+                for h in doc.get("historial_compras", [])
             ],
         )
 

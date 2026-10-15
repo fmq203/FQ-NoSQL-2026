@@ -105,6 +105,19 @@ class TestValidadorInventario:
             assert result.usuario_data is not None
 
     @pytest.mark.unit
+    async def test_no_persiste_datos_personales_del_usuario(self, handler, valid_context):
+        """El saga_log (Mongo) y el event_log (PostgreSQL, append-only: no se
+        puede borrar despues) solo deben llevar el usuario_id, nunca el nombre."""
+        with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get, \
+             patch("src.chain.validators.insert_event_log", new_callable=AsyncMock) as mock_pg:
+            mock_get.return_value = {"nombre": "Juan", "apellido": "Pérez", "email": "juan@example.com"}
+            result = await handler.handle(valid_context)
+
+        persistido = str(result.saga_log) + str(mock_pg.call_args_list)
+        for dato in ("Juan", "Pérez", "juan@example.com"):
+            assert dato not in persistido
+
+    @pytest.mark.unit
     async def test_nonexistent_user_fails(self, handler, valid_context):
         """Non-existent user should fail validation."""
         with patch("src.chain.validators.get_usuario", new_callable=AsyncMock) as mock_get:

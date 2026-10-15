@@ -46,15 +46,3 @@ class UsuarioResponse(UsuarioBase):
 
     class Config:
         from_attributes = True
-
-
-class UsuarioAnonimizado(BaseModel):
-    """Usuario con datos anonimizados para exportación GDPR."""
-    usuario_id_hash: str
-    tipo_documento: TipoDocumento
-    nro_documento_hash: str
-    nombre_hash: str
-    apellido_hash: str
-    email_hash: str
-    creado_en: datetime
-    historial_compras: List[HistorialCompra] = []

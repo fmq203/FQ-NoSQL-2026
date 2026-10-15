@@ -9,7 +9,7 @@ from src.models.usuario import (
     UsuarioAnonimizado,
     TipoDocumento,
 )
-from src.services.usuario_service import UsuarioService
+from src.services.usuario_service import UsuarioService, usuarios_anonimizados_a_csv
 from src.utils.errors import EventFlowHTTPException
 from uuid import UUID
 from typing import List, Optional
@@ -66,29 +66,46 @@ async def listar_usuarios(
     return await service.listar_usuarios(skip=skip, limit=limit)
 
 
-@router.get("/usuarios/exportar", response_model=List[UsuarioAnonimizado])
+@router.get(
+    "/usuarios/exportar",
+    response_model=List[UsuarioAnonimizado],
+    responses={200: {"description": "JSON (default) o CSV con ?format=csv", "content": {"text/csv": {"schema": {"type": "string"}}}}},
+)
 async def exportar_usuarios(
     format: str = Query("json", description="Formato de exportación: json o csv"),
     service: UsuarioService = Depends(get_usuario_service),
 ):
     """
-    Exportar usuarios anonimizados (GDPR).
+    Exportar usuarios anonimizados para análisis (GDPR).
 
-    - Nombres/emails: anonimizados irreversiblemente (hash)
+    - Datos personales (nombre, apellido, email, nro_documento): **eliminados**,
+      no hasheados (minimización de datos: son de baja entropía y un hash se
+      revierte por diccionario)
+    - `pseudonimo`: HMAC-SHA256 del usuario_id con clave del servidor, para
+      agrupar las compras de un mismo usuario sin exponer su id real
+    - `mes_alta` (YYYY-MM) y `fecha_compra` (día) están generalizados
     - Historial de compras: preservado para análisis
-    - Formatos soportados: json, csv
+    - Formatos: json (default) o csv (una fila por compra)
 
     NOTA: esta ruta debe declararse antes de /usuarios/{usuario_id} -
     FastAPI/Starlette resuelve las rutas en orden de registro, y un
     registro inverso hace que "exportar" se intente parsear como UUID
     y devuelva 422 en vez de ejecutar la exportación.
     """
-    if format.lower() not in ["json", "csv"]:
+    formato = format.lower()
+    if formato not in ["json", "csv"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Formato no soportado. Use 'json' o 'csv'"
         )
-    return await service.exportar_usuarios_anonimizados()
+    usuarios = await service.exportar_usuarios_anonimizados()
+    if formato == "csv":
+        return Response(
+            content=usuarios_anonimizados_a_csv(usuarios),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="usuarios_anonimizados.csv"'},
+        )
+    return usuarios
 
 
 @router.get("/usuarios/{usuario_id}", response_model=UsuarioResponse)

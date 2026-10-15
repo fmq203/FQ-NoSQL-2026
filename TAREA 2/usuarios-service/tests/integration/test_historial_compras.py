@@ -83,6 +83,6 @@ class TestHistorialCompras:
         export = (await client.get("/api/usuarios/exportar")).json()
 
         assert len(export) == 1
-        assert export[0]["email_hash"] != usuario_valido["email"]
+        assert usuario_valido["email"] not in str(export)
         assert len(export[0]["historial_compras"]) == 1
         assert export[0]["historial_compras"][0]["evento_id"] == compra["evento_id"]

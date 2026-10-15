@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     health_check_timeout_ms: int = 2000
     health_check_degraded_threshold_ms: int = 50
     health_check_unhealthy_threshold_ms: int = 500
+    # Clave HMAC de los pseudonimos del export. Vacia = se genera una al azar
+    # al arrancar el servicio (anonimizacion; los pseudonimos no se pueden
+    # relacionar entre reinicios). Con valor = pseudonimizacion estable.
+    export_pseudonym_key: str = ""
 
     class Config:
         env_file = ".env"
