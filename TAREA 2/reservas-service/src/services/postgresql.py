@@ -23,30 +23,6 @@ async def init_pg_schema() -> None:
     )
 
     async with _pg_pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS pagos (
-                pago_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                reserva_id UUID NOT NULL,
-                usuario_id UUID NOT NULL,
-                evento_id UUID NOT NULL,
-                monto DECIMAL(10,2) NOT NULL,
-                estado VARCHAR(50) NOT NULL DEFAULT 'pendiente',
-                proveedor_pago VARCHAR(100),
-                referencia_externa VARCHAR(200),
-                creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-        """)
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_pagos_reserva_id ON pagos(reserva_id)
-        """)
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_pagos_usuario_id ON pagos(usuario_id)
-        """)
-        await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_pagos_estado ON pagos(estado)
-        """)
-
         # Event Log: registro append-only de cada paso de la SAGA
         # (Event Sourcing). Ver brain/patterns/event-log-pattern.md.
         await conn.execute("""
@@ -121,7 +97,7 @@ async def init_pg_schema() -> None:
             GROUP BY payload->>'paso_compensado'
         """)
 
-    logger.info("✅ PostgreSQL schema inicializado (pagos + event_log + vistas analíticas)")
+    logger.info("✅ PostgreSQL schema inicializado (event_log + vistas analíticas)")
 
 
 async def close_pg_pool() -> None:

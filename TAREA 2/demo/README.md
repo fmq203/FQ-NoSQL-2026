@@ -29,7 +29,7 @@ xdg-open index.html   # o doble click en el Finder/Explorador
 
 ## Qué muestra
 
-1. **Diagrama de infraestructura** (estático): los 3 servicios, sus puertos, y su base de datos propia (database-per-service) — Mongo x2, Redis + PostgreSQL en Reservas.
+1. **Diagrama de infraestructura** (estático): los 3 servicios, sus puertos y sus datos: un MongoDB con una colección por servicio (usuarios, eventos, reservas) más Redis y PostgreSQL en Reservas.
 2. **Estado en vivo** de los 3 servicios (`/health`, con sus `checks` por dependencia — Mongo/Redis/PostgreSQL/circuit breakers).
 3. **Pipeline visual** de la SAGA (Chain of Responsibility, 6 pasos) que se anima al reservar.
 4. **Crear usuario** → `POST /api/usuarios`.

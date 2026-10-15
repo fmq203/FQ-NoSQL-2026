@@ -22,7 +22,7 @@ help: ## Mostrar esta ayuda
 
 up: ## Levantar todos los servicios (DBs + microservicios)
 	@echo "$(GREEN)🚀 Levantando EventFlow...$(NC)"
-	docker compose -f $(COMPOSE_FILE) up -d
+	docker compose -f $(COMPOSE_FILE) up -d --build
 	@echo "$(GREEN)✅ Servicios levantados. Usa 'make logs' para ver logs.$(NC)"
 
 down: ## Bajar todos los servicios

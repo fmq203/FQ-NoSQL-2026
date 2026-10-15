@@ -481,3 +481,30 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Verificación:** tests nuevos (`test_audit_endpoint.py`, `test_fault_injection_demo.py`) + toda la suite de reservas-service (105 passed, 4 skipped, sin fallas ni siquiera en el test de performance normalmente flaky). Reconstruido el contenedor y probado de punta a punta contra el stack real con un script de Node: crea evento con 5 disponibles, dispara `simular_fallo=sync_pago`, confirma 503, confirma que los disponibles siguen en 5, y confirma que la auditoría muestra `SAGA_STARTED → USUARIO_VALIDADO → EVENTO_VALIDADO → COMPENSACION_EJECUTADA → SAGA_FAILED` en orden.
 
 **Tags:** #demo #saga #compensation #fault-injection #cqrs #audit #event-log #postgresql #infrastructure-diagram #claude-sonnet-5
+---
+
+### 2026-10-15 — Análisis contra el enunciado, bloque 1 (huecos funcionales) y bloque 2 (README)
+
+**Contexto:** Con 21 días hasta la pre-defensa (5/11), se contrastó el PDF de la tarea con el repo y con un clon limpio de GitHub (`docker compose up --build`, `make health`, `make test`). Se acordó un plan en bloques: (1) huecos funcionales, (2) README con la justificación y los diagramas que exige el PDF, (3) anonimización/seudonimización/cifrado, (4) opcionales (JMeter, replica set).
+
+**Hallazgos del análisis (verificados, no supuestos):**
+- Los eventos no tenían `fecha` (el enunciado define al evento con fecha, lugar y aforo).
+- `historial_compras` nunca se llenaba: `agregar_compra_historial` existía sin ningún llamador.
+- `make test`, el comando documentado en el README, no corría ningún test: los Dockerfiles copian solo `src/` y un `|| true` ocultaba el fallo. Solo se vio en un clon limpio.
+- El README no tenía "Justificación del Diseño"; el diagrama CoR mostraba 4 handlers (hay 6) y el de SAGA ubicaba el pago en PostgreSQL (el pago real es el Lua de Redis).
+- La anonimización del export usa SHA-256 sin sal truncado (un DNI de 8 dígitos se revierte por fuerza bruta): pendiente para el bloque 3.
+
+**Bloque 1 (3 commits):**
+- `fecha` obligatoria en eventos. Al escribir los tests apareció un bug real: fechas extremas con offset (ej. `0001-01-01+05:00`) desbordaban en pymongo y daban 500 en vez de 422; se acotó el rango (1970-2100) y se normaliza a UTC.
+- Historial: nuevo `POST /api/usuarios/{id}/historial`, idempotente por `reserva_id` (`$push` filtrado con `$ne`); `ConfirmadorReserva` lo llama *best-effort* (la reserva ya está cobrada, no se compensa) y deja `HISTORIAL_ACTUALIZADO` / `HISTORIAL_PENDIENTE` en el `event_log`.
+- `make test` ahora monta `tests/`, `pytest.ini` y el `Dockerfile` en los contenedores y sale con código distinto de 0 si algo falla. Faltaba `requests` en el `requirements.txt` de reservas (solo existía en el venv local por casualidad).
+- Los tests de carga disparaban 100 requests en el mismo instante, pero RP-SC-007 pide 100 req/s *sostenidos*: en un solo proceso Python eso mide la cola (~100 × 10 ms), no la latencia (p99 entre 625 y 1300 ms, intermitente). Con una request cada 10 ms el p99 da 175-335 ms. Un request de calentamiento solo no lo arreglaba: había que corregir el modelo de carga.
+- Incidente de infraestructura: el contenedor de Mongo se cayó con "Too many open files" tras ~4.800 conexiones acumuladas por correr las suites muchas veces seguidas. Es higiene de los tests, no de los servicios.
+
+**Bloque 2 (README):** secciones nuevas de arquitectura, justificación del diseño (consistencia, elección de bases, embebido vs referencia, por qué SAGA con orquestación, por qué CoR, no doble venta, Event Sourcing/CQRS), tabla de compensaciones por paso y diagramas Mermaid (arquitectura, secuencia SAGA, cadena CoR). Los diagramas se validaron con el parser de `mermaid` en Node antes de commitear (se comprobó que el validador detecta errores con un diagrama roto).
+- **Honestidad sobre lo implementado:** `secondaryPreferred` está configurado en usuarios y eventos, pero el compose levanta un único nodo Mongo, así que en desarrollo las lecturas van al primario. El README lo dice explícitamente en vez de presentar el AP como logrado. Tampoco hay caché de lecturas. Dos afirmaciones de `brain/` no se reflejan en el código y no se copiaron al README: "Redis (cache)" para eventos y "historial acotado a las últimas 50 compras".
+- "Database per service" era impreciso: es un único MongoDB con una colección por servicio (aislamiento lógico). Se corrigió en el README y en el diagrama del demo.
+- Se eliminó la tabla `pagos` de PostgreSQL (se creaba pero nada la usaba) para que el código coincida con lo documentado: PostgreSQL = `event_log` + vistas.
+- `make up` ahora usa `--build` para no servir imágenes viejas.
+
+**Tags:** #analisis #requisitos #historial-compras #fecha-eventos #make-test #carga #readme #mermaid #consistencia #claude-sonnet-5

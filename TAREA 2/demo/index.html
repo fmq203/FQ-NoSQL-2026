@@ -180,24 +180,25 @@
   <div class="infra">
     <div class="svc-col">
       <div class="box svc"><b>Usuarios Service</b><span class="port">:8001</span></div>
-      <div class="box db">MongoDB<br>(usuarios, historial)</div>
+      <div class="box db">MongoDB<br>colección <b>usuarios</b><br>(perfil + historial)</div>
     </div>
     <div class="conn">⇄</div>
     <div class="svc-col">
       <div class="box svc"><b>Eventos Service</b><span class="port">:8002</span></div>
-      <div class="box db">MongoDB<br>(eventos, inventario)</div>
+      <div class="box db">MongoDB<br>colección <b>eventos</b><br>(fecha, lugar, inventario)</div>
     </div>
     <div class="conn">⇄</div>
     <div class="svc-col">
       <div class="box svc"><b>Reservas Service</b><span class="port">:8003</span><br><span class="port">orquestador SAGA</span></div>
-      <div class="box db">Redis<br>(pago + inventario atómico)</div>
+      <div class="box db">Redis<br>(pago + inventario atómico, Lua)</div>
+      <div class="box db">MongoDB · colección <b>reservas</b></div>
       <div class="box db">PostgreSQL<br>(event_log / auditoría CQRS)</div>
     </div>
     <div class="cross-arrows">
       <span>Reservas → Usuarios (validar usuario)</span>
       <span>Reservas → Eventos (validar/sincronizar aforo)</span>
     </div>
-    <div class="orchestrator-note">Cada servicio tiene su propia base de datos (Database per Service) — Reservas coordina la SAGA llamando a Usuarios y Eventos por HTTP, con reintentos + circuit breaker.</div>
+    <div class="orchestrator-note">Un único MongoDB con una colección por servicio (cada servicio solo accede a la suya; a los datos de otro se llega por su API). Reservas coordina la SAGA llamando a Usuarios y Eventos por HTTP, con reintentos + circuit breaker.</div>
   </div>
 
   <div class="pipeline" id="pipeline">
