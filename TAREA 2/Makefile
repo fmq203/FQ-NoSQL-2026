@@ -2,7 +2,7 @@
 # Uso: make <comando>
 # Ver make help para lista de comandos
 
-.PHONY: help up down build test logs clean ps status
+.PHONY: help up down build test jmeter logs clean ps status
 
 # Variables
 COMPOSE_FILE = docker-compose.yml
@@ -72,6 +72,24 @@ test-integration: ## Ejecutar tests de integración
 
 test-contract: ## Ejecutar tests de contrato
 	$(call run_tests,Contract tests,tests/contract/)
+
+# Pruebas de carga (JMeter 5.5 en Docker, sin instalar nada). Cada corrida escribe en
+# su propia carpeta jmeter/results/<fecha> (no pisa ni borra corridas anteriores).
+# --network host: solo Linux; en Docker Desktop (Mac/Windows) usar JMETER_ARGS="-Jhost=host.docker.internal"
+# y quitar --network host. Parametros: ver jmeter/README.md
+JMETER_IMAGE = justb4/jmeter:5.5
+STOCK ?= 50
+JMETER_ARGS ?=
+
+jmeter: ## Pruebas de carga con JMeter: doble venta, SAGA sostenida, lecturas (requiere make up)
+	@run=jmeter/results/$$(date +%Y%m%d-%H%M%S); mkdir -p $$run; \
+	echo "$(GREEN)📈 JMeter -> $$run (aprox. 2 min)$(NC)"; \
+	docker run --rm --network host -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/jmeter:/jmeter" $(JMETER_IMAGE) \
+		-n -t /jmeter/eventflow.jmx -l /$$run/resultados.jtl -j /$$run/jmeter.log \
+		-e -o /$$run/report -Jstock=$(STOCK) $(JMETER_ARGS) > $$run/consola.txt 2>&1 \
+		|| { echo "$(RED)❌ JMeter fallo, ver $$run/consola.txt$(NC)"; exit 1; }; \
+	python3 jmeter/resumen.py $$run/resultados.jtl $(STOCK); status=$$?; \
+	echo "Reporte HTML: $$run/report/index.html"; exit $$status
 
 logs: ## Ver logs de todos los servicios
 	docker compose -f $(COMPOSE_FILE) logs -f $(SERVICES) $(DBS)

@@ -95,3 +95,6 @@ pnpm-lock.yaml
 *.html
 !demo/*.html
 reports/
+
+# Resultados de JMeter (cada corrida genera su carpeta)
+jmeter/results/
