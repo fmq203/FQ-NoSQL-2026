@@ -175,7 +175,10 @@ async def get_usuario(usuario_id: str, correlation_id: str = "") -> Optional[dic
     if not await check_circuit_breaker("usuarios_service"):
         raise CircuitBreakerOpenError("Circuit breaker abierto para usuarios_service")
     client = await get_usuarios_client()
-    headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
+    # no-cache: la SAGA necesita el dato actual de MongoDB, no el cache AP de lecturas
+    headers = {"Cache-Control": "no-cache"}
+    if correlation_id:
+        headers["X-Correlation-ID"] = correlation_id
     try:
         resp = await _con_reintentos(
             lambda: client.get(f"/api/usuarios/{usuario_id}", headers=headers)
@@ -200,7 +203,9 @@ async def get_evento(evento_id: str, correlation_id: str = "") -> Optional[dict]
     if not await check_circuit_breaker("eventos_service"):
         raise CircuitBreakerOpenError("Circuit breaker abierto para eventos_service")
     client = await get_eventos_client()
-    headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
+    headers = {"Cache-Control": "no-cache"}
+    if correlation_id:
+        headers["X-Correlation-ID"] = correlation_id
     try:
         resp = await _con_reintentos(
             lambda: client.get(f"/api/eventos/{evento_id}", headers=headers)

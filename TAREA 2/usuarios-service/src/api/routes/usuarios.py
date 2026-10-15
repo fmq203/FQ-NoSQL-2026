@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query
 from src.models.usuario import (
     CompraRegistrada,
     CompraRegistrar,
@@ -9,6 +9,7 @@ from src.models.usuario import (
     UsuarioAnonimizado,
     TipoDocumento,
 )
+from src.services.lectura_cache import leer_con_cache
 from src.services.usuario_service import UsuarioService, usuarios_anonimizados_a_csv
 from src.utils.errors import EventFlowHTTPException
 from uuid import UUID
@@ -111,6 +112,8 @@ async def exportar_usuarios(
 @router.get("/usuarios/{usuario_id}", response_model=UsuarioResponse)
 async def obtener_usuario(
     usuario_id: UUID,
+    request: Request,
+    response: Response,
     service: UsuarioService = Depends(get_usuario_service),
 ):
     """
@@ -118,14 +121,23 @@ async def obtener_usuario(
 
     Incluye historial de compras.
     Retorna 404 si no existe.
+
+    Lectura AP: sirve desde cache (header `X-Cache`: HIT/MISS/STALE/BYPASS).
+    `Cache-Control: no-cache` fuerza la lectura a MongoDB.
     """
-    usuario = await service.obtener_usuario(usuario_id)
-    if not usuario:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
-        )
-    return usuario
+    async def cargar() -> dict:
+        usuario = await service.obtener_usuario(usuario_id)
+        if not usuario:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado"
+            )
+        return usuario.model_dump(mode="json")
+
+    bypass = "no-cache" in request.headers.get("cache-control", "").lower()
+    data, estado = await leer_con_cache(f"cache:usuario:{usuario_id}", cargar, bypass=bypass)
+    response.headers["X-Cache"] = estado
+    return data
 
 
 @router.post(

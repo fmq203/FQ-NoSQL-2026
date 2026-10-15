@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from src.models.evento import (
     EventoCreate,
     EventoResponse,
@@ -7,6 +7,7 @@ from src.models.evento import (
     RFC7807Error,
 )
 from src.services.evento_service import EventoService
+from src.services.lectura_cache import leer_con_cache
 from src.utils.errors import EventFlowHTTPException
 from uuid import UUID
 
@@ -46,9 +47,19 @@ async def crear_evento(
 )
 async def obtener_evento(
     evento_id: UUID,
+    request: Request,
+    response: Response,
     service: EventoService = Depends(get_evento_service),
 ):
-    return await service.get_event(str(evento_id))
+    """Lectura AP: sirve desde cache (header `X-Cache`: HIT/MISS/STALE/BYPASS).
+    `Cache-Control: no-cache` fuerza la lectura a MongoDB (lo usa la SAGA)."""
+    async def cargar() -> dict:
+        return (await service.get_event(str(evento_id))).model_dump(mode="json")
+
+    bypass = "no-cache" in request.headers.get("cache-control", "").lower()
+    data, estado = await leer_con_cache(f"cache:evento:{evento_id}", cargar, bypass=bypass)
+    response.headers["X-Cache"] = estado
+    return data
 
 
 @router.post(

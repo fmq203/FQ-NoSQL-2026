@@ -6,6 +6,7 @@ from typing import Optional
 
 from src.services.mongodb import get_collection
 from src.models.evento import EventoCreate, EventoResponse, EventoInDB, AjusteInventarioResponse
+from src.services.lectura_cache import invalidar
 from src.utils.errors import EventFlowHTTPException
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,8 @@ class EventoService:
                 status_code=409,
                 instance=f"/api/eventos/{evento_id}",
             )
+
+        await invalidar(f"cache:evento:{evento_id}")
 
         precio_actualizado = next(
             (p for p in result.get("precios", []) if p["categoria"] == categoria), None

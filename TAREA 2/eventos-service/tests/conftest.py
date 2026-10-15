@@ -85,3 +85,20 @@ async def created_event_id(async_client):
     )
     assert response.status_code == 201
     return response.json()["evento_id"]
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cache_redis():
+    """Los GET usan un cache Redis (services/lectura_cache.py). Los tests lo
+    reemplazan por fakeredis para no depender de un Redis real, y lo vacian
+    entre tests para que ninguno vea el cache de otro."""
+    import fakeredis.aioredis
+    import src.services.lectura_cache as lectura_cache
+
+    fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    lectura_cache._redis = fake
+    lectura_cache._redis_caido_hasta = 0.0
+    yield fake
+    await fake.flushall()
+    lectura_cache._redis = None
+    lectura_cache._redis_caido_hasta = 0.0

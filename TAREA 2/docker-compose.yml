@@ -67,10 +67,13 @@ services:
       SERVICE_PORT: 8001
       # Vacio = clave aleatoria por proceso (anonimizacion). Con valor = pseudonimos estables.
       EXPORT_PSEUDONYM_KEY: ${EXPORT_PSEUDONYM_KEY:-}
+      CACHE_REDIS_URL: redis://redis:6379/1
     ports:
       - "8001:8001"
     depends_on:
       mongodb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -90,10 +93,13 @@ services:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DB: eventflow
       SERVICE_PORT: 8002
+      CACHE_REDIS_URL: redis://redis:6379/1
     ports:
       - "8002:8002"
     depends_on:
       mongodb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]

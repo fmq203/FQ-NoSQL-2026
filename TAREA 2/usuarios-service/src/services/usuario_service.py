@@ -16,6 +16,7 @@ from src.models.usuario import (
     HistorialCompra,
     TipoDocumento,
 )
+from src.services.lectura_cache import invalidar
 from src.utils.errors import EventFlowHTTPException
 
 logger = logging.getLogger(__name__)
@@ -222,6 +223,7 @@ class UsuarioService:
             },
         )
         if result.modified_count > 0:
+            await invalidar(f"cache:usuario:{usuario_id}")
             return True
         existe = await self.collection.count_documents({"_id": usuario_id}, limit=1)
         return False if existe else None

@@ -101,3 +101,21 @@ class TestGetUsuarioConReintentos:
             with pytest.raises(httpx.HTTPError):
                 await http_clients.get_usuario("some-id")
         assert http_clients._failure_counts["usuarios_service"] == 1
+
+
+class TestLecturaFrescaEnLaSaga:
+    """La SAGA es el camino transaccional (CP): nunca debe recibir el cache AP
+    de lecturas de Usuarios/Eventos, asi que pide siempre `Cache-Control: no-cache`."""
+
+    async def test_get_usuario_y_get_evento_piden_no_cache(self):
+        for funcion, getter, payload in (
+            (http_clients.get_usuario, "get_usuarios_client", {"usuario_id": "x"}),
+            (http_clients.get_evento, "get_eventos_client", {"evento_id": "x"}),
+        ):
+            fake_client = MagicMock()
+            fake_client.get = AsyncMock(return_value=_ok_response(payload))
+            with patch.object(http_clients, getter, AsyncMock(return_value=fake_client)):
+                await funcion("some-id", correlation_id="corr-1")
+            headers = fake_client.get.call_args.kwargs["headers"]
+            assert headers["Cache-Control"] == "no-cache"
+            assert headers["X-Correlation-ID"] == "corr-1"

@@ -43,7 +43,8 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+                       expose_headers=["X-Cache", "X-Correlation-ID", "X-Trace-ID"])
     app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(StructuredLoggingMiddleware)
     app.add_middleware(MetricsMiddleware)

@@ -45,7 +45,8 @@ def create_app() -> FastAPI:
     # request.state.correlation_id (con un fallback a un uuid4() propio si
     # no existe todavia), asi que CorrelationIDMiddleware -que lo setea-
     # debe agregarse DESPUES para quedar mas afuera y correr antes.
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+                       expose_headers=["X-Cache", "X-Correlation-ID", "X-Trace-ID"])
     app.add_middleware(StructuredLoggingMiddleware)
     app.add_middleware(CorrelationIDMiddleware)
     app.add_middleware(MetricsMiddleware)
