@@ -292,6 +292,18 @@
   </section>
 
   <section class="card">
+    <h2>Historial de compras del usuario (Usuarios Service)</h2>
+    <p class="hint">Cuando una reserva se confirma, reservas-service registra la compra en el historial del usuario (<code>POST /api/usuarios/&#123;id&#125;/historial</code>, idempotente por <code>reserva_id</code>). Consistencia eventual: si Usuarios no responde, la reserva igual queda confirmada y el evento <code>HISTORIAL_PENDIENTE</code> queda en la auditoría.</p>
+    <div class="grid-form">
+      <div class="field" style="flex:1; min-width:280px;"><label>usuario_id</label><input id="hist-usuario-id" placeholder="Se autocompleta con el último usuario usado"></div>
+    </div>
+    <div class="actions">
+      <button id="btn-consultar-historial">Consultar historial</button>
+    </div>
+    <div id="hist-resultado" style="margin-top:14px;"></div>
+  </section>
+
+  <section class="card">
     <h2>Auditoría (PostgreSQL / event_log)</h2>
     <p class="hint">Modelo de auditoría CQRS: cada paso de cada SAGA (incluso las que fallan y se compensan) queda como un evento inmutable en PostgreSQL, independiente del modelo operativo en MongoDB. <code>GET /api/reservar/&#123;reserva_id&#125;/audit</code> — reservas-service.</p>
     <div class="grid-form">
@@ -450,6 +462,7 @@ $('btn-crear-usuario').addEventListener('click', async () => {
   showResult('res-usuario', r);
   if (r.ok && r.body?.usuario_id) {
     $('r-usuario').value = r.body.usuario_id;
+    $('hist-usuario-id').value = r.body.usuario_id;
     $('usuario-id-badge').style.display = 'inline-block';
     $('usuario-id-badge').className = 'badge ok';
     $('usuario-id-badge').textContent = r.body.usuario_id;
@@ -554,6 +567,7 @@ async function crearUsuarioAPI() {
   const r = await callApi(`${c.usuarios}/api/usuarios`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
+  if (r.ok && r.body?.usuario_id) $('hist-usuario-id').value = r.body.usuario_id;
   return r;
 }
 
@@ -713,6 +727,34 @@ document.querySelectorAll('#scenario-buttons button').forEach(btn => {
     }
   });
 });
+
+// ---- Historial de compras del usuario ----
+
+function renderHistorial(items) {
+  if (!items || items.length === 0) {
+    return '<p style="color:var(--muted); font-size:12.5px;">Sin compras registradas todavía (hacé una reserva exitosa con este usuario).</p>';
+  }
+  return items.map(h => `<div class="timeline-event">
+      <div class="ev-type">${h.evento_nombre}</div>
+      <div class="ev-time">${h.entradas} entrada(s)</div>
+      <div class="ev-payload">$${h.total_pagado} · ${h.estado} · reserva ${h.reserva_id ?? '-'}</div>
+    </div>`).join('');
+}
+
+async function consultarHistorial() {
+  const c = cfg();
+  const id = $('hist-usuario-id').value.trim();
+  if (!id) {
+    $('hist-resultado').innerHTML = '<p style="color:var(--muted); font-size:12.5px;">Pegá un usuario_id, o creá un usuario / corré un escenario (se autocompleta).</p>';
+    return;
+  }
+  const r = await callApi(`${c.usuarios}/api/usuarios/${id}`);
+  $('hist-resultado').innerHTML = r.ok
+    ? renderHistorial(r.body.historial_compras)
+    : `<pre class="result err">${JSON.stringify(r.body, null, 2)}</pre>`;
+}
+
+$('btn-consultar-historial').addEventListener('click', consultarHistorial);
 
 // ---- Auditoría PostgreSQL (event_log) ----
 

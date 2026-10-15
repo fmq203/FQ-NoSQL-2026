@@ -141,9 +141,15 @@ class UsuarioService:
         evento_nombre: str,
         entradas: int,
         total_pagado: float,
-        estado: str
-    ) -> bool:
-        """Agregar compra al historial del usuario."""
+        estado: str,
+        reserva_id: Optional[UUID] = None,
+    ) -> Optional[bool]:
+        """Agregar compra al historial del usuario (idempotente por reserva_id).
+
+        Returns:
+            True si se agrego, False si esa reserva_id ya estaba en el
+            historial (reintento), None si el usuario no existe.
+        """
         compra = HistorialCompra(
             evento_id=evento_id,
             evento_nombre=evento_nombre,
@@ -151,13 +157,22 @@ class UsuarioService:
             entradas=entradas,
             total_pagado=total_pagado,
             estado=estado,
+            reserva_id=reserva_id,
         )
 
+        filtro: dict = {"_id": usuario_id}
+        if reserva_id is not None:
+            # Solo matchea si NINGUNA compra del historial tiene esa reserva_id
+            filtro["historial_compras.reserva_id"] = {"$ne": reserva_id}
+
         result = await self.collection.update_one(
-            {"_id": usuario_id},
+            filtro,
             {
                 "$push": {"historial_compras": compra.model_dump()},
-                "$set": {"actualizado_en": datetime.now(timezone.utc)}
-            }
+                "$set": {"actualizado_en": datetime.now(timezone.utc)},
+            },
         )
-        return result.modified_count > 0
+        if result.modified_count > 0:
+            return True
+        existe = await self.collection.count_documents({"_id": usuario_id}, limit=1)
+        return False if existe else None

@@ -251,6 +251,51 @@ async def decrementar_inventario_evento(
     return resp.json()
 
 
+async def registrar_compra_usuario(
+    usuario_id: str,
+    reserva_id: str,
+    evento_id: str,
+    evento_nombre: str,
+    entradas: int,
+    total_pagado: float,
+    correlation_id: str = "",
+) -> dict:
+    """POST /api/usuarios/{id}/historial - registra la compra confirmada en el
+    historial del usuario (Usuarios Service es dueno de ese dato).
+
+    Idempotente por reserva_id del lado de Usuarios (un reintento devuelve
+    200 sin duplicar). Reintenta 3x con backoff y respeta el circuit
+    breaker, igual que el resto de las llamadas a Usuarios. Propaga la
+    excepcion: el llamador decide que hacer (la reserva ya esta confirmada,
+    asi que ConfirmadorReserva lo trata como best-effort).
+    """
+    if not await check_circuit_breaker("usuarios_service"):
+        raise CircuitBreakerOpenError("Circuit breaker abierto para usuarios_service")
+    client = await get_usuarios_client()
+    headers = {"X-Correlation-ID": correlation_id} if correlation_id else {}
+    try:
+        resp = await _con_reintentos(
+            lambda: client.post(
+                f"/api/usuarios/{usuario_id}/historial",
+                json={
+                    "reserva_id": reserva_id,
+                    "evento_id": evento_id,
+                    "evento_nombre": evento_nombre,
+                    "entradas": entradas,
+                    "total_pagado": total_pagado,
+                    "estado": "confirmada",
+                },
+                headers=headers,
+            )
+        )
+    except httpx.HTTPError:
+        record_failure("usuarios_service")
+        raise
+    resp.raise_for_status()
+    record_success("usuarios_service")
+    return resp.json()
+
+
 async def incrementar_inventario_evento(
     evento_id: str, categoria: str, cantidad: int, correlation_id: str = ""
 ) -> None:

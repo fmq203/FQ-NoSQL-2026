@@ -281,6 +281,50 @@ class TestConfirmadorReserva:
                 assert "numero_confirmacion" in result.reserva_data
 
     @pytest.mark.unit
+    async def test_registra_la_compra_en_el_historial_del_usuario(
+        self, handler, valid_context, registrar_compra_mock
+    ):
+        valid_context.evento_data = {"nombre": "Concierto Rock 2026"}
+        with patch("src.chain.validators.get_reservas_collection") as mock_collection:
+            mock_col = AsyncMock()
+            mock_collection.return_value = mock_col
+            mock_col.find_one.return_value = None
+            with patch("src.chain.validators.insert_event_log") as mock_pg:
+                result = await handler.handle(valid_context)
+
+        assert result.error is None
+        registrar_compra_mock.assert_awaited_once()
+        kwargs = registrar_compra_mock.await_args.kwargs
+        assert kwargs["usuario_id"] == str(valid_context.usuario_id)
+        assert kwargs["reserva_id"] == str(valid_context.reserva_id)
+        assert kwargs["evento_nombre"] == "Concierto Rock 2026"
+        assert kwargs["entradas"] == 2
+        assert kwargs["total_pagado"] == 100.0
+        tipos = [c.kwargs.get("event_type") for c in mock_pg.call_args_list]
+        assert "HISTORIAL_ACTUALIZADO" in tipos
+
+    @pytest.mark.unit
+    async def test_fallo_del_historial_no_revierte_la_reserva(
+        self, handler, valid_context, registrar_compra_mock
+    ):
+        """El historial es best-effort: la reserva ya esta cobrada y confirmada."""
+        registrar_compra_mock.side_effect = Exception("usuarios-service caido")
+        with patch("src.chain.validators.get_reservas_collection") as mock_collection, \
+             patch("src.chain.validators.ejecutar_compensar_pago_inventario") as mock_compensar:
+            mock_col = AsyncMock()
+            mock_collection.return_value = mock_col
+            mock_col.find_one.return_value = None
+            with patch("src.chain.validators.insert_event_log") as mock_pg:
+                result = await handler.handle(valid_context)
+
+        assert result.error is None
+        assert result.reserva_data["estado"] == "confirmada"
+        mock_compensar.assert_not_called()
+        tipos = [c.kwargs.get("event_type") for c in mock_pg.call_args_list]
+        assert "HISTORIAL_PENDIENTE" in tipos
+        assert "COMPENSACION_EJECUTADA" not in tipos
+
+    @pytest.mark.unit
     async def test_idempotent_reservation(self, handler, valid_context):
         """Existing reservation returns success (idempotent)."""
         with patch("src.chain.validators.get_reservas_collection") as mock_collection:

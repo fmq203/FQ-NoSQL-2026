@@ -43,6 +43,24 @@ class HistorialCompra(BaseModel):
     entradas: int
     total_pagado: float
     estado: str
+    reserva_id: Optional[UUID] = None
+
+
+class CompraRegistrar(BaseModel):
+    """Body de POST /api/usuarios/{id}/historial (uso interno: lo llama
+    reservas-service cuando una reserva queda confirmada)."""
+    reserva_id: UUID
+    evento_id: UUID
+    evento_nombre: str = Field(..., min_length=1, max_length=200)
+    entradas: int = Field(..., gt=0)
+    total_pagado: float = Field(..., ge=0)
+    estado: str = Field("confirmada", min_length=1, max_length=50)
+
+
+class CompraRegistrada(BaseModel):
+    usuario_id: UUID
+    reserva_id: UUID
+    registrada: bool
 
 
 class UsuarioResponse(UsuarioBase):

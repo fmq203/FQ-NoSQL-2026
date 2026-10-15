@@ -9,6 +9,7 @@ from ..services.http_clients import (
     get_evento,
     decrementar_inventario_evento,
     incrementar_inventario_evento,
+    registrar_compra_usuario,
 )
 from ..services.redis_pago import ejecutar_pagar_y_decrementar, ejecutar_compensar_pago_inventario
 from ..services.mongo import get_reservas_collection
@@ -319,6 +320,39 @@ class ConfirmadorReserva(BaseHandler):
         super().__init__()
         self._step_name = SagaStep.CONFIRMAR_RESERVA
 
+    async def _registrar_historial(self, context: ReservaContext, total_pagado: float) -> None:
+        """Agrega la compra al historial del usuario (Usuarios Service).
+
+        Best-effort por diseno: la reserva ya esta confirmada y cobrada, asi
+        que un fallo aca NUNCA debe revertirla ni fallar la SAGA (el
+        historial es una lectura derivada, con consistencia eventual segun
+        el enunciado). Si falla, queda HISTORIAL_PENDIENTE en el event_log
+        para poder reconciliarlo despues.
+        """
+        evento_nombre = (context.evento_data or {}).get("nombre") or str(context.evento_id)
+        try:
+            await registrar_compra_usuario(
+                usuario_id=str(context.usuario_id),
+                reserva_id=str(context.reserva_id),
+                evento_id=str(context.evento_id),
+                evento_nombre=evento_nombre,
+                entradas=context.cantidad,
+                total_pagado=total_pagado,
+                correlation_id=str(context.correlation_id),
+            )
+            tipo = "HISTORIAL_ACTUALIZADO"
+            payload = {"usuario_id": str(context.usuario_id)}
+        except Exception as e:
+            logger.warning(f"No se pudo actualizar el historial del usuario {context.usuario_id}: {e}")
+            tipo = "HISTORIAL_PENDIENTE"
+            payload = {"usuario_id": str(context.usuario_id), "error": str(e)}
+        await insert_event_log(
+            event_type=tipo,
+            aggregate_id=context.reserva_id,
+            payload=payload,
+            correlation_id=context.correlation_id,
+        )
+
     async def _process(self, context: ReservaContext) -> None:
         """Confirmar reserva en MongoDB."""
         start_time = time.perf_counter()
@@ -380,6 +414,8 @@ class ConfirmadorReserva(BaseHandler):
                 },
                 correlation_id=context.correlation_id
             )
+
+            await self._registrar_historial(context, reserva_doc["monto_total"])
         except Exception as e:
             # Compensación: rollback en Redis
             await ejecutar_compensar_pago_inventario(

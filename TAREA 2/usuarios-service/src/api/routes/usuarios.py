@@ -1,7 +1,9 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
 from src.models.usuario import (
+    CompraRegistrada,
+    CompraRegistrar,
     UsuarioCreate,
     UsuarioResponse,
     UsuarioAnonimizado,
@@ -107,3 +109,41 @@ async def obtener_usuario(
             detail="Usuario no encontrado"
         )
     return usuario
+
+
+@router.post(
+    "/usuarios/{usuario_id}/historial",
+    response_model=CompraRegistrada,
+    status_code=status.HTTP_201_CREATED,
+    responses={200: {"description": "La compra ya estaba registrada (reintento idempotente)"}},
+)
+async def registrar_compra(
+    usuario_id: UUID,
+    compra: CompraRegistrar,
+    response: Response,
+    service: UsuarioService = Depends(get_usuario_service),
+):
+    """
+    Registrar una compra confirmada en el historial del usuario.
+
+    Uso interno: lo llama reservas-service despues de confirmar una reserva.
+    Idempotente por `reserva_id`: reintentar la misma compra devuelve 200
+    sin duplicarla en el historial. 404 si el usuario no existe.
+    """
+    agregada = await service.agregar_compra_historial(
+        usuario_id=usuario_id,
+        evento_id=compra.evento_id,
+        evento_nombre=compra.evento_nombre,
+        entradas=compra.entradas,
+        total_pagado=compra.total_pagado,
+        estado=compra.estado,
+        reserva_id=compra.reserva_id,
+    )
+    if agregada is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+    if not agregada:
+        response.status_code = status.HTTP_200_OK
+    return CompraRegistrada(usuario_id=usuario_id, reserva_id=compra.reserva_id, registrada=agregada)

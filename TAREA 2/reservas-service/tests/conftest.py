@@ -44,6 +44,18 @@ def _reset_db_singletons():
     _reset()
 
 
+@pytest.fixture(autouse=True)
+def registrar_compra_mock():
+    """ConfirmadorReserva registra la compra en el historial del usuario
+    (HTTP a usuarios-service). Los tests no deben hacer esa llamada real
+    (ni esperar sus reintentos): se reemplaza por un mock en todos; los
+    tests de este comportamiento piden el fixture para inspeccionarlo."""
+    from unittest.mock import AsyncMock, patch
+    with patch("src.chain.validators.registrar_compra_usuario", new_callable=AsyncMock) as m:
+        m.return_value = {"registrada": True}
+        yield m
+
+
 @pytest.fixture(scope="session")
 def app():
     return create_app()
