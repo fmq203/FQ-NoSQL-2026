@@ -1,4 +1,3 @@
-version: '3.9'
 
 services:
   # ============ MONGODB ============
@@ -66,6 +65,8 @@ services:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DB: eventflow
       SERVICE_PORT: 8001
+      # Vacio = clave aleatoria por proceso (anonimizacion). Con valor = pseudonimos estables.
+      EXPORT_PSEUDONYM_KEY: ${EXPORT_PSEUDONYM_KEY:-}
     ports:
       - "8001:8001"
     depends_on:

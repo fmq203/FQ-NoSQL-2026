@@ -105,6 +105,44 @@ Cada paso de cada SAGA, también las que fallan y se compensan, se guarda como e
 
 ---
 
+## 🔐 Privacidad de Datos y Exportación Anonimizada
+
+### Datos personales en la solución
+
+| Dato | Dónde vive | Comentario |
+|------|------------|------------|
+| `nombre`, `apellido`, `email`, `tipo_documento` + `nro_documento` | Colección `usuarios` (único lugar) | Identificadores directos |
+| `historial_compras[]` | Colección `usuarios` | Cuasi-identificador: ligado a la persona |
+| `usuario_id` (UUID) | Reservas, Redis, `event_log`, logs | Identificador interno opaco; solo se resuelve consultando Usuarios Service |
+
+El resto del sistema trabaja con el `usuario_id` y **no copia datos personales**: se quitó el `nombre` que el `saga_log` y el `event_log` guardaban al validar el usuario (el `event_log` es append-only, así que lo que entra no se puede borrar después) y el email que se escribía en el log de alta. Consecuencia: dar de baja a una persona requiere borrar un único documento (hoy no hay endpoint de baja), y lo que quede en los demás servicios es un UUID huérfano.
+
+### Anonimización vs seudonimización
+
+- **Anonimización:** transformar los datos de modo que **nadie** pueda identificar a la persona, de forma irreversible. El resultado deja de ser dato personal. Sirve para compartir información con analistas o terceros.
+- **Seudonimización:** reemplazar el identificador por un seudónimo; quien tenga la clave o la tabla de correspondencia **puede re-identificar**, así que sigue siendo dato personal. Sirve para reducir riesgo en procesos internos y para seguir a un mismo usuario en el tiempo (cohortes) sin exponer su identidad.
+
+### Estrategia del export (`GET /api/usuarios/exportar?format=json|csv`)
+
+1. **Eliminar, no hashear, los identificadores directos** (`nombre`, `apellido`, `email`, `nro_documento`). Son de baja entropía: un DNI tiene ~10⁸ valores posibles y un hash sin clave se revierte por diccionario en segundos. La primera versión los exportaba como SHA-256 truncado; eso era seudonimización débil y no cumplía el "irreversible" del enunciado, por eso se descartó.
+2. **`pseudonimo` = HMAC-SHA256(clave del servidor, `usuario_id`).** El `usuario_id` es un UUID v4 aleatorio (122 bits, no enumerable) y sin la clave no se puede recomputar. Permite agrupar las compras de un mismo usuario dentro del export. Dos modos, según `EXPORT_PSEUDONYM_KEY`:
+   - **Sin clave (default):** se genera una al azar por proceso → anonimización (los pseudónimos no se pueden relacionar entre reinicios).
+   - **Con clave fija:** pseudónimos estables → seudonimización para análisis longitudinal; el export pasa a ser dato personal seudonimizado y la clave debe custodiarse aparte.
+3. **Generalizar cuasi-identificadores:** el alta se exporta como mes (`YYYY-MM`), la compra como día, y se omite el `reserva_id` (permitiría cruzar con las colecciones operativas).
+4. **Preservar lo analítico**, que es lo que pide el enunciado: `tipo_documento` (categoría), y por compra `evento_id`, `evento_nombre`, `entradas`, `total_pagado` y `estado`.
+5. **CSV** (una fila por compra) con neutralización de *formula injection*: las celdas que empiezan con `=`, `+`, `-` o `@` se prefijan, para que Excel no las ejecute.
+
+Límites conocidos: no se aplica k-anonimato; un historial muy particular combinado con datos externos podría permitir re-identificar a alguien. Para un uso real habría que agregar un umbral mínimo de usuarios por grupo.
+
+### Cifrado de datos personales (propuesta; no implementado)
+
+- **En tránsito:** hoy los servicios hablan HTTP dentro de la red del compose; en producción, TLS en un reverse proxy y mTLS entre servicios.
+- **En reposo, dos niveles:** (a) cifrado de volumen o *Encrypted Storage Engine* de MongoDB, que protege ante robo de disco pero no ante acceso a la base; (b) **cifrado a nivel de campo** (CSFLE de MongoDB, o AES-256-GCM en el servicio) para `email`, `nro_documento`, `nombre` y `apellido`, de modo que la base nunca ve el dato en claro. La clave de datos se guarda envuelta por una clave maestra en un KMS (o secreto) separado de la base.
+- **Problema a resolver:** `email` y `nro_documento` tienen índice único y se buscan por igualdad, y un cifrado aleatorio lo rompe. Solución: un ***blind index*** — se guarda además `email_idx = HMAC(clave_de_índice, email_normalizado)` con índice único, y se busca por ese valor; el dato en sí va cifrado. `nombre` y `apellido` no se consultan, así que alcanza con cifrado aleatorio.
+- **Costo:** se pierden las consultas parciales o por rango sobre esos campos y hay que gestionar la rotación de claves. Como Usuarios Service es el único que toca la colección, se puede introducir sin cambiar la API.
+
+---
+
 ## 🚀 Inicio Rápido
 
 ### Prerrequisitos
@@ -173,7 +211,7 @@ make down
 | POST | `/api/usuarios` | Crear usuario |
 | GET | `/api/usuarios/{id}` | Obtener usuario |
 | GET | `/api/usuarios` | Listar usuarios (paginado) |
-| GET | `/api/usuarios/exportar` | Exportar anonimizado (GDPR) |
+| GET | `/api/usuarios/exportar` | Exportar anonimizado (GDPR): JSON, o CSV con `?format=csv` |
 | POST | `/api/usuarios/{id}/historial` | Registrar una compra en el historial (uso interno: lo llama Reservas al confirmar; idempotente por `reserva_id`) |
 | GET | `/health` | Health check |
 
@@ -461,9 +499,9 @@ servicio/
 
 | Servicio | Resultado |
 |----------|-----------|
-| usuarios-service | 46 passed |
+| usuarios-service | 50 passed |
 | eventos-service | 87 passed |
-| reservas-service | 110 passed, 4 skipped |
+| reservas-service | 111 passed, 4 skipped |
 
 La carga de rendimiento sigue la especificación RP-SC-007: **100 req/s sostenidos** (una request cada 10 ms durante 1 s), con p99 medido ≈ 175–335 ms (límite: 1 s).
 

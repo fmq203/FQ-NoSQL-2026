@@ -508,3 +508,27 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 - `make up` ahora usa `--build` para no servir imágenes viejas.
 
 **Tags:** #analisis #requisitos #historial-compras #fecha-eventos #make-test #carga #readme #mermaid #consistencia #claude-sonnet-5
+
+---
+
+### 2026-10-15 — Bloque 3: privacidad, export anonimizado real y CSV
+
+**Contexto:** El análisis contra el enunciado marcó que la "anonimización irreversible" del export no lo era, que `?format=csv` se validaba pero siempre devolvía JSON, y que el PDF pide explicar anonimización/seudonimización y el cifrado de datos personales.
+
+**Hallazgos (verificados antes de tocar código):**
+- El export hasheaba nombre, apellido, email y nro_documento con SHA-256 sin sal, truncado a 16 hex. Son datos de baja entropía (un DNI son ~10⁸ valores): se revierten por diccionario en segundos. Eso es seudonimización débil, no anonimización irreversible.
+- Había datos personales fuera de `usuarios`: el `nombre` se guardaba en el `saga_log` (Mongo) y en el payload de `USUARIO_VALIDADO` del `event_log` (PostgreSQL, **append-only**: lo que entra no se puede borrar después, lo que choca con el derecho de supresión).
+- `src/models/__init__.py` de usuarios tenía una copia obsoleta de `UsuarioAnonimizado` que nadie importaba; y varios docs de `brain/` describían un export distinto del implementado (`usuario_hash`, `eventos_comprados`, `gasto_total`, con una sal hardcodeada por defecto).
+
+**Decisiones:**
+- Minimización en vez de hash: se **eliminan** los identificadores directos. El usuario queda como `pseudonimo` = HMAC-SHA256(clave del servidor, `usuario_id`); el `usuario_id` es un UUID v4 (122 bits, no enumerable), así que ahí el hash sí es seguro. `mes_alta` y `fecha_compra` se generalizan; se omite `reserva_id` (permitiría cruzar con las colecciones operativas).
+- Dos modos según `EXPORT_PSEUDONYM_KEY`: vacía → clave aleatoria por proceso (anonimización); con valor → seudónimos estables (seudonimización para cohortes). La diferencia entre ambos conceptos queda explícita en el README.
+- CSV real (una fila por compra, usuarios sin compras incluidos) con neutralización de *formula injection* (`= + - @`).
+- Cifrado: solo explicado, como pide el enunciado ("cómo se podría aplicar"): cifrado de volumen vs a nivel de campo, y el problema de las búsquedas/índices únicos sobre campos cifrados resuelto con *blind index* (HMAC). Se aclara explícitamente que no está implementado.
+- Fugas corregidas: `saga_log` y `event_log` ya no guardan el nombre (test que verifica que ningún dato personal llega a lo persistido). Consecuencia de diseño: la PII vive en un único documento, así que la baja de una persona es borrar ese documento (todavía no hay endpoint de baja).
+
+**Verificación:** contra el stack real (`make up`): una compra y el export en JSON y CSV; `grep` del export y de la auditoría con nombre, apellido, email, documento y `usuario_id` reales → 0 coincidencias; el `saga_log` guarda solo "Usuario validado". `make test`: usuarios 50, eventos 87, reservas 111 (+4 skipped). También se quitó el `version:` obsoleto del `docker-compose.yml` (una advertencia en cada comando) y se agregó la card de export al demo.
+
+**Límites que quedan documentados:** sin k-anonimato (un historial muy particular + datos externos podría re-identificar); cifrado en reposo y TLS no implementados.
+
+**Tags:** #privacidad #anonimizacion #seudonimizacion #hmac #gdpr #csv #event-log #claude-sonnet-5

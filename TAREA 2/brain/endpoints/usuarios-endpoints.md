@@ -91,20 +91,28 @@ metadata:
 
 **Query Parameter**: `format` (string, enum: `json`, `csv`, default: `json`)
 
-**Response 200** (`UsuarioExport`):
+**Response 200** (JSON, lista de `UsuarioAnonimizado`; con `?format=csv` devuelve `text/csv`, una fila por compra):
 ```json
-{
-  "usuarios_anonimizados": [
-    {
-      "usuario_hash": "a1b2c3d4e5f6...",
-      "eventos_comprados": 5,
-      "gasto_total": 750.00
-    }
-  ]
-}
+[
+  {
+    "pseudonimo": "9f2c41d0a7b3e85561c0d4aa7e3b9f12",
+    "tipo_documento": "DNI",
+    "mes_alta": "2026-09",
+    "historial_compras": [
+      {
+        "evento_id": "7b8b32a1-7b35-4b82-8362-a97b1c19bd71",
+        "evento_nombre": "Concierto Rock 2026",
+        "fecha_compra": "2026-10-15",
+        "entradas": 3,
+        "total_pagado": 7500.0,
+        "estado": "confirmada"
+      }
+    ]
+  }
+]
 ```
 
-**Anonimización**: SHA-256 irreversible con salt. Preserva solo `eventos_comprados` (count) y `gasto_total` (sum).
+**Anonimización**: se **eliminan** `nombre`, `apellido`, `email` y `nro_documento` (no se hashean: son datos de baja entropía y un hash se revierte por diccionario). `pseudonimo` = HMAC-SHA256(clave del servidor, `usuario_id`); `mes_alta` y `fecha_compra` están generalizados. El historial se preserva sin `reserva_id`. Estrategia completa y justificación en el [README](../../README.md#-privacidad-de-datos-y-exportación-anonimizada).
 
 ---
 

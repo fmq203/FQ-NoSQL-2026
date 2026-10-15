@@ -116,50 +116,40 @@ db.usuarios.createIndex({ "creado_en": -1 })
 }
 ```
 
-#### GET /api/usuarios/exportar?format=json
+#### GET /api/usuarios/exportar?format=json|csv
 ```json
-// Response 200 - Datos anonimizados (GDPR)
-{
-  "usuarios_anonimizados": [
-    {
-      "usuario_hash": "a1b2c3d4e5f6...",  // SHA-256(usuario_id + salt)
-      "eventos_comprados": 5,
-      "gasto_total": 750.00
-    }
-  ]
-}
+[
+  {
+    "pseudonimo": "9f2c41d0a7b3e85561c0d4aa7e3b9f12",
+    "tipo_documento": "DNI",
+    "mes_alta": "2026-09",
+    "historial_compras": [
+      {
+        "evento_id": "7b8b32a1-7b35-4b82-8362-a97b1c19bd71",
+        "evento_nombre": "Concierto Rock 2026",
+        "fecha_compra": "2026-10-15",
+        "entradas": 3,
+        "total_pagado": 7500.0,
+        "estado": "confirmada"
+      }
+    ]
+  }
+]
 ```
 
 ---
 
 ## Anonimización (GDPR)
 
-### Estrategia: Hash Irreversible + Preservación Analítica
+### Estrategia: minimización + pseudónimo con HMAC + generalización
 
-```python
-import hashlib
-import os
+Implementación: `UsuarioService._to_anonimizado()` y `_pseudonimo()` (`usuarios-service/src/services/usuario_service.py`).
 
-SALT = os.getenv("ANONYMIZATION_SALT", "eventflow-salt-2026")
-
-def anonimizar_usuario(usuario_doc):
-    """Anonimiza irreversiblemente datos personales, preserva análisis"""
-    usuario_hash = hashlib.sha256(
-        f"{usuario_doc['_id']}{SALT}".encode()
-    ).hexdigest()
-    
-    eventos_comprados = len(usuario_doc.get('historial_compras', []))
-    gasto_total = sum(c['precio_total'] for c in usuario_doc.get('historial_compras', []))
-    
-    return {
-        "usuario_hash": usuario_hash,
-        "eventos_comprados": eventos_comprados,
-        "gasto_total": round(gasto_total, 2)
-    }
-```
-
-**Datos eliminados**: `nombre`, `apellido`, `email`, `tipo_documento`, `nro_documento`
-**Datos preservados**: `eventos_comprados`, `gasto_total` (para análisis de negocio)
+- **Eliminados** (no hasheados): `nombre`, `apellido`, `email`, `nro_documento`. Un hash sin clave de un DNI de 8 dígitos o de un nombre se revierte por diccionario en segundos, así que no era una anonimización irreversible (la versión inicial usaba SHA-256 truncado: se descartó).
+- **`pseudonimo`** = HMAC-SHA256(`EXPORT_PSEUDONYM_KEY`, `usuario_id`)[:32]. El `usuario_id` es un UUID v4 aleatorio (no enumerable). Sin clave configurada se genera una al azar por proceso (anonimización); con clave fija los pseudónimos son estables (seudonimización, para seguimiento de cohortes; la clave se custodia aparte).
+- **Generalizados**: alta → `YYYY-MM`; compra → `YYYY-MM-DD`; se omite `reserva_id`.
+- **Preservados** (valor analítico): `tipo_documento`, historial (`evento_id`, `evento_nombre`, `entradas`, `total_pagado`, `estado`).
+- CSV: una fila por compra; neutraliza *formula injection* (celdas que empiezan con `= + - @`).
 
 ---
 

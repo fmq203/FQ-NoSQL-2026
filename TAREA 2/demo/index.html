@@ -305,6 +305,16 @@
   </section>
 
   <section class="card">
+    <h2>Exportación anonimizada (GDPR)</h2>
+    <p class="hint"><code>GET /api/usuarios/exportar</code> — los datos personales (nombre, apellido, email, documento) se <b>eliminan</b> en vez de hashearse; el usuario queda como un <code>pseudonimo</code> (HMAC), el alta como mes y la compra como día, y el historial se conserva para análisis. CSV: una fila por compra.</p>
+    <div class="actions">
+      <button id="btn-exportar-json">Ver export (JSON)</button>
+      <a id="lnk-exportar-csv" href="#" download="usuarios_anonimizados.csv" style="color:var(--accent); font-size:13px;">Descargar CSV</a>
+    </div>
+    <pre class="result" id="res-export" style="display:none; max-height:320px; overflow:auto;"></pre>
+  </section>
+
+  <section class="card">
     <h2>Auditoría (PostgreSQL / event_log)</h2>
     <p class="hint">Modelo de auditoría CQRS: cada paso de cada SAGA (incluso las que fallan y se compensan) queda como un evento inmutable en PostgreSQL, independiente del modelo operativo en MongoDB. <code>GET /api/reservar/&#123;reserva_id&#125;/audit</code> — reservas-service.</p>
     <div class="grid-form">
@@ -756,6 +766,24 @@ async function consultarHistorial() {
 }
 
 $('btn-consultar-historial').addEventListener('click', consultarHistorial);
+
+// ---- Exportación anonimizada ----
+
+async function exportarAnonimizado() {
+  const c = cfg();
+  const r = await callApi(`${c.usuarios}/api/usuarios/exportar`);
+  const el = $('res-export');
+  el.style.display = 'block';
+  el.className = 'result ' + (r.ok ? 'ok' : 'err');
+  el.textContent = r.ok
+    ? `${r.body.length} usuario(s) exportados — mostrando hasta 5:\n\n` + JSON.stringify(r.body.slice(0, 5), null, 2)
+    : JSON.stringify(r.body, null, 2);
+}
+
+$('btn-exportar-json').addEventListener('click', exportarAnonimizado);
+$('lnk-exportar-csv').addEventListener('click', () => {
+  $('lnk-exportar-csv').href = `${cfg().usuarios}/api/usuarios/exportar?format=csv`;
+});
 
 // ---- Auditoría PostgreSQL (event_log) ----
 

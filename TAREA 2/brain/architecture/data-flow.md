@@ -91,9 +91,9 @@ sequenceDiagram
     US->>MongoDB: find({}, {projection: {historial_compras: 1}})
     MongoDB-->>US: Cursor usuarios
     
-    Note over US: Anonimización irreversible:\n- SHA-256(usuario_id + salt) → usuario_hash\n- Eliminar: nombre, apellido, email, nro_documento\n- Preservar: eventos_comprados, gasto_total
-    
-    US-->>Client: 200 {usuarios_anonimizados: [{usuario_hash, eventos_comprados, gasto_total}]}
+    Note over US: Anonimización por minimización:\n- Eliminar: nombre, apellido, email, nro_documento\n- pseudonimo = HMAC-SHA256(clave, usuario_id)\n- Generalizar: mes de alta, día de compra\n- Preservar: historial de compras
+
+    US-->>Client: 200 [{pseudonimo, tipo_documento, mes_alta, historial_compras}]  (o text/csv)
 ```
 
 ---
