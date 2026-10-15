@@ -21,7 +21,7 @@ flowchart LR
     end
 
     MG[("MongoDB<br/>colecciones: usuarios,<br/>eventos, reservas")]
-    RD[("Redis<br/>pago + inventario atómico<br/>scripts Lua")]
+    RD[("Redis<br/>pago + inventario atómico (Lua)<br/>caché de lecturas")]
     PG[("PostgreSQL<br/>event_log + vistas CQRS")]
 
     C --> U
@@ -33,6 +33,8 @@ flowchart LR
     R --- MG
     R --- RD
     R --- PG
+    U -.->|"caché de lecturas"| RD
+    E -.->|"caché de lecturas"| RD
 
     R -->|"GET usuario<br/>POST historial"| U
     R -->|"GET evento<br/>POST decrementar / incrementar inventario"| E
@@ -44,8 +46,8 @@ Reservas es el único servicio que habla con los otros dos (por HTTP, con reinte
 
 | Servicio | Puerto | Datos | Responsabilidad |
 |----------|--------|-------|-----------------|
-| **Usuarios** | 8001 | MongoDB (`usuarios`) | CRUD de usuarios, historial de compras, exportación anonimizada |
-| **Eventos** | 8002 | MongoDB (`eventos`) | CRUD de eventos (fecha, lugar, aforo), inventario por categoría |
+| **Usuarios** | 8001 | MongoDB (`usuarios`) + caché Redis | CRUD de usuarios, historial de compras, exportación anonimizada |
+| **Eventos** | 8002 | MongoDB (`eventos`) + caché Redis | CRUD de eventos (fecha, lugar, aforo), inventario por categoría |
 | **Reservas y Pagos** | 8003 | Redis + MongoDB (`reservas`) + PostgreSQL | Orquestador SAGA, pago e inventario atómicos, auditoría |
 
 ### Bases de datos
@@ -53,7 +55,7 @@ Reservas es el único servicio que habla con los otros dos (por HTTP, con reinte
 | BD | Tipo | Uso | Por qué |
 |----|------|-----|---------|
 | **MongoDB** | NoSQL documental | Usuarios, eventos y reservas confirmadas | Documentos con subdocumentos (historial, precios, ubicación), índices únicos, operadores atómicos sobre arrays |
-| **Redis** | NoSQL clave-valor | Pago e inventario por evento/categoría | Scripts Lua atómicos y latencia de memoria: es lo que impide la doble venta |
+| **Redis** | NoSQL clave-valor | Pago e inventario por evento/categoría (DB 0) y caché de lecturas de Usuarios y Eventos (DB 1) | Scripts Lua atómicos: es lo que impide la doble venta; y TTL para el caché AP |
 | **PostgreSQL** | Relacional (complementaria) | `event_log` append-only y vistas analíticas | ACID para la auditoría; no cuenta como una de las dos NoSQL |
 
 ---
@@ -64,8 +66,12 @@ Reservas es el único servicio que habla con los otros dos (por HTTP, con reinte
 
 | Operación | Prioridad | Cómo se logra | Estado en este repo |
 |-----------|-----------|---------------|---------------------|
-| Lecturas de usuarios y eventos (`GET`) | Disponibilidad y tolerancia a particiones → consistencia **eventual** | MongoDB con `readPreference=secondaryPreferred` | Configurado en ambos servicios. El `docker-compose` levanta **un solo nodo** Mongo (sin replica set), así que en desarrollo las lecturas van al primario; con un replica set se reparten en secundarios sin cambiar código. |
+| Lecturas de usuarios y eventos (`GET`) | Disponibilidad y tolerancia a particiones → consistencia **eventual** | Caché Redis con política *stale-if-error* (ver abajo) + `readPreference=secondaryPreferred` en MongoDB | Caché **implementado y probado**, incluido con MongoDB caído. `secondaryPreferred` está configurado, pero el `docker-compose` levanta **un solo nodo** Mongo (sin replica set), así que en desarrollo no reparte lecturas. |
 | Escritura de reservas y pagos | **Consistencia** → una reserva es única y no hay dobles ventas | Pago e inventario en un único script Lua de Redis, `_id = reserva_id` en Mongo, `writeConcern majority + journal` en `reservas` | Implementado y cubierto por tests (doble venta, concurrencia, idempotencia, compensaciones) |
+
+**Caché de lecturas AP** (`services/lectura_cache.py` en Usuarios y Eventos): una entrada es *fresca* 30 s (se sirve de Redis, `X-Cache: HIT`); vencida o ausente se lee de MongoDB y se refresca (`MISS`); y si MongoDB no responde se sirve la entrada vencida (`STALE`): se prefiere un dato posiblemente desactualizado a no responder. Las escrituras que cambian el dato (inventario, historial) invalidan la entrada. El **camino transaccional queda fuera**: la SAGA manda `Cache-Control: no-cache` y siempre lee de MongoDB (`BYPASS`), sin admitir datos vencidos. Si Redis cae, las lecturas siguen yendo a MongoDB.
+
+Verificado contra el stack real: con MongoDB detenido, `GET /api/eventos/{id}` responde `200` (`HIT` mientras la entrada es fresca, `STALE` después de 30 s), `/health` informa `unhealthy` y la lectura estricta falla; al volver MongoDB todo se recupera solo. **Lo que el caché no hace es bajar la latencia de un lookup por `_id`**: contra un Mongo local midió p50 ≈ 10 ms con caché vs ≈ 8 ms leyendo de Mongo (la consulta ya es un acceso por clave indexada). Su aporte es disponibilidad y descargar a MongoDB, no velocidad en una instalación de un solo nodo.
 
 Se sacrifica velocidad por consistencia solo donde el negocio lo exige (comprar); las lecturas, que son la mayoría, no pagan ese costo.
 
@@ -111,11 +117,11 @@ Cada paso de cada SAGA, también las que fallan y se compensan, se guarda como e
 
 | Dato | Dónde vive | Comentario |
 |------|------------|------------|
-| `nombre`, `apellido`, `email`, `tipo_documento` + `nro_documento` | Colección `usuarios` (único lugar) | Identificadores directos |
+| `nombre`, `apellido`, `email`, `tipo_documento` + `nro_documento` | Colección `usuarios` y, durante a lo sumo 10 min, la copia del perfil en el caché Redis (`cache:usuario:{id}`, DB 1) | Identificadores directos |
 | `historial_compras[]` | Colección `usuarios` | Cuasi-identificador: ligado a la persona |
 | `usuario_id` (UUID) | Reservas, Redis, `event_log`, logs | Identificador interno opaco; solo se resuelve consultando Usuarios Service |
 
-El resto del sistema trabaja con el `usuario_id` y **no copia datos personales**: se quitó el `nombre` que el `saga_log` y el `event_log` guardaban al validar el usuario (el `event_log` es append-only, así que lo que entra no se puede borrar después) y el email que se escribía en el log de alta. Consecuencia: dar de baja a una persona requiere borrar un único documento (hoy no hay endpoint de baja), y lo que quede en los demás servicios es un UUID huérfano.
+El resto del sistema trabaja con el `usuario_id` y **no copia datos personales**: se quitó el `nombre` que el `saga_log` y el `event_log` guardaban al validar el usuario (el `event_log` es append-only, así que lo que entra no se puede borrar después) y el email que se escribía en el log de alta. Consecuencia: dar de baja a una persona requiere borrar su documento **e invalidar su entrada del caché** (hoy no hay endpoint de baja, y la copia del caché vence sola a los 10 min); lo que quede en los demás servicios es un UUID huérfano.
 
 ### Anonimización vs seudonimización
 
@@ -499,9 +505,9 @@ servicio/
 
 | Servicio | Resultado |
 |----------|-----------|
-| usuarios-service | 50 passed |
-| eventos-service | 87 passed |
-| reservas-service | 111 passed, 4 skipped |
+| usuarios-service | 56 passed |
+| eventos-service | 93 passed |
+| reservas-service | 112 passed, 4 skipped |
 
 La carga de rendimiento sigue la especificación RP-SC-007: **100 req/s sostenidos** (una request cada 10 ms durante 1 s), con p99 medido ≈ 175–335 ms (límite: 1 s).
 
