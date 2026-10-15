@@ -109,6 +109,7 @@ make down
 | GET | `/api/usuarios/{id}` | Obtener usuario |
 | GET | `/api/usuarios` | Listar usuarios (paginado) |
 | GET | `/api/usuarios/exportar` | Exportar anonimizado (GDPR) |
+| POST | `/api/usuarios/{id}/historial` | Registrar una compra en el historial (uso interno: lo llama Reservas al confirmar; idempotente por `reserva_id`) |
 | GET | `/health` | Health check |
 
 **Ejemplo crear usuario:**
@@ -310,6 +311,10 @@ Más un índice GIN (`idx_event_log_payload_gin`) para acelerar los filtros por 
 
 ## 🧪 Tests
 
+Requieren el stack arriba (`make up`): los tests corren **dentro de los contenedores** contra las bases del compose
+(los Dockerfiles copian solo `src/`, así que `make` monta `tests/` en modo lectura al ejecutarlos). Si algún
+servicio falla, el comando termina con código distinto de 0.
+
 ```bash
 # Todos los tests
 make test
@@ -334,13 +339,15 @@ servicio/
 │   └── performance/   # Tests de latencia (p95/p99)
 ```
 
-**Estado (2026-09-26), suite completa contra `docker compose up -d`:**
+**Estado (2026-10-15), `make test` con el stack levantado desde cero:**
 
 | Servicio | Resultado |
 |----------|-----------|
-| usuarios-service | 38/38 ✅ |
-| eventos-service | 80/80 ✅ |
-| reservas-service | 100 passed / 4 skipped / 1 flaky (test de p99 bajo carga concurrente — timing-sensitive, confirmado que pasa en corridas aisladas) |
+| usuarios-service | 46 passed |
+| eventos-service | 87 passed |
+| reservas-service | 110 passed, 4 skipped |
+
+La carga de rendimiento sigue la especificación RP-SC-007: **100 req/s sostenidos** (una request cada 10 ms durante 1 s), con p99 medido ≈ 175–335 ms (límite: 1 s).
 
 ---
 

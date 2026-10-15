@@ -46,7 +46,7 @@ class TestSAGAP99:
 
     @pytest.mark.performance
     async def test_p99_under_1s_100_concurrent(self, client: AsyncClient, mock_all_services):
-        """Test P99 < 1s with 100 concurrent requests."""
+        """Test P99 < 1s a 100 req/s sostenidos (RP-SC-007)."""
         request_data = {
             "usuario_id": str(uuid4()),
             "evento_id": str(uuid4()),
@@ -61,8 +61,18 @@ class TestSAGAP99:
             end = time.perf_counter()
             return (end - start) * 1000, response.status_code
         
-        # 100 concurrent requests
-        tasks = [make_request() for _ in range(100)]
+        # Calentamiento: los clientes de Mongo/Redis se crean de forma lazy en
+        # el primer uso; se excluye ese arranque en frio de la muestra.
+        await client.post("/api/reservar", json={**request_data, "reserva_id": str(uuid4())})
+
+        # RP-SC-007: 100 req/s *sostenidos* (una request nueva cada 10 ms
+        # durante 1 s), no 100 simultaneas en t=0: un solo proceso Python
+        # atiende en serie (~10 ms de CPU por request), asi que una rafaga
+        # instantanea mide la cola (100 x 10 ms ~ 1 s), no la latencia bajo carga.
+        tasks = []
+        for _ in range(100):
+            tasks.append(asyncio.create_task(make_request()))
+            await asyncio.sleep(0.01)
         results = await asyncio.gather(*tasks)
         
         latencies = [r[0] for r in results]

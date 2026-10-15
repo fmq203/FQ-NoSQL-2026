@@ -39,30 +39,39 @@ build-no-cache: ## Construir sin caché
 	@echo "$(GREEN)🔨 Construyendo sin caché...$(NC)"
 	docker compose -f $(COMPOSE_FILE) build --no-cache $(SERVICES)
 
-test: ## Ejecutar tests de todos los microservicios
+# Los Dockerfiles copian solo src/ (imagen de produccion liviana), asi que los
+# tests, su pytest.ini y el Dockerfile (que leen los tests de tests/docker) se
+# montan (solo lectura) en el contenedor al correrlos.
+# TEST_MONGODB_URI apunta al Mongo del compose (dentro del contenedor localhost
+# no es el host). Un servicio que falla no corta a los demas, pero el target
+# termina con codigo != 0 si alguno fallo (antes un "|| true" lo ocultaba).
+# Uso interno: $(call run_tests,<etiqueta>,<ruta-de-tests>)
+define run_tests
+	@fail=0; for svc in $(SERVICES); do \
+		echo "$(YELLOW)$(1) $$svc...$(NC)"; \
+		docker compose -f $(COMPOSE_FILE) run --rm \
+			-v "$(CURDIR)/$$svc/tests:/app/tests:ro" \
+			-v "$(CURDIR)/$$svc/pytest.ini:/app/pytest.ini:ro" \
+			-v "$(CURDIR)/$$svc/Dockerfile:/app/Dockerfile:ro" \
+			-e TEST_MONGODB_URI=mongodb://mongodb:27017 \
+			$$svc python -m pytest $(2) -v --tb=short -p no:cacheprovider || fail=1; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "$(RED)❌ Hubo tests fallidos$(NC)"; else echo "$(GREEN)✅ Todos los tests pasaron$(NC)"; fi; \
+	exit $$fail
+endef
+
+test: ## Ejecutar tests de todos los microservicios (requiere el stack arriba: make up)
 	@echo "$(GREEN)🧪 Ejecutando tests...$(NC)"
-	@for svc in $(SERVICES); do \
-		echo "$(YELLOW)Testing $$svc...$(NC)"; \
-		docker compose -f $(COMPOSE_FILE) run --rm $$svc python -m pytest tests/ -v --tb=short -p no:schemathesis || true; \
-	done
+	$(call run_tests,Testing,tests/)
 
 test-unit: ## Ejecutar solo tests unitarios
-	@for svc in $(SERVICES); do \
-		echo "$(YELLOW)Unit tests $$svc...$(NC)"; \
-		docker compose -f $(COMPOSE_FILE) run --rm $$svc python -m pytest tests/unit/ -v --tb=short || true; \
-	done
+	$(call run_tests,Unit tests,tests/unit/)
 
 test-integration: ## Ejecutar tests de integración
-	@for svc in $(SERVICES); do \
-		echo "$(YELLOW)Integration tests $$svc...$(NC)"; \
-		docker compose -f $(COMPOSE_FILE) run --rm $$svc python -m pytest tests/integration/ -v --tb=short || true; \
-	done
+	$(call run_tests,Integration tests,tests/integration/)
 
 test-contract: ## Ejecutar tests de contrato
-	@for svc in $(SERVICES); do \
-		echo "$(YELLOW)Contract tests $$svc...$(NC)"; \
-		docker compose -f $(COMPOSE_FILE) run --rm $$svc python -m pytest tests/contract/ -v --tb=short || true; \
-	done
+	$(call run_tests,Contract tests,tests/contract/)
 
 logs: ## Ver logs de todos los servicios
 	docker compose -f $(COMPOSE_FILE) logs -f $(SERVICES) $(DBS)
