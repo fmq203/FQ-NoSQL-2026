@@ -13,15 +13,6 @@ import src.services.lectura_cache as lectura_cache
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
-async def _falla(peticion) -> bool:
-    """True si la request termina en error 5xx (el cliente de test re-lanza
-    la excepcion de la app en vez de devolver la respuesta 500)."""
-    try:
-        return (await peticion).status_code >= 500
-    except ServerSelectionTimeoutError:
-        return True
-
-
 class _RedisCaido:
     async def get(self, *a, **k):
         raise ConnectionError("redis caido")
@@ -76,16 +67,17 @@ async def test_con_mongo_caido_se_sirve_la_entrada_vencida(async_client, created
     try:
         with patch.object(EventoService, "get_event", side_effect=ServerSelectionTimeoutError("mongo caido")):
             r = await async_client.get(f"/api/eventos/{created_event_id}")
-            estricta_fallo = await _falla(
-                async_client.get(f"/api/eventos/{created_event_id}", headers={"Cache-Control": "no-cache"})
-            )
+            estricta = await async_client.get(f"/api/eventos/{created_event_id}", headers={"Cache-Control": "no-cache"})
     finally:
         settings.cache_fresh_seconds = original
 
     assert r.status_code == 200
     assert r.headers["X-Cache"] == "STALE"
     assert r.json() == tibio.json()
-    assert estricta_fallo  # el camino transaccional nunca recibe datos vencidos
+    # el camino transaccional nunca recibe datos vencidos: Mongo caido -> 503, no 500
+    assert estricta.status_code == 503
+    assert estricta.headers["Retry-After"] == "5"
+    assert estricta.json()["type"].endswith("/service-unavailable")
 
 
 async def test_un_404_no_se_cachea(async_client):

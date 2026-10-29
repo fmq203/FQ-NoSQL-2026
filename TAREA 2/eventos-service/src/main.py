@@ -14,9 +14,11 @@ from src.utils.errors import (
     validation_exception_handler,
     pydantic_validation_exception_handler,
     http_exception_handler,
+    database_unavailable_handler,
     generic_exception_handler,
 )
 from pydantic import ValidationError
+from pymongo.errors import ConnectionFailure
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
@@ -53,6 +55,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ValidationError, pydantic_validation_exception_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(ConnectionFailure, database_unavailable_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
 
     app.include_router(eventos.router, prefix="/api")

@@ -2,6 +2,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
+from pymongo.errors import ConnectionFailure
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from uuid import UUID, uuid4
 import logging
@@ -170,6 +171,25 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         str(request.url.path),
         correlation_id,
     )
+
+
+async def database_unavailable_handler(request: Request, exc: ConnectionFailure) -> JSONResponse:
+    """MongoDB inalcanzable: es indisponibilidad transitoria (503), no un error interno (500)."""
+    correlation_id = getattr(request.state, "correlation_id", uuid4())
+
+    logger.error(
+        f"MongoDB unavailable: {type(exc).__name__}: {exc}",
+        extra={"correlation_id": str(correlation_id)},
+    )
+    response = create_error_response(
+        "SERVICE_UNAVAILABLE",
+        "Database unavailable, retry in a few seconds",
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        str(request.url.path),
+        correlation_id,
+    )
+    response.headers["Retry-After"] = "5"
+    return response
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:

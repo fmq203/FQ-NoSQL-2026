@@ -71,7 +71,7 @@ Reservas es el único servicio que habla con los otros dos (por HTTP, con reinte
 
 **Caché de lecturas AP** (`services/lectura_cache.py` en Usuarios y Eventos): una entrada es *fresca* 30 s (se sirve de Redis, `X-Cache: HIT`); vencida o ausente se lee de MongoDB y se refresca (`MISS`); y si MongoDB no responde se sirve la entrada vencida (`STALE`): se prefiere un dato posiblemente desactualizado a no responder. Las escrituras que cambian el dato (inventario, historial) invalidan la entrada. El **camino transaccional queda fuera**: la SAGA manda `Cache-Control: no-cache` y siempre lee de MongoDB (`BYPASS`), sin admitir datos vencidos. Si Redis cae, las lecturas siguen yendo a MongoDB.
 
-Verificado contra el stack real: con MongoDB detenido, `GET /api/eventos/{id}` responde `200` (`HIT` mientras la entrada es fresca, `STALE` después de 30 s), `/health` informa `unhealthy` y la lectura estricta falla; al volver MongoDB todo se recupera solo. **Lo que el caché no hace es bajar la latencia de un lookup por `_id`**: contra un Mongo local midió p50 ≈ 10 ms con caché vs ≈ 8 ms leyendo de Mongo (la consulta ya es un acceso por clave indexada). Su aporte es disponibilidad y descargar a MongoDB, no velocidad en una instalación de un solo nodo.
+Verificado contra el stack real: con MongoDB detenido, `GET /api/eventos/{id}` responde `200` (`HIT` mientras la entrada es fresca, `STALE` después de 30 s), `/health` informa `unhealthy` y la lectura estricta responde `503 SERVICE_UNAVAILABLE` con `Retry-After: 5` (MongoDB inalcanzable es indisponibilidad, no un error interno, así que nunca sale un 500); al volver MongoDB todo se recupera solo. **Lo que el caché no hace es bajar la latencia de un lookup por `_id`**: contra un Mongo local midió p50 ≈ 10 ms con caché vs ≈ 8 ms leyendo de Mongo (la consulta ya es un acceso por clave indexada). Su aporte es disponibilidad y descargar a MongoDB, no velocidad en una instalación de un solo nodo.
 
 Se sacrifica velocidad por consistencia solo donde el negocio lo exige (comprar); las lecturas, que son la mayoría, no pagan ese costo.
 
@@ -452,6 +452,8 @@ Todos los errores siguen **RFC 7807 Problem Details**, con códigos específicos
 ```
 
 **Códigos principales (Reservas Service):** `VALIDATION_ERROR` (400/422), `USER_NOT_FOUND`/`EVENT_NOT_FOUND`/`RESERVA_NOT_FOUND` (404), `EVENT_NOT_AVAILABLE`/`INSUFFICIENT_INVENTORY` (409), `PAYMENT_FAILED`/`RESERVATION_FAILED`/`INTERNAL_ERROR` (500), `SERVICE_UNAVAILABLE` (503 — dependencia caída o circuit breaker abierto).
+
+**Usuarios y Eventos:** si MongoDB no responde (`ConnectionFailure`, incluye `ServerSelectionTimeoutError`) devuelven `503 service-unavailable` con `Retry-After: 5`, no un 500: es indisponibilidad transitoria, y el cliente de la SAGA la reintenta como tal.
 
 **Headers de tracing:** `X-Correlation-ID`, `X-Trace-ID` en todas las respuestas.
 

@@ -20,10 +20,12 @@ EventFlow tiene requerimientos de consistencia **diferenciados** por operación:
 
 | Operación | Nivel de Consistencia | Implementación | Justificación |
 |-----------|----------------------|----------------|---------------|
-| **GET /api/usuarios/{id}** | Eventual | MongoDB read preference `secondaryPreferred` | Alta disponibilidad, tolerancia a particiones, latencia < 50ms |
-| **GET /api/eventos/{id}** | Eventual | MongoDB read preference `secondaryPreferred` | Lecturas masivas, cache Redis opcional |
+| **GET /api/usuarios/{id}** | Eventual | MongoDB read preference `secondaryPreferred` | Alta disponibilidad, tolerancia a particiones, latencia < 50ms; mismo caché AP en Redis que eventos |
+| **GET /api/eventos/{id}** | Eventual | MongoDB read preference `secondaryPreferred` | Lecturas masivas; caché AP en Redis (fresco 30 s, `STALE` si MongoDB cae; la SAGA lo saltea con `Cache-Control: no-cache`) |
 | **GET /api/usuarios (listado)** | Eventual | MongoDB paginado + índices | Escalabilidad horizontal |
 | **POST /api/reservar** | **Fuerte (Linealizable)** | SAGA Orchestration + Redis Lua atómico + MongoDB + PostgreSQL | Unicidad reserva, integridad financiera, no doble venta |
+
+> **Estado real de la implementación (2026-10-29):** el `docker-compose.yml` levanta **un solo nodo** de MongoDB, sin replica set. `secondaryPreferred` y `w=majority` + `journal` están configurados en los clientes, pero con un nodo `secondaryPreferred` lee del primario y `majority` = ese nodo: la lectura eventual **no se ejercita** y el `replica_lag_ms` de abajo no aplica. La disponibilidad de lecturas (AP) se demuestra con el caché Redis (`lectura_cache.py`, `X-Cache: STALE` con MongoDB caído). Si MongoDB cae y no hay entrada en caché (o la lectura es estricta, `Cache-Control: no-cache`), Usuarios y Eventos responden `503 SERVICE_UNAVAILABLE` con `Retry-After: 5`. Redis tampoco tiene réplica.
 
 ---
 
