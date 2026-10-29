@@ -551,3 +551,19 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Herramientas/entorno:** JMeter 5.5 en Docker (`make jmeter`, una carpeta por corrida, sin borrar nada); `resumen.py` sin dependencias que además falla si se vendió distinto del stock. `docker stats`/`docker top` devuelven CPU 0 en este WSL2, así que no sirvieron para medir. Un comando mío con `rm -rf` fue bloqueado por la verificación de seguridad de Claude Code; se resolvió cambiando el diseño (carpeta por corrida) y no insistiendo.
 
 **Tags:** #jmeter #carga #cache #ap #stale-if-error #doble-venta #rendimiento #claude-sonnet-5
+
+---
+
+### 2026-10-29 — Preparación de la pre-defensa: 503 con MongoDB caído, doc de consistencia y guion
+
+**Contexto:** Revisión final antes de la pre-defensa del 5/11. Quedaban tres cabos sueltos: con MongoDB caído y sin entrada en caché, Usuarios y Eventos respondían **500** (el `generic_exception_handler` atrapaba el `ServerSelectionTimeoutError`); `decisions/consistency-strategy.md` seguía hablando de un "cache Redis opcional" y presentaba `secondaryPreferred`/`replica_lag` como si hubiera réplicas; y no había guion para la demo de 12 minutos.
+
+**Cambios:**
+- Handler `ConnectionFailure → 503 service-unavailable` + `Retry-After: 5` en Usuarios y Eventos (cubre `ServerSelectionTimeoutError`, `AutoReconnect`, `NetworkTimeout`). Indisponibilidad transitoria no es un error interno, y el cliente HTTP de la SAGA ya reintenta los 5xx.
+- El test de caché que aceptaba "cualquier 5xx o excepción" (`_falla`) ahora exige 503 con `Retry-After` y `type` RFC 7807. El helper existía porque el cliente de test re-lanza las excepciones que caen en el handler genérico; con un handler específico la respuesta llega normal.
+- `consistency-strategy.md`: nota de "estado real" (un nodo, sin replica set; `majority` = ese nodo; el AP se demuestra con el caché) y la tabla actualizada al caché implementado.
+- Guion local de 12 min (`demo/GUION.md`, en `.gitignore`: es material personal de la presentación, no se versiona) (arquitectura → camino feliz/idempotencia → errores → compensación + auditoría → historial → export → AP con MongoDB caído → JMeter → cierre) y tabla de preguntas probables con respuestas honestas (incluye que no se cumple 100 req/s).
+
+**Verificación:** `make test` → usuarios 56, eventos 93, reservas 112 (+4 skipped). Contra el stack real, `docker compose stop mongodb` + `GET` con `Cache-Control: no-cache` en ambos servicios → `503`, `Retry-After: 5`, cuerpo RFC 7807; MongoDB vuelto a levantar después.
+
+**Tags:** #rfc7807 #503 #disponibilidad #documentacion #demo #pre-defensa #claude-opus-5

@@ -98,3 +98,6 @@ reports/
 
 # Resultados de JMeter (cada corrida genera su carpeta)
 jmeter/results/
+
+# Guion personal de la presentación (no se versiona)
+demo/GUION.md
