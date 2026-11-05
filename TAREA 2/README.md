@@ -518,7 +518,7 @@ Los tests de rendimiento de `pytest` siguen RP-SC-007 (**100 req/s sostenidos**,
 ### Pruebas de carga con JMeter
 
 ```bash
-make jmeter      # doble venta, SAGA sostenida y lecturas contra el stack real (~2 min)
+make jmeter      # doble venta, SAGA sostenida y lecturas contra el stack real (~2 min); deja jmeter/results/<fecha>/report/index.html
 ```
 
 Plan en [`jmeter/`](./jmeter/README.md). Resultados (máquina de desarrollo, un nodo, JMeter compartiendo CPU):

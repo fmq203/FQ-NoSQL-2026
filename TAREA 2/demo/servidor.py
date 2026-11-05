@@ -5,7 +5,9 @@
 
 Solo stdlib. La API de control corre `docker compose` sobre el docker-compose.yml
 de TAREA 2, con una lista fija de servicios y acciones (sin shell), y "limpiar
-datos" vacía MongoDB, Redis y el event_log de PostgreSQL con comandos fijos. Como cualquier
+datos" vacía MongoDB, Redis y el event_log de PostgreSQL con comandos fijos.
+También lista las corridas de JMeter, sirve sus reportes en /jmeter-results/ y
+puede lanzar `make jmeter` en segundo plano (una corrida a la vez). Como cualquier
 página abierta en el navegador puede pegarle a localhost, se defiende así:
 - escucha solo en 127.0.0.1;
 - exige el header X-Demo-Control (un fetch de otro origen con ese header necesita
@@ -14,14 +16,22 @@ página abierta en el navegador puede pegarle a localhost, se defiende así:
 """
 import argparse
 import json
+import re
 import subprocess
+import sys
+import threading
+from datetime import datetime
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 DEMO_DIR = Path(__file__).resolve().parent
 COMPOSE_DIR = DEMO_DIR.parent
+JMETER_RESULTS_DIR = COMPOSE_DIR / "jmeter" / "results"
+JMETER_URL_PREFIX = "/jmeter-results/"
+JMETER_STOCK = 50
+JMETER_TIMEOUT_SEGUNDOS = 900
 
 SERVICIOS = (
     "mongodb",
@@ -88,7 +98,72 @@ def accion_docker(accion: str, servicio: str) -> subprocess.CompletedProcess:
     return docker_compose("stop", *objetivo)
 
 
+# ---- JMeter ----
+
+_jmeter_lock = threading.Lock()
+_jmeter = {"corriendo": False, "inicio": None, "fin": None, "returncode": None, "corrida": None, "salida": ""}
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def listar_corridas() -> list:
+    if not JMETER_RESULTS_DIR.is_dir():
+        return []
+    corridas = []
+    for d in JMETER_RESULTS_DIR.iterdir():
+        if not (d / "resultados.jtl").is_file():
+            continue
+        corridas.append({
+            "nombre": d.name,
+            "fecha": datetime.fromtimestamp((d / "resultados.jtl").stat().st_mtime).isoformat(timespec="seconds"),
+            "reporte": f"{JMETER_URL_PREFIX}{d.name}/report/index.html" if (d / "report" / "index.html").is_file() else None,
+        })
+    return sorted(corridas, key=lambda c: c["fecha"], reverse=True)
+
+
+def resumen_corrida(nombre: str) -> dict | None:
+    if nombre not in {c["nombre"] for c in listar_corridas()}:
+        return None
+    proc = subprocess.run(
+        [sys.executable, str(COMPOSE_DIR / "jmeter" / "resumen.py"),
+         str(JMETER_RESULTS_DIR / nombre / "resultados.jtl"), str(JMETER_STOCK)],
+        capture_output=True, text=True, timeout=60,
+    )
+    return {"nombre": nombre, "returncode": proc.returncode, "salida": (proc.stdout + proc.stderr).strip()}
+
+
+def _correr_jmeter() -> None:
+    try:
+        proc = subprocess.run(["make", "jmeter", f"STOCK={JMETER_STOCK}"], cwd=COMPOSE_DIR,
+                              capture_output=True, text=True, timeout=JMETER_TIMEOUT_SEGUNDOS)
+        salida, returncode = _ANSI.sub("", proc.stdout + proc.stderr).strip(), proc.returncode
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        salida, returncode = f"No se pudo correr make jmeter: {exc}", -1
+    corrida = re.search(r"jmeter/results/([\w-]+)", salida)
+    with _jmeter_lock:
+        _jmeter.update(corriendo=False, fin=datetime.now().isoformat(timespec="seconds"),
+                       returncode=returncode, salida=salida, corrida=corrida.group(1) if corrida else None)
+
+
+def lanzar_jmeter() -> bool:
+    with _jmeter_lock:
+        if _jmeter["corriendo"]:
+            return False
+        _jmeter.update(corriendo=True, inicio=datetime.now().isoformat(timespec="seconds"),
+                       fin=None, returncode=None, corrida=None, salida="")
+    threading.Thread(target=_correr_jmeter, daemon=True).start()
+    return True
+
+
 class DemoHandler(SimpleHTTPRequestHandler):
+    def translate_path(self, path: str) -> str:
+        """Los reportes de JMeter se sirven desde jmeter/results/ (fuera de demo/), sin salir de ahí."""
+        ruta = urlparse(path).path
+        if not ruta.startswith(JMETER_URL_PREFIX):
+            return super().translate_path(path)
+        base = JMETER_RESULTS_DIR.resolve()
+        destino = (base / unquote(ruta[len(JMETER_URL_PREFIX):])).resolve()
+        return str(destino) if destino.is_relative_to(base) else str(base / "__fuera_de_results__")
+
     def _origen_permitido(self) -> bool:
         puerto = self.server.server_address[1]
         permitidos = {f"localhost:{puerto}", f"127.0.0.1:{puerto}"}
@@ -113,16 +188,34 @@ class DemoHandler(SimpleHTTPRequestHandler):
         return False
 
     def do_GET(self):
-        if self.path != "/control/estado":
+        if not self.path.startswith("/control/"):
             return super().do_GET()
         if not self._control_autorizado():
             return
-        try:
-            self._json(200, {"servicios": estado_contenedores()})
-        except (RuntimeError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
-            self._json(503, {"detail": f"No se pudo consultar Docker: {exc}"})
+        if self.path == "/control/estado":
+            try:
+                return self._json(200, {"servicios": estado_contenedores()})
+            except (RuntimeError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+                return self._json(503, {"detail": f"No se pudo consultar Docker: {exc}"})
+        if self.path == "/control/jmeter":
+            with _jmeter_lock:
+                ejecucion = dict(_jmeter)
+            return self._json(200, {"corridas": listar_corridas(), "ejecucion": ejecucion, "stock": JMETER_STOCK})
+        if self.path.startswith("/control/jmeter/resumen/"):
+            try:
+                resumen = resumen_corrida(unquote(self.path.rsplit("/", 1)[1]))
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                return self._json(503, {"detail": f"No se pudo calcular el resumen: {exc}"})
+            return self._json(200, resumen) if resumen else self._json(404, {"detail": "Corrida inexistente"})
+        self._json(404, {"detail": "Not Found"})
 
     def do_POST(self):
+        if self.path == "/control/jmeter/correr":
+            if not self._control_autorizado():
+                return
+            if not lanzar_jmeter():
+                return self._json(409, {"detail": "Ya hay una corrida de JMeter en curso"})
+            return self._json(202, {"detail": "JMeter arrancó (aprox. 2 min)"})
         if self.path == "/control/limpiar":
             if not self._control_autorizado():
                 return

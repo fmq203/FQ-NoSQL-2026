@@ -31,6 +31,7 @@ xdg-open demo/index.html
 2. **Estado en vivo** de los 3 servicios (`/health`, con sus `checks` por dependencia — Mongo/Redis/PostgreSQL/circuit breakers).
 3. **Pipeline visual** de la SAGA (Chain of Responsibility, 6 pasos) que se anima al reservar.
 3b. **Contenedores Docker** → subir/bajar cada contenedor (o todos) con su estado y health; por ejemplo, bajar `mongodb` para la demo de lecturas AP sin ir a la terminal. **🧹 Limpiar datos** vacía usuarios, eventos y reservas de MongoDB, Redis (pagos, inventario y caché) y el `event_log` de PostgreSQL, conservando índices y vistas, para arrancar la demo de cero.
+3c. **Pruebas de carga (JMeter)** (al final de la página) → corre `make jmeter` en segundo plano (~2 min, una corrida a la vez), lista las corridas de `jmeter/results/`, abre el dashboard HTML de cada una (servido en `/jmeter-results/`) y muestra el resumen de `resumen.py` con la verificación de doble venta.
 4. **Crear usuario** → `POST /api/usuarios`. Las tarjetas 1–3 se pueden minimizar (botón en cada una o "Minimizar pasos 1–3"): quedan solo los botones y el ID creado, así los escenarios se ven junto al pipeline. El navegador recuerda cuáles quedaron minimizadas.
 5. **Crear evento** → `POST /api/eventos`.
 6. **Reservar** → `POST /api/reservar` (usuario_id/evento_id se autocompletan de los pasos anteriores).

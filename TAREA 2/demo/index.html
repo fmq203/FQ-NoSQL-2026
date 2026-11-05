@@ -380,8 +380,20 @@
     <div id="audit-timeline" style="margin-top:14px;"></div>
   </section>
 
+  <section class="card" id="jmeter-card">
+    <h2>Pruebas de carga (JMeter)</h2>
+    <p class="hint">Plan <code>jmeter/eventflow.jmx</code>: <b>doble venta</b> (100 compradores × 3 intentos contra un evento con stock 50: tienen que salir exactamente 50 compras), SAGA sostenida y lecturas. Cada corrida deja su reporte HTML. Correrlo tarda ~2 min y carga la máquina: mejor <b>antes</b> de presentar, y después "🧹 Limpiar datos".</p>
+    <div class="actions">
+      <button id="btn-jmeter-correr">▶ Correr JMeter (~2 min)</button>
+      <button class="secondary" id="btn-jmeter-refresh">↻ Actualizar</button>
+      <span id="jmeter-msg" style="font-size:12.5px; color:var(--muted);"></span>
+    </div>
+    <div id="jmeter-corridas" style="margin-top:12px;"></div>
+    <pre class="result" id="res-jmeter" style="display:none"></pre>
+  </section>
+
   <footer>
-    EventFlow — Tarea 2 NoSQL. Este archivo es estático (sin build, sin dependencias externas); abrilo directo o serví <code>demo/</code> con <code>python3 -m http.server</code>.
+    EventFlow — Tarea 2 NoSQL. Este archivo es estático (sin build, sin dependencias externas); abrilo directo, o con <code>python3 demo/servidor.py</code> para los botones de Docker, limpieza y JMeter.
   </footer>
 </div>
 
@@ -1031,6 +1043,77 @@ async function consultarAuditoria() {
 }
 
 $('btn-consultar-audit').addEventListener('click', consultarAuditoria);
+
+// ---- JMeter (vía demo/servidor.py) ----
+
+let jmeterPoll = null;
+let jmeterStock = 50;
+
+function renderCorridas(corridas) {
+  if (!corridas.length) {
+    return '<p style="color:var(--muted); font-size:12.5px;">Todavía no hay corridas: tocá "Correr JMeter".</p>';
+  }
+  return corridas.map(c => `
+    <div class="timeline-event">
+      <div class="ev-type">${c.nombre}</div>
+      <div class="ev-time">${c.fecha.replace('T', ' ')}</div>
+      <div class="ev-payload" style="display:flex; gap:6px; flex-wrap:wrap;">
+        ${c.reporte ? `<a href="${c.reporte}" target="_blank" rel="noopener"><button class="secondary" type="button">📊 Ver reporte</button></a>` : '<span>sin reporte HTML</span>'}
+        <button class="secondary" type="button" data-resumen="${c.nombre}">Ver resumen</button>
+      </div>
+    </div>`).join('');
+}
+
+async function refreshJmeter() {
+  const r = await callApi('/control/jmeter', { headers: CONTROL_HEADERS });
+  if (!r.ok) {
+    $('jmeter-msg').textContent = 'No disponible: abrí la demo con  python3 demo/servidor.py.';
+    $('btn-jmeter-correr').disabled = true;
+    return;
+  }
+  const { corridas, ejecucion } = r.body;
+  jmeterStock = r.body.stock ?? jmeterStock;
+  $('jmeter-corridas').innerHTML = renderCorridas(corridas);
+  $('jmeter-corridas').querySelectorAll('button[data-resumen]').forEach(b =>
+    b.addEventListener('click', () => verResumenJmeter(b.dataset.resumen)));
+  $('btn-jmeter-correr').disabled = ejecucion.corriendo;
+  if (ejecucion.corriendo) {
+    const seg = Math.round((Date.now() - new Date(ejecucion.inicio).getTime()) / 1000);
+    $('jmeter-msg').textContent = `Corriendo JMeter… ${seg} s (tarda ~2 min)`;
+    if (!jmeterPoll) jmeterPoll = setInterval(refreshJmeter, 3000);
+    return;
+  }
+  if (jmeterPoll) {
+    // Recién terminó: mostrar el resultado de esa corrida.
+    clearInterval(jmeterPoll);
+    jmeterPoll = null;
+    $('jmeter-msg').textContent = ejecucion.returncode === 0
+      ? `Terminó OK: ${ejecucion.corrida ?? ''} (sin errores y ventas = stock).`
+      : `Terminó con problemas (código ${ejecucion.returncode}): ver la salida abajo.`;
+    showResult('res-jmeter', { ok: ejecucion.returncode === 0, body: { salida: ejecucion.salida } });
+    $('res-jmeter').textContent = ejecucion.salida;
+  }
+}
+
+async function verResumenJmeter(nombre) {
+  $('jmeter-msg').textContent = `Calculando resumen de ${nombre}…`;
+  const r = await callApi(`/control/jmeter/resumen/${encodeURIComponent(nombre)}`, { headers: CONTROL_HEADERS });
+  if (!r.ok) { showResult('res-jmeter', r); $('jmeter-msg').textContent = ''; return; }
+  showResult('res-jmeter', { ok: r.body.returncode === 0, body: {} });
+  $('res-jmeter').textContent = r.body.salida;
+  $('jmeter-msg').textContent = `Resumen de ${nombre} (doble venta verificada contra stock ${jmeterStock}).`;
+}
+
+$('btn-jmeter-correr').addEventListener('click', async () => {
+  if (!confirm('¿Correr JMeter? Tarda ~2 minutos, carga la máquina y crea usuarios/eventos/reservas de prueba.')) return;
+  const r = await callApi('/control/jmeter/correr', { method: 'POST', headers: CONTROL_HEADERS });
+  if (!r.ok && r.status !== 409) { showResult('res-jmeter', r); return; }
+  $('res-jmeter').style.display = 'none';
+  jmeterPoll = jmeterPoll || setInterval(refreshJmeter, 3000);
+  refreshJmeter();
+});
+$('btn-jmeter-refresh').addEventListener('click', refreshJmeter);
+refreshJmeter();
 
 // ---- Tarjetas 1-3 minimizables (el estado se recuerda en este navegador) ----
 const COLLAPSE_KEY = 'eventflow-demo-colapsadas';

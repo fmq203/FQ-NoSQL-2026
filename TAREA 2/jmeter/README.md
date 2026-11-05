@@ -7,7 +7,9 @@ make up          # el stack tiene que estar arriba
 make jmeter      # ~2 min; escribe en jmeter/results/<fecha>/ (no borra corridas anteriores)
 ```
 
-Cada corrida deja `resultados.jtl` (crudo), `report/index.html` (dashboard de JMeter) y un resumen por consola (`resumen.py`).
+Cada corrida deja `resultados.jtl` (crudo), `report/index.html` (dashboard de JMeter) y un resumen por consola (`resumen.py`). También se puede correr y consultar desde la demo (`python3 demo/servidor.py`, tarjeta "Pruebas de carga (JMeter)"): lista las corridas, abre cada reporte y muestra su resumen.
+
+Hasta el 2026-11-04 el reporte HTML no se generaba: el contenedor corre con el usuario del host (`-u`) y JMeter no podía crear su carpeta temporal dentro de la imagen (`Cannot create temporary directory "/opt/apache-jmeter-5.5/temp"`). Ahora se le pasa `-Jjmeter.reportgenerator.temp_dir` dentro de la carpeta de la corrida. El reporte de una corrida vieja se puede regenerar desde su `.jtl` con `-g resultados.jtl -o report`.
 `make jmeter` termina con error si alguna aserción falla o si se vendió una cantidad distinta del stock.
 
 `--network host` es solo Linux. En Docker Desktop (Mac/Windows) hay que quitarlo y pasar `JMETER_ARGS="-Jhost=host.docker.internal"`.

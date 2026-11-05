@@ -608,3 +608,19 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Verificado:** `make test` → 56 / 93 / 112 (+4 skipped). En Chromium contra el stack: compensación con aforo 5 → 5 y la secuencia nueva en ≈50 ms; el camino feliz conserva sus 8 eventos en orden.
 
 **Tags:** #event-sourcing #auditoria #saga #compensacion #demo #claude-opus-5
+
+---
+
+### 2026-11-04 — JMeter desde la demo, y el reporte HTML que nunca se generaba
+
+**Contexto:** Al pedir un botón para acceder a JMeter apareció que ninguna corrida de `jmeter/results/` tenía `report/index.html`, aunque el README y el guion lo daban por hecho. El `consola.txt` lo decía al final: `Cannot create temporary directory "/opt/apache-jmeter-5.5/temp"`. El contenedor corre con el usuario del host (`-u`, para no dejar archivos de root) y ese usuario no puede escribir dentro de la imagen. La carga y `resumen.py` terminaban bien, así que el fallo pasó inadvertido.
+
+**Cambios:**
+- `Makefile`: `-Jjmeter.reportgenerator.temp_dir` dentro de la carpeta de la corrida, y aviso explícito si el reporte no se generó. El reporte del 15/10 se regeneró desde su `.jtl` (`-g ... -o report`) sin volver a correr la carga.
+- `demo/servidor.py`: lista las corridas, sirve los reportes en `/jmeter-results/` (con `resolve()` + `is_relative_to` para no salir de `jmeter/results/`), calcula el resumen con `resumen.py` y lanza `make jmeter` en un hilo, una corrida a la vez (409 si ya hay una). La página consulta el avance cada 3 s.
+
+**Verificado:** corrida lanzada desde la API: 1:19, doble venta 50/250, 0 errores, y esta vez con dashboard HTML (abierto en Chromium). Traversal con `../` y `%2e%2e` → 404; sin header u otro origen → 403.
+
+**Lección:** un paso que "solo" produce un artefacto secundario necesita su propio chequeo; acá el éxito del paso principal tapó el fallo del secundario durante tres semanas.
+
+**Tags:** #jmeter #docker #demo #bug #reportes #claude-opus-5

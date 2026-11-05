@@ -86,10 +86,12 @@ jmeter: ## Pruebas de carga con JMeter: doble venta, SAGA sostenida, lecturas (r
 	echo "$(GREEN)📈 JMeter -> $$run (aprox. 2 min)$(NC)"; \
 	docker run --rm --network host -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/jmeter:/jmeter" $(JMETER_IMAGE) \
 		-n -t /jmeter/eventflow.jmx -l /$$run/resultados.jtl -j /$$run/jmeter.log \
-		-e -o /$$run/report -Jstock=$(STOCK) $(JMETER_ARGS) > $$run/consola.txt 2>&1 \
+		-e -o /$$run/report -Jjmeter.reportgenerator.temp_dir=/$$run/tmp \
+		-Jstock=$(STOCK) $(JMETER_ARGS) > $$run/consola.txt 2>&1 \
 		|| { echo "$(RED)❌ JMeter fallo, ver $$run/consola.txt$(NC)"; exit 1; }; \
 	python3 jmeter/resumen.py $$run/resultados.jtl $(STOCK); status=$$?; \
-	echo "Reporte HTML: $$run/report/index.html"; exit $$status
+	test -f $$run/report/index.html && echo "Reporte HTML: $$run/report/index.html" \
+		|| echo "$(RED)⚠️  No se generó el reporte HTML, ver $$run/consola.txt$(NC)"; exit $$status
 
 logs: ## Ver logs de todos los servicios
 	docker compose -f $(COMPOSE_FILE) logs -f $(SERVICES) $(DBS)
