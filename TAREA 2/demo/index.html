@@ -202,13 +202,13 @@
 
   <section class="card" id="docker-card">
     <h2>Contenedores Docker</h2>
-    <p class="hint">Subir o bajar cada contenedor desde acá (<code>docker compose up -d</code> / <code>stop</code>; los datos se conservan). Por ejemplo, bajar <b>mongodb</b> para mostrar las lecturas AP. <b>Limpiar datos</b> vacía usuarios, eventos, reservas, Redis y la auditoría para arrancar la demo de cero. Necesita la página servida con <code>python3 demo/servidor.py</code>.</p>
+    <p class="hint">Subir o bajar cada contenedor desde acá (<code>docker compose up -d</code> / <code>stop</code>; los datos se conservan). Los 7 contenedores del stack. Por ejemplo, bajar <b>mongodb</b> para mostrar las lecturas AP, o <b>redis</b> y <b>redis-cache</b> por separado para ver que una caída no arrastra a la otra. <b>Limpiar datos</b> vacía usuarios, eventos, reservas, las dos Redis y la auditoría para arrancar la demo de cero. Necesita la página servida con <code>python3 demo/servidor.py</code>.</p>
     <div class="docker-grid" id="docker-grid"></div>
     <div class="actions">
       <button id="btn-docker-up-all">▲ Subir todo</button>
       <button class="danger" id="btn-docker-down-all">▼ Bajar todo</button>
       <button class="secondary" id="btn-docker-refresh">↻ Estado</button>
-      <button class="danger" id="btn-limpiar-datos" title="Vacía MongoDB, Redis y el event_log de PostgreSQL (conserva índices y vistas)">🧹 Limpiar datos</button>
+      <button class="danger" id="btn-limpiar-datos" title="Vacía MongoDB, las dos Redis y el event_log de PostgreSQL (conserva índices y vistas)">🧹 Limpiar datos</button>
       <span id="docker-msg" style="font-size:12.5px; color:var(--muted);"></span>
     </div>
     <pre class="result" id="res-docker" style="display:none"></pre>
@@ -238,7 +238,7 @@
       <span>Reservas → Usuarios (validar usuario)</span>
       <span>Reservas → Eventos (validar/sincronizar aforo)</span>
     </div>
-    <div class="orchestrator-note">Un único MongoDB con una colección por servicio (cada servicio solo accede a la suya; a los datos de otro se llega por su API). Reservas coordina la SAGA llamando a Usuarios y Eventos por HTTP, con reintentos + circuit breaker.</div>
+    <div class="orchestrator-note">Un único MongoDB con una colección por servicio y dos Redis independientes (pagos en Reservas, caché en Usuarios y Eventos) (cada servicio solo accede a la suya; a los datos de otro se llega por su API). Reservas coordina la SAGA llamando a Usuarios y Eventos por HTTP, con reintentos + circuit breaker.</div>
   </div>
 
   <div class="pipeline" id="pipeline">
@@ -348,8 +348,8 @@
 
   <section class="card">
     <h2>Lecturas AP: disponibilidad con MongoDB caído</h2>
-    <p class="hint"><code>GET /api/eventos/&#123;id&#125;</code> se sirve desde un caché Redis (header <code>X-Cache</code>: <b>HIT</b> / <b>MISS</b> / <b>STALE</b> / <b>BYPASS</b>). Entrada fresca = 30 s; si MongoDB no responde se sirve la entrada vencida (STALE): se prefiere un dato posiblemente desactualizado a no responder. La lectura estricta (<code>Cache-Control: no-cache</code>, la que usa la SAGA) nunca recibe datos vencidos.
-    Para verlo: leé el evento, ejecutá <code>docker stop eventflow_mongodb</code>, esperá 35 s y volvé a leer. Después <code>docker start eventflow_mongodb</code>.</p>
+    <p class="hint"><code>GET /api/eventos/&#123;id&#125;</code> se sirve desde una caché Redis propia, <code>redis-cache</code>, separada de la Redis de pagos (header <code>X-Cache</code>: <b>HIT</b> / <b>MISS</b> / <b>STALE</b> / <b>BYPASS</b>). Entrada fresca = 30 s; si MongoDB no responde se sirve la entrada vencida (STALE): se prefiere un dato posiblemente desactualizado a no responder. La lectura estricta (<code>Cache-Control: no-cache</code>, la que usa la SAGA) nunca recibe datos vencidos.
+    Para verlo: leé el evento, ejecutá <code>docker stop eventflow_mongodb</code>, esperá 35 s y volvé a leer. Después <code>docker start eventflow_mongodb</code>. Contraste: con <code>eventflow_redis_cache</code> caído las lecturas van a MongoDB y las compras siguen; con <code>eventflow_redis</code> (pagos) caído las lecturas siguen y solo falla comprar.</p>
     <div class="grid-form">
       <div class="field" style="flex:1; min-width:280px;"><label>evento_id</label><input id="ap-evento-id" placeholder="Se autocompleta con el último evento creado"></div>
     </div>
@@ -479,7 +479,15 @@ refreshHealth();
 
 // ---- Contenedores Docker (vía demo/servidor.py, mismo origen que la página) ----
 
-const DOCKER_SERVICES = ['mongodb', 'redis', 'redis-cache', 'postgresql', 'usuarios-service', 'eventos-service', 'reservas-service'];
+const DOCKER_SERVICES = {
+  'mongodb': 'usuarios, eventos, reservas',
+  'redis': 'pagos e inventario (Lua)',
+  'redis-cache': 'caché de lecturas AP',
+  'postgresql': 'event_log y vistas CQRS',
+  'usuarios-service': ':8001 · perfiles',
+  'eventos-service': ':8002 · eventos',
+  'reservas-service': ':8003 · SAGA',
+};
 const CONTROL_HEADERS = { 'X-Demo-Control': '1' };
 let dockerOcupado = false;
 
@@ -491,7 +499,7 @@ function dockerDot({ state, health }) {
 }
 
 function renderDocker(servicios) {
-  $('docker-grid').innerHTML = DOCKER_SERVICES.map(s => {
+  $('docker-grid').innerHTML = Object.keys(DOCKER_SERVICES).map(s => {
     const e = servicios?.[s];
     const texto = e ? [e.state, e.health].filter(Boolean).join(' · ') : 'desconocido';
     const corriendo = e?.state === 'running';
@@ -501,6 +509,7 @@ function renderDocker(servicios) {
           <span class="dot ${e ? dockerDot(e) : 'unknown'}"></span>
           <span class="svc-name" title="${s}">${s}</span>
         </div>
+        <span class="svc-state">${DOCKER_SERVICES[s]}</span>
         <span class="svc-state">${texto}</span>
         <div class="svc-btns">
           <button data-docker="start" data-svc="${s}" ${corriendo || dockerOcupado ? 'disabled' : ''}>▲ Subir</button>
@@ -561,7 +570,7 @@ function olvidarIdsDeLaPagina() {
 
 $('btn-limpiar-datos').addEventListener('click', async () => {
   if (dockerOcupado) return;
-  if (!confirm('¿Borrar todos los usuarios, eventos, reservas, claves de Redis y la auditoría? No se puede deshacer.')) return;
+  if (!confirm('¿Borrar todos los usuarios, eventos, reservas, claves de las dos Redis y la auditoría? No se puede deshacer.')) return;
   dockerOcupado = true;
   $('btn-limpiar-datos').disabled = true;
   $('docker-msg').textContent = 'Limpiando datos…';

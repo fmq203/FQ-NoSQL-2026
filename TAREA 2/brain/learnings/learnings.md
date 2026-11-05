@@ -708,3 +708,5 @@ Todo lo borrado se puede recuperar del historial de git.
 **Lo que sigue sin resolver:** cada Redis es un solo nodo sin réplica; la independencia evita que una caída arrastre a la otra, no que cada una deje de ser un punto único de falla para lo suyo.
 
 **Tags:** #redis #disponibilidad #cache #docker #claude-sonnet-5
+
+**Seguimiento (misma fecha):** la página del demo muestra los 7 contenedores con su rol (`redis`: pagos e inventario; `redis-cache`: caché de lecturas; etc.), el diagrama de infraestructura incluye las dos Redis, y los textos de la tarjeta Docker y de "Lecturas AP" explican la caída independiente de cada una. Verificado en el navegador: 7 filas, sin errores de consola.
