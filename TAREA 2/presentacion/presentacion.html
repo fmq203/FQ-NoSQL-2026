@@ -88,132 +88,107 @@
   .agenda { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 60px; }
   .agenda div { font-size: 34px; display: flex; gap: 22px; align-items: baseline; border-bottom: 2px solid var(--line); padding-bottom: 14px; }
   .agenda span { color: var(--blue); font-weight: 800; min-width: 52px; }
+  .chain { display: grid; grid-template-columns: 720px 140px 1fr; row-gap: 12px; align-items: center; }
+  .c-h { position: relative; display: flex; align-items: center; gap: 18px; background: var(--blue-soft); border: 3px solid var(--blue); border-radius: 14px; padding: 10px 20px; font-size: 26px; }
+  .c-h .n { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 800; font-size: 22px; display: flex; align-items: center; justify-content: center; }
+  .c-h .d { color: var(--muted); font-size: 21px; margin-left: auto; }
+  .c-start, .c-end { justify-self: start; margin-left: 300px; font-size: 24px; font-weight: 700; padding: 8px 22px; border-radius: 12px; border: 3px solid var(--line); background: var(--bg2); }
+  .c-end { border-color: var(--green); background: var(--green-soft); }
+  .c-arrow { text-align: center; color: var(--muted); font-size: 24px; letter-spacing: 1px; }
+  .c-outs { display: flex; gap: 12px; }
+  .out { font-size: 23px; padding: 8px 16px; border-radius: 10px; border: 2px solid var(--red); background: #fbeaea; }
+  .out.comp { border: 3px solid var(--orange); background: var(--orange-soft); font-weight: 600; }
+  .out.none { border: 2px dashed var(--line); background: transparent; color: var(--muted); }
 </style>
 </head>
 <body>
+
 
 <!-- 1. Portada -->
 <section class="slide dark" style="justify-content:center; gap:40px">
   <div class="kicker">Tarea 2 · Bases de Datos NoSQL</div>
   <h1>EventFlow</h1>
-  <p class="lead" style="font-size:42px">Venta de entradas con microservicios, bases políglotas, SAGA orquestada y Chain of Responsibility</p>
+  <p class="lead" style="font-size:42px">Venta de entradas con microservicios, tres bases de datos, SAGA y Chain of Responsibility</p>
   <div style="display:flex; gap:16px; margin-top:24px">
     <span class="tag">FastAPI</span><span class="tag">MongoDB</span><span class="tag orange">Redis</span><span class="tag gray">PostgreSQL</span><span class="tag green">Docker Compose</span>
   </div>
-  <div class="footer"><span>Pre-defensa · 5 de noviembre de 2026</span><span>Repositorio: TAREA 2/</span></div>
+  <div class="footer"><span>Pre-defensa · 5 de noviembre de 2026</span><span></span></div>
 </section>
 
-<!-- 2. Agenda -->
+<!-- 2. Problema -->
 <section class="slide">
-  <div class="kicker">Agenda</div>
-  <h2>Qué vamos a ver</h2>
-  <div class="agenda" style="margin-top:24px">
-    <div><span>01</span>El problema y los requisitos</div>
-    <div><span>08</span>Chain of Responsibility</div>
-    <div><span>02</span>Arquitectura</div>
-    <div><span>09</span>SAGA orquestada y compensaciones</div>
-    <div><span>03</span>Selección de bases de datos</div>
-    <div><span>10</span>Atomicidad: no hay doble venta</div>
-    <div><span>04</span>Estrategia de tres bases</div>
-    <div><span>11</span>Idempotencia y resiliencia</div>
-    <div><span>05</span>Modelado: embebido vs referencia</div>
-    <div><span>12</span>Auditoría: event log + CQRS</div>
-    <div><span>06</span>Consistencia por operación</div>
-    <div><span>13</span>Privacidad: export anonimizado</div>
-    <div><span>07</span>Lecturas AP con caché</div>
-    <div><span>14</span>Resultados, límites y demo</div>
-  </div>
-  <div class="footer"><span>EventFlow</span><span>2</span></div>
-</section>
-
-<!-- 3. Problema -->
-<section class="slide">
-  <div class="kicker">01 · El problema</div>
+  <div class="kicker">El problema</div>
   <h2>Dos exigencias opuestas en el mismo sistema</h2>
-  <div class="row" style="flex:1">
+  <div class="row" style="flex:1; align-items:flex-start">
     <div class="card blue" style="flex:1">
       <span class="tag">Lecturas</span>
       <h3>Catálogo y perfiles</h3>
       <ul>
-        <li>Muchas consultas de usuarios y eventos</li>
-        <li>Rápidas y escalables</li>
-        <li>Prioridad: <b>disponibilidad</b> y tolerancia a particiones</li>
-        <li>Se acepta consistencia eventual</li>
+        <li>Muchas consultas</li>
+        <li>Prioridad: <b>disponibilidad</b></li>
+        <li>Se acepta un dato algo viejo</li>
       </ul>
     </div>
     <div class="card orange" style="flex:1">
-      <span class="tag orange">Escrituras</span>
+      <span class="tag orange">Compras</span>
       <h3>Reservas y pagos</h3>
       <ul>
-        <li>Muchos compradores a la vez sobre el mismo stock</li>
+        <li>Muchos compradores, mismo stock</li>
         <li>Prioridad: <b>consistencia fuerte</b></li>
         <li>Nunca vender de más ni cobrar dos veces</li>
-        <li>Transacción que cruza servicios y bases</li>
-      </ul>
-    </div>
-    <div class="card" style="flex:1">
-      <span class="tag gray">Requisitos</span>
-      <h3>Del enunciado</h3>
-      <ul>
-        <li>Al menos 2 bases NoSQL</li>
-        <li>SAGA con orquestación</li>
-        <li>Chain of Responsibility</li>
-        <li>Docker Compose</li>
-        <li>Opcionales: JMeter, Event Sourcing, CQRS, anonimización</li>
       </ul>
     </div>
   </div>
-  <div class="footer"><span>EventFlow</span><span>3</span></div>
+  <div class="footer"><span>Enunciado: 2 bases NoSQL o más · SAGA orquestada · Chain of Responsibility · Docker Compose</span><span>2</span></div>
 </section>
 
-<!-- 4. Arquitectura -->
+<!-- 3. Arquitectura -->
 <section class="slide">
-  <div class="kicker">02 · Arquitectura</div>
+  <div class="kicker">Arquitectura</div>
   <h2>Tres microservicios, tres bases</h2>
   <div class="col" style="flex:1; gap:16px">
     <div style="display:flex; justify-content:center"><div class="chip" style="border-color:var(--blue); background:var(--blue-soft); text-align:center; padding:14px 40px"><b>Cliente · Demo web · JMeter</b></div></div>
     <div class="down">↓ &nbsp; HTTP / JSON &nbsp; ↓</div>
     <div style="display:grid; grid-template-columns: 1fr 190px 1fr 190px 1fr; gap:0 18px; flex:1">
       <div class="col" style="gap:16px">
-        <div class="svc"><h3>Usuarios :8001</h3><p>perfil · historial · export</p></div>
-        <div class="chip mongo"><b>MongoDB · usuarios</b>perfil con historial embebido</div>
-        <div class="chip redis dashed"><b>Redis DB 1 · caché AP</b>GET /usuarios/{id}</div>
+        <div class="svc"><h3>Usuarios :8001</h3><p>perfil · historial</p></div>
+        <div class="chip mongo"><b>MongoDB</b>usuarios</div>
+        <div class="chip redis dashed"><b>Redis</b>caché de lecturas</div>
       </div>
-      <div class="link"><span class="arrow">◀────</span>valida usuario<br>registra historial</div>
+      <div class="link"><span class="arrow">◀────</span>valida usuario</div>
       <div class="col" style="gap:16px">
-        <div class="svc" style="background:var(--blue)"><h3>Reservas :8003</h3><p style="color:#e7eefc">orquestador SAGA · 6 handlers</p></div>
-        <div class="chip redis"><b>Redis DB 0 · Lua</b>pago + stock atómicos</div>
-        <div class="chip mongo"><b>MongoDB · reservas</b>confirmadas, con saga_log</div>
-        <div class="chip pg"><b>PostgreSQL · event_log</b>un evento por paso + vistas</div>
+        <div class="svc" style="background:var(--blue)"><h3>Reservas :8003</h3><p style="color:#e7eefc">orquesta la compra</p></div>
+        <div class="chip redis"><b>Redis</b>stock y pagos</div>
+        <div class="chip mongo"><b>MongoDB</b>reservas</div>
+        <div class="chip pg"><b>PostgreSQL</b>event log</div>
       </div>
-      <div class="link"><span class="arrow">────▶</span>valida evento<br>decrementa stock</div>
+      <div class="link"><span class="arrow">────▶</span>valida evento<br>descuenta stock</div>
       <div class="col" style="gap:16px">
         <div class="svc"><h3>Eventos :8002</h3><p>precios · inventario</p></div>
-        <div class="chip mongo"><b>MongoDB · eventos</b>precios por categoría embebidos</div>
-        <div class="chip redis dashed"><b>Redis DB 1 · caché AP</b>GET /eventos/{id}</div>
+        <div class="chip mongo"><b>MongoDB</b>eventos</div>
+        <div class="chip redis dashed"><b>Redis</b>caché de lecturas</div>
       </div>
     </div>
   </div>
-  <div class="footer"><span>Un contenedor por base: MongoDB con una colección por servicio (cada uno toca solo la suya) · llamadas con reintentos y circuit breaker</span><span>4</span></div>
+  <div class="footer"><span>Cada servicio toca solo sus datos · entre servicios: HTTP con reintentos y circuit breaker</span><span>3</span></div>
 </section>
 
-<!-- 5. Selección de bases -->
+<!-- 4. Selección de bases -->
 <section class="slide">
-  <div class="kicker">03 · Selección de bases</div>
+  <div class="kicker">Selección de bases</div>
   <h2>Cada base, por lo que necesita su dato</h2>
   <table>
-    <tr><th style="width:18%">Base</th><th style="width:27%">Qué guarda</th><th style="width:33%">Por qué</th><th>Alternativa descartada</th></tr>
-    <tr><td><b>MongoDB</b><br><span class="muted">documental · NoSQL</span></td><td>Usuarios con historial, eventos con precios, reservas confirmadas</td><td>Modelo embebido: un documento trae todo sin joins; actualización atómica por documento; índices únicos</td><td>Relacional: joins para el historial y migraciones por cada campo nuevo</td></tr>
-    <tr><td><b>Redis</b><br><span class="muted">clave-valor · NoSQL</span></td><td>Pago + stock por categoría (DB 0); caché de lecturas (DB 1)</td><td>Script Lua atómico: chequea, descuenta y cobra en una operación, &lt; 1 ms, sin locks</td><td>Transacciones multi-documento de MongoDB: más lentas y complejas para un contador</td></tr>
-    <tr><td><b>PostgreSQL</b><br><span class="muted">relacional</span></td><td>Event log append-only de cada SAGA y vistas de análisis</td><td>ACID + SQL + JSONB con índice GIN: auditoría consultable</td><td>Guardar la auditoría en MongoDB: sin SQL ni vistas para el análisis</td></tr>
+    <tr><th style="width:24%">Base</th><th style="width:34%">Qué guarda</th><th>Por qué</th></tr>
+    <tr><td><b>MongoDB</b><br><span class="muted">documental · NoSQL</span></td><td>Usuarios, eventos y reservas</td><td>Un documento trae todo junto, sin joins</td></tr>
+    <tr><td><b>Redis</b><br><span class="muted">clave-valor · NoSQL</span></td><td>Stock, pagos y caché</td><td>Un script Lua atómico decide la venta en &lt; 1 ms</td></tr>
+    <tr><td><b>PostgreSQL</b><br><span class="muted">relacional</span></td><td>Event log de cada compra</td><td>SQL y vistas para auditar y analizar</td></tr>
   </table>
-  <p class="muted">Cassandra y DynamoDB se descartaron: más restrictivos o atados a un proveedor, sin ganancia a esta escala.</p>
-  <div class="footer"><span>Las dos NoSQL exigidas: MongoDB y Redis</span><span>5</span></div>
+  <div class="footer"><span>Las dos NoSQL exigidas: MongoDB y Redis</span><span>4</span></div>
 </section>
 
-<!-- 6. Estrategia de tres bases -->
+<!-- 5. Estrategia de tres bases -->
 <section class="slide">
-  <div class="kicker">04 · Estrategia de tres bases</div>
+  <div class="kicker">Estrategia de tres bases</div>
   <h2>Una compra pasa por las tres</h2>
   <div class="diagram" style="flex:0 0 330px"><pre class="mermaid">
 flowchart LR
@@ -230,39 +205,33 @@ flowchart LR
   classDef mongo fill:#e6f4ec,stroke:#2e8b57,stroke-width:3px
   </pre></div>
   <div class="row">
-    <div class="card green" style="flex:1"><span class="tag green">MongoDB</span><h3>Datos del negocio</h3><p>Fuente de verdad de usuarios, eventos y reservas. Lecturas disponibles vía caché.</p></div>
-    <div class="card orange" style="flex:1"><span class="tag orange">Redis</span><h3>Decide la venta</h3><p>El Lua es el árbitro del stock: atómico. Además, caché de lecturas.</p></div>
-    <div class="card" style="flex:1"><span class="tag gray">PostgreSQL</span><h3>Registra todo</h3><p>Cada paso, éxito o fallo, queda como evento. No bloquea la compra.</p></div>
+    <div class="card green" style="flex:1"><span class="tag green">MongoDB</span><h3>Guarda el negocio</h3></div>
+    <div class="card orange" style="flex:1"><span class="tag orange">Redis</span><h3>Decide la venta</h3></div>
+    <div class="card" style="flex:1"><span class="tag gray">PostgreSQL</span><h3>Registra cada paso</h3></div>
   </div>
-  <div class="footer"><span>Cada paso de la compra también escribe su evento en PostgreSQL</span><span>6</span></div>
+  <div class="footer"><span>Cada paso también escribe su evento en PostgreSQL, sin bloquear la compra</span><span>5</span></div>
 </section>
 
-<!-- 7. Modelado -->
+<!-- 6. Modelado -->
 <section class="slide">
-  <div class="kicker">05 · Modelado</div>
+  <div class="kicker">Modelado</div>
   <h2>Embebido dentro de un servicio, referencia entre servicios</h2>
   <div class="diagram"><pre class="mermaid">
 classDiagram
   direction LR
   class Usuario {
-    _id : UUID
     email : único
-    nro_documento : único
-    historial_compras : lista
+    historial_compras
   }
   class Compra {
     reserva_id
-    evento_id
     evento_nombre
-    entradas
     total_pagado
   }
   class Evento {
-    _id : UUID
-    nombre : único
+    nombre
     fecha
-    precios : lista
-    entradas_disponibles
+    precios
   }
   class Precio {
     categoria
@@ -273,113 +242,60 @@ classDiagram
     _id = reserva_id
     usuario_id
     evento_id
-    numero_confirmacion : único
-    saga_log : lista
   }
   Usuario *-- Compra : embebido
   Evento *-- Precio : embebido
   Reserva --> Usuario : referencia
   Reserva --> Evento : referencia
   </pre></div>
-  <div class="footer"><span>Embebido: se lee siempre junto y se actualiza atómicamente · Referencia: viven en servicios distintos</span><span>7</span></div>
+  <div class="footer"><span>Embebido: se lee siempre junto · Referencia: vive en otro servicio</span><span>6</span></div>
 </section>
 
-<!-- 8. Consistencia -->
+<!-- 7. Consistencia + caché -->
 <section class="slide">
-  <div class="kicker">06 · Consistencia por operación</div>
-  <h2>Cada operación elige su lado del teorema CAP</h2>
-  <table>
-    <tr><th style="width:26%">Operación</th><th style="width:14%">Prioriza</th><th style="width:34%">Cómo</th><th>Garantía</th></tr>
-    <tr><td><code>GET /api/usuarios/{id}</code><br><code>GET /api/eventos/{id}</code></td><td><span class="tag">AP</span></td><td>Caché Redis <i>stale-if-error</i> delante de MongoDB</td><td>Responde aunque MongoDB caiga; el dato puede estar hasta 30 s viejo (más si MongoDB está caído)</td></tr>
-    <tr><td><code>POST /api/reservar</code></td><td><span class="tag orange">CP</span></td><td>Lua atómico + idempotencia + SAGA con compensación + <code>w=majority</code></td><td>Nunca vende de más ni cobra dos veces; si no puede garantizarlo, responde error</td></tr>
-    <tr><td>Lectura dentro de la SAGA</td><td><span class="tag orange">CP</span></td><td><code>Cache-Control: no-cache</code></td><td>Nunca usa un dato vencido para decidir una compra</td></tr>
-  </table>
-  <div class="card" style="margin-top:8px"><p><b>Honesto:</b> cada base corre en un solo nodo. La read preference y <code>w=majority</code> están configurados, pero sin replica set no se ejercitan; la disponibilidad de lecturas se demuestra con la caché.</p></div>
-  <div class="footer"><span>EventFlow</span><span>8</span></div>
-</section>
-
-<!-- 9. Cache AP -->
-<section class="slide">
-  <div class="kicker">07 · Lecturas AP</div>
-  <h2>Caché stale-if-error: mejor un dato viejo que no responder</h2>
-  <div class="diagram"><pre class="mermaid">
-flowchart LR
-  G["GET /api/eventos/{id}"] --> Q{"¿no-cache?"}
-  Q -- "sí (SAGA)" --> M1["MongoDB"] --> BY["200 · BYPASS"]
-  Q -- "no" --> F{"¿copia fresca<br/>&lt; 30 s?"}
-  F -- "sí" --> HIT["200 · HIT"]
+  <div class="kicker">Consistencia por operación</div>
+  <h2>Lecturas disponibles, compras consistentes</h2>
+  <div class="row" style="flex:1">
+    <div class="col" style="flex:0 0 520px">
+      <div class="card blue"><span class="tag">AP</span><h3>Leer usuario o evento</h3><p>Caché Redis: si MongoDB cae, responde con la última copia.</p></div>
+      <div class="card orange"><span class="tag orange">CP</span><h3>Comprar</h3><p>Lua atómico + idempotencia + SAGA. Si no puede garantizarlo, responde error.</p></div>
+    </div>
+    <div class="diagram" style="flex:1"><pre class="mermaid">
+flowchart TD
+  G["GET /eventos/{id}"] --> F{"¿copia fresca?"}
+  F -- "sí" --> HIT["HIT"]
   F -- "no" --> M{"¿MongoDB<br/>responde?"}
-  M -- "sí" --> MISS["200 · MISS<br/>y refresca la copia"]
-  M -- "no" --> V{"¿hay copia<br/>vencida?"}
-  V -- "sí" --> STALE["200 · STALE"]
-  V -- "no" --> E503["503 · Retry-After: 5"]
+  M -- "sí" --> MISS["MISS"]
+  M -- "no" --> STALE["STALE<br/>copia vieja"]
   classDef ok fill:#e6f4ec,stroke:#2e8b57,stroke-width:3px
   classDef warn fill:#fcefe4,stroke:#d9702a,stroke-width:3px
-  classDef bad fill:#fbeaea,stroke:#c0392b,stroke-width:3px
-  class HIT,MISS,BY ok
+  class HIT,MISS ok
   class STALE warn
-  class E503 bad
   </pre></div>
-  <div class="footer"><span>Header X-Cache · las escrituras de inventario e historial invalidan la copia · los 404 no se cachean</span><span>9</span></div>
+  </div>
+  <div class="footer"><span>Cada base corre en un solo nodo: la disponibilidad se demuestra con la caché</span><span>7</span></div>
 </section>
 
-<!-- 10. Chain of Responsibility -->
+<!-- 8. Diagrama de la cadena -->
 <section class="slide">
-  <div class="kicker">08 · Chain of Responsibility</div>
-  <h2>Seis handlers en serie: un paso o corta la cadena</h2>
-  <div class="col" style="gap:14px">
-  <div style="display:grid; grid-template-columns:1fr 50px 1fr 50px 1fr; gap:0 10px">
-    <div class="hstep"><div class="box"><div class="n">1</div><h3>ValidadorDeDatos</h3><p>cantidad, método de pago, UUIDs</p></div><div class="err">422 VALIDATION_ERROR</div></div>
-    <div class="harrow">→</div>
-    <div class="hstep"><div class="box"><div class="n">2</div><h3>ValidadorInventario</h3><p>GET usuario (no-cache)</p></div><div class="err">404 USER_NOT_FOUND<br>503 Usuarios caído</div></div>
-    <div class="harrow">→</div>
-    <div class="hstep"><div class="box"><div class="n">3</div><h3>ValidadorEvento</h3><p>publicado · categoría · stock</p></div><div class="err">404 · 409 · 422<br>503 Eventos caído</div></div>
+  <div class="kicker">Chain of Responsibility</div>
+  <h2>Seis handlers en serie: cada uno pasa o corta</h2>
+  <div class="chain">
+    <div class="c-start">POST /api/reservar</div><div></div><div></div>
+    <div class="c-h"><span class="n">1</span><b>ValidadorDeDatos</b><span class="d">cantidad, pago, ids</span></div><div class="c-arrow">- - -▶</div><div class="c-outs"><span class="out err">400 / 422 · datos inválidos</span></div>
+    <div class="c-h"><span class="n">2</span><b>ValidadorInventario</b><span class="d">¿existe el usuario?</span></div><div class="c-arrow">- - -▶</div><div class="c-outs"><span class="out err">404 no existe · 503 Usuarios caído</span></div>
+    <div class="c-h"><span class="n">3</span><b>ValidadorEvento</b><span class="d">¿publicado, categoría, stock?</span></div><div class="c-arrow">- - -▶</div><div class="c-outs"><span class="out err">404 · 409 sin stock · 422 categoría</span></div>
+    <div class="c-h"><span class="n">4</span><b>ProcesadorPago</b><span class="d">Lua en Redis + sync con Eventos</span></div><div class="c-arrow">- - -▶</div><div class="c-outs"><span class="out err">409 sin stock</span><span class="out comp">falla sync → compensa Redis · 503</span></div>
+    <div class="c-h"><span class="n">5</span><b>ConfirmadorReserva</b><span class="d">insert en MongoDB + historial</span></div><div class="c-arrow">- - -▶</div><div class="c-outs"><span class="out comp">falla insert → compensa Redis y Eventos · 500</span></div>
+    <div class="c-h"><span class="n">6</span><b>Auditor</b><span class="d">SAGA_COMPLETED</span></div><div class="c-arrow">- - -▶</div><div class="c-outs"><span class="out none">no bloquea</span></div>
+    <div class="c-end">201 confirmada</div><div></div><div></div>
   </div>
-  <div style="text-align:right; padding-right:250px; font-size:30px; color:var(--muted); line-height:1">↓ continúa</div>
-  <div style="display:grid; grid-template-columns:1fr 50px 1fr 50px 1fr; gap:0 10px">
-    <div class="hstep"><div class="box"><div class="n">4</div><h3>ProcesadorPago</h3><p>Lua en Redis + decrementar en Eventos</p></div><div class="err comp">409 sin stock<br><b>503 → compensa Redis</b></div></div>
-    <div class="harrow">→</div>
-    <div class="hstep"><div class="box"><div class="n">5</div><h3>ConfirmadorReserva</h3><p>insert MongoDB + historial</p></div><div class="err comp"><b>500 → compensa Redis y Eventos</b></div></div>
-    <div class="harrow">→</div>
-    <div class="hstep"><div class="box"><div class="n">6</div><h3>Auditor</h3><p>SAGA_COMPLETED</p></div><div class="err none">no bloquea</div></div>
-  </div>
-  </div>
-  <div class="footer"><span>Rojo: error sin nada que deshacer · Naranja: ya se modificó estado y el handler lo revierte · 201 si nadie corta</span><span>10</span></div>
+  <div class="footer"><span>Rojo: corta sin nada que deshacer · Naranja: ya cambió estado y lo revierte</span><span>8</span></div>
 </section>
 
-<!-- 11. CoR código -->
+<!-- 9. SAGA secuencia -->
 <section class="slide">
-  <div class="kicker">08 · Chain of Responsibility</div>
-  <h2>El patrón en el código</h2>
-  <div class="row" style="align-items:flex-start">
-    <pre style="flex:1.15"><span class="c"># chain/handler.py</span>
-<span class="k">class</span> BaseHandler(Handler):
-    <span class="k">async def</span> handle(self, ctx):
-        <span class="k">if</span> ctx.error:          <span class="c"># la cadena ya se cortó</span>
-            <span class="k">return</span> ctx
-        <span class="k">await</span> self._process(ctx) <span class="c"># el paso propio</span>
-        <span class="k">if</span> ctx.error:
-            <span class="k">return</span> ctx
-        <span class="k">return await</span> self._execute_next(ctx)
-
-<span class="c"># chain/validators.py · ChainBuilder.build()</span>
-datos.set_next(usuario)
-usuario.set_next(evento)
-evento.set_next(pago)
-pago.set_next(confirmacion)
-confirmacion.set_next(auditor)</pre>
-    <div class="col" style="flex:1">
-      <div class="card"><h3>Una responsabilidad por handler</h3><p>Validar, cobrar, confirmar y auditar están separados y se testean por separado.</p></div>
-      <div class="card"><h3>Corte temprano</h3><p>Un error en los pasos 1-3 evita tocar Redis o MongoDB: no hay nada que compensar.</p></div>
-      <div class="card"><h3>Compensación localizada</h3><p>Solo los handlers 4 y 5 modifican estado, y solo ellos saben deshacerlo.</p></div>
-    </div>
-  </div>
-  <div class="footer"><span>EventFlow</span><span>11</span></div>
-</section>
-
-<!-- 12. SAGA secuencia -->
-<section class="slide">
-  <div class="kicker">09 · SAGA orquestada</div>
+  <div class="kicker">SAGA orquestada</div>
   <h2>Reservas coordina la compra de punta a punta</h2>
   <div class="diagram"><pre class="mermaid">
 sequenceDiagram
@@ -392,209 +308,147 @@ sequenceDiagram
   participant M as MongoDB
   participant P as PostgreSQL
   C->>R: POST /api/reservar
-  R->>U: GET usuario (no-cache)
-  R->>E: GET evento (no-cache)
-  R->>X: Lua pagar_y_decrementar
-  R->>E: POST decrementar-inventario
-  R->>M: insert reserva (_id = reserva_id)
-  R->>U: POST historial (best-effort)
+  R->>U: validar usuario
+  R->>E: validar evento
+  R->>X: cobrar y descontar (Lua)
+  R->>E: descontar inventario
+  R->>M: guardar reserva
+  R->>U: registrar historial
   R-->>P: un evento por paso
   R-->>C: 201 confirmada
   </pre></div>
-  <div class="footer"><span>Orquestación y no coreografía: un solo lugar conoce el orden y el estado, así que compensar y auditar es directo</span><span>12</span></div>
+  <div class="footer"><span>Orquestación: un solo lugar conoce el orden, así que compensar y auditar es directo</span><span>9</span></div>
 </section>
 
-<!-- 13. Compensaciones -->
+<!-- 10. Compensaciones -->
 <section class="slide">
-  <div class="kicker">09 · SAGA · compensaciones</div>
+  <div class="kicker">SAGA · compensaciones</div>
   <h2>Si algo falla después de cobrar, se deshace</h2>
   <div class="row" style="flex:1">
     <div class="diagram" style="flex:1.1"><pre class="mermaid">
 flowchart TD
   F{"¿Dónde falló?"}
-  F -- "pasos 1-3" --> N["Nada que deshacer<br/>404 · 409 · 422 · 503"]
-  F -- "paso 4: no sincroniza<br/>con Eventos" --> P4["Lua compensar_pago<br/>devuelve stock y borra el pago<br/>503"]
-  F -- "paso 5: falla<br/>el insert" --> P5["Lua compensar_pago<br/>+ incrementar-inventario<br/>500"]
+  F -- "pasos 1-3" --> N["Nada que deshacer"]
+  F -- "paso 4" --> P4["Devuelve stock<br/>y anula el pago"]
+  F -- "paso 5" --> P5["Devuelve stock, anula el pago<br/>y repone inventario en Eventos"]
   classDef comp fill:#fcefe4,stroke:#d9702a,stroke-width:3px
   classDef ok fill:#e6f4ec,stroke:#2e8b57,stroke-width:3px
   class P4,P5 comp
   class N ok
   </pre></div>
-    <div class="col" style="flex:1">
-      <h3>Auditoría real de una compensación</h3>
+    <div class="col" style="flex:1; justify-content:center">
+      <h3>Auditoría real</h3>
       <div class="timeline">
         <div class="ev"><span class="t">inicio</span><b>SAGA_STARTED</b></div>
-        <div class="ev"><span class="t">+18 ms</span><b>USUARIO_VALIDADO</b></div>
-        <div class="ev"><span class="t">+36 ms</span><b>EVENTO_VALIDADO</b></div>
-        <div class="ev warn"><span class="t">+42 ms</span><b>PAGO_PROCESADO</b> <span class="muted">cobro real</span></div>
+        <div class="ev warn"><span class="t">+42 ms</span><b>PAGO_PROCESADO</b></div>
         <div class="ev warn"><span class="t">+47 ms</span><b>COMPENSACION_EJECUTADA</b></div>
         <div class="ev bad"><span class="t">+51 ms</span><b>SAGA_FAILED</b></div>
       </div>
-      <p class="muted">Aforo antes y después: 5 → 5. Sin <code>INVENTARIO_DECREMENTADO</code>: Eventos nunca se enteró.</p>
+      <p class="muted">Stock antes y después: 5 → 5.</p>
     </div>
   </div>
-  <div class="footer"><span>Compensaciones inline y sincrónicas dentro del handler que modificó el estado</span><span>13</span></div>
+  <div class="footer"><span>Cada handler que cambia estado sabe deshacerlo</span><span>10</span></div>
 </section>
 
-<!-- 14. Atomicidad -->
+<!-- 11. Atomicidad -->
 <section class="slide">
-  <div class="kicker">10 · Atomicidad</div>
+  <div class="kicker">Atomicidad</div>
   <h2>No hay doble venta: el stock lo decide un script Lua</h2>
   <div class="row" style="align-items:flex-start">
-    <pre style="flex:1.2"><span class="c">-- pagar_y_decrementar (Redis ejecuta un script por vez)</span>
-<span class="k">if</span> redis.call(<span class="s">'EXISTS'</span>, pago_key) == 1 <span class="k">then</span>
-  <span class="k">return</span> {1, ya_pagado}        <span class="c">-- idempotente</span>
+    <pre style="flex:1.1"><span class="c">-- Redis ejecuta un script por vez</span>
+<span class="k">if</span> ya_pagado <span class="k">then</span>
+  <span class="k">return</span> OK             <span class="c">-- idempotente</span>
 <span class="k">end</span>
-redis.call(<span class="s">'SETNX'</span>, inventario_key, seed)
-<span class="k">local</span> disponible = tonumber(redis.call(<span class="s">'GET'</span>, inventario_key))
 <span class="k">if</span> disponible &lt; cantidad <span class="k">then</span>
-  <span class="k">return</span> {-2, disponible}      <span class="c">-- sin stock, nada cambia</span>
+  <span class="k">return</span> SIN_STOCK      <span class="c">-- nada cambia</span>
 <span class="k">end</span>
-redis.call(<span class="s">'DECRBY'</span>, inventario_key, cantidad)
-redis.call(<span class="s">'HSET'</span>, pago_key, ...)  <span class="c">-- registra el pago</span>
-redis.call(<span class="s">'EXPIRE'</span>, pago_key, ttl)
-<span class="k">return</span> {1, disponible - cantidad}</pre>
+DECRBY stock cantidad
+HSET   pago ...
+<span class="k">return</span> OK</pre>
     <div class="col" style="flex:1">
       <h3>Prueba con JMeter</h3>
-      <p class="muted">100 compradores × 3 intentos contra un evento con 50 entradas</p>
+      <p class="muted">300 intentos contra 50 entradas</p>
       <div class="num-row">
-        <div class="num green"><span class="big">50</span><p>compras · 201</p></div>
-        <div class="num orange"><span class="big">250</span><p>rechazos · 409</p></div>
+        <div class="num green"><span class="big">50</span><p>compras</p></div>
+        <div class="num orange"><span class="big">250</span><p>rechazos</p></div>
+        <div class="num"><span class="big">0</span><p>stock final</p></div>
       </div>
-      <div class="num"><span class="big" style="font-size:72px">0</span><p>entradas al final · inventario exacto</p></div>
     </div>
   </div>
-  <div class="footer"><span>Chequear y descontar no pueden intercalarse entre dos compradores</span><span>14</span></div>
+  <div class="footer"><span>Chequear y descontar no pueden intercalarse entre dos compradores</span><span>11</span></div>
 </section>
 
-<!-- 15. Idempotencia y resiliencia -->
+<!-- 12. Idempotencia y resiliencia -->
 <section class="slide">
-  <div class="kicker">11 · Idempotencia y resiliencia</div>
+  <div class="kicker">Idempotencia y resiliencia</div>
   <h2>Reintentar siempre es seguro</h2>
   <div class="row" style="flex:1">
-    <div class="diagram" style="flex:1.2"><pre class="mermaid">
+    <div class="diagram" style="flex:1.3"><pre class="mermaid">
 sequenceDiagram
   participant C as Cliente
   participant R as Reservas
   participant E as Eventos
   Note over E: caído
   C->>R: POST reserva_id = A
-  R-xE: 3 reintentos · 0,5 / 1 / 2 s
+  R-xE: 3 reintentos
   R-->>C: 503 (nada cobrado)
   Note over E: vuelve
   C->>R: POST reserva_id = A
-  R->>E: OK
   R-->>C: 201 confirmada
   C->>R: POST reserva_id = A
   R-->>C: 200 ya existía
   </pre></div>
-    <div class="col" style="flex:1">
-      <div class="card blue"><h3>Idempotencia por <code>reserva_id</code></h3><p>Ya confirmada en MongoDB → 200. El Lua no cobra dos veces. El historial usa <code>$ne</code>.</p></div>
-      <div class="card"><h3>Reintentos con backoff</h3><p>3 reintentos ante timeout o 5xx; un 404 no se reintenta.</p></div>
-      <div class="card orange"><h3>Circuit breaker</h3><p>5 fallos seguidos → abierto 30 s, rechaza al instante; después prueba con una petición (half-open).</p></div>
+    <div class="col" style="flex:1; justify-content:center">
+      <div class="card blue"><h3>Mismo <code>reserva_id</code>, misma respuesta</h3><p>No se cobra ni se reserva dos veces.</p></div>
+      <div class="card orange"><h3>Circuit breaker</h3><p>Tras 5 fallos deja de insistir por 30 s.</p></div>
     </div>
   </div>
-  <div class="footer"><span>Errores RFC 7807 con códigos específicos y X-Correlation-ID</span><span>15</span></div>
+  <div class="footer"><span>Errores RFC 7807 con códigos específicos</span><span>12</span></div>
 </section>
 
-<!-- 16. Event log + CQRS -->
+<!-- 13. Event log + CQRS -->
 <section class="slide">
-  <div class="kicker">12 · Auditoría</div>
+  <div class="kicker">Auditoría</div>
   <h2>Event log append-only + CQRS</h2>
   <div class="diagram"><pre class="mermaid">
 flowchart LR
-  subgraph W["Escritura · command"]
-    direction TB
-    S["SAGA · 6 handlers"] -- "INSERT por paso" --> L[("event_log<br/>JSONB + GIN")]
-    S --> MR[("MongoDB<br/>reservas")]
-  end
-  subgraph Q["Lectura · query"]
-    direction TB
-    V1["ventas_por_evento"]
-    V2["tasa_exito_saga"]
-    V3["compensaciones_por_tipo"]
-    A["GET /api/reservar/{id}/audit"]
-    O["GET /api/reservar · consulta operativa"]
-  end
-  L --> V1
-  L --> V2
-  L --> V3
-  L --> A
-  MR --> O
+  S["SAGA"] -- "un INSERT por paso" --> L[("PostgreSQL<br/>event_log")]
+  L --> V1["ventas_por_evento"]
+  L --> V2["tasa_exito_saga"]
+  L --> V3["compensaciones_por_tipo"]
+  L --> A["GET /reservar/{id}/audit"]
   </pre></div>
-  <div class="card"><p><b>Event sourcing de auditoría:</b> cada paso, incluidos fallos y compensaciones, queda como evento inmutable. El estado operativo vive en MongoDB (sin replay). Las ventas se cuentan por <code>RESERVA_CONFIRMADA</code>: un cobro compensado no las infla.</p></div>
-  <div class="footer"><span>Escribir el log no bloquea la compra: si PostgreSQL cae, la reserva sigue</span><span>16</span></div>
+  <div class="footer"><span>Se escribe aparte (command) y se consulta con vistas (query) · si PostgreSQL cae, la compra sigue</span><span>13</span></div>
 </section>
 
-<!-- 17. Privacidad -->
+<!-- 14. Resultados y límites -->
 <section class="slide">
-  <div class="kicker">13 · Privacidad</div>
-  <h2>Export anonimizado: minimizar, no hashear</h2>
-  <div class="diagram" style="flex:0 0 360px"><pre class="mermaid">
-flowchart LR
-  U["Usuario<br/>nombre · apellido · email<br/>documento · usuario_id<br/>alta · historial"] --> X["GET /api/usuarios/exportar"]
-  X -- "se eliminan" --> D["nombre · apellido · email<br/>nro_documento · ids"]
-  X -- "seudónimo" --> P["HMAC-SHA256(clave, usuario_id)"]
-  X -- "se generalizan" --> G["alta → mes · compra → día"]
-  X -- "se conservan" --> K["tipo_documento · historial"]
-  classDef bad fill:#fbeaea,stroke:#c0392b,stroke-width:2px
-  classDef ok fill:#e6f4ec,stroke:#2e8b57,stroke-width:2px
-  class D bad
-  class P,G,K ok
-  </pre></div>
-  <div class="row">
-    <div class="card" style="flex:1"><h3>¿Por qué no un hash?</h3><p>Un DNI o un nombre hasheado sin clave se revierte por diccionario en segundos.</p></div>
-    <div class="card" style="flex:1"><h3>Anonimizar vs seudonimizar</h3><p>Sin clave configurada es efímera (anonimización); con clave fija, seudónimos estables.</p></div>
-    <div class="card" style="flex:1"><h3>JSON y CSV</h3><p>El CSV neutraliza la inyección de fórmulas. Los datos personales viven en un único documento.</p></div>
-  </div>
-  <div class="footer"><span>Cifrado a nivel de campo: propuesto, no implementado · sin k-anonimato</span><span>17</span></div>
-</section>
-
-<!-- 18. Resultados -->
-<section class="slide">
-  <div class="kicker">14 · Resultados</div>
-  <h2>Qué está probado</h2>
+  <div class="kicker">Resultados</div>
+  <h2>Qué está probado y qué falta</h2>
   <div class="num-row">
-    <div class="num"><span class="big">261</span><p>tests en verde (<code>make test</code>): usuarios 56 · eventos 93 · reservas 112</p></div>
-    <div class="num green"><span class="big">0</span><p>ventas de más en 300 compras concurrentes contra 50 entradas</p></div>
-    <div class="num orange"><span class="big">≈50</span><p>req/s de techo de la SAGA completa (objetivo: 100)</p></div>
+    <div class="num"><span class="big">261</span><p>tests en verde</p></div>
+    <div class="num green"><span class="big">0</span><p>ventas de más bajo carga</p></div>
+    <div class="num orange"><span class="big">≈50</span><p>req/s de techo (objetivo: 100)</p></div>
   </div>
-  <table style="margin-top:8px">
-    <tr><th style="width:40%">Escenario</th><th>Resultado verificado contra el stack</th></tr>
-    <tr><td>MongoDB caído</td><td>Lecturas siguen (<code>HIT</code> → <code>STALE</code>); la lectura estricta da 503</td></tr>
-    <tr><td>Eventos caído durante una compra</td><td>503 sin cobro; al volver, reintento → 201 → 200</td></tr>
-    <tr><td>Falla después de cobrar</td><td>Compensación: aforo igual antes y después, auditada</td></tr>
-  </table>
-  <div class="footer"><span>Contract testing con schemathesis en Eventos · 4 tests skipped en Reservas</span><span>18</span></div>
+  <div class="card" style="margin-top:8px">
+    <h3>Límites</h3>
+    <ul>
+      <li>La compra satura en ≈ 50 req/s</li>
+      <li>Un solo nodo por base, sin réplicas</li>
+      <li>El event log es de auditoría: el estado no se reconstruye desde él</li>
+    </ul>
+  </div>
+  <div class="footer"><span>Detalle en jmeter/README.md y brain/learnings/learnings.md</span><span>14</span></div>
 </section>
 
-<!-- 19. Límites -->
-<section class="slide">
-  <div class="kicker">14 · Límites</div>
-  <h2>Lo que no está resuelto (y lo decimos)</h2>
-  <div class="row" style="flex:1">
-    <div class="col" style="flex:1">
-      <div class="card orange"><h3>Rendimiento</h3><p>La SAGA completa satura en ≈ 50 req/s: no se cumple p99 &lt; 1 s a 100 req/s. Descartados: CPU de Python y commit sincrónico de PostgreSQL. Sospechas: journal de MongoDB, proxy de Docker en WSL2.</p></div>
-      <div class="card"><h3>Un nodo por base</h3><p>Sin replica set ni réplica de Redis. Antes de agregar réplicas hay que ajustar la read preference (<code>maxStalenessSeconds ≥ 90</code>).</p></div>
-    </div>
-    <div class="col" style="flex:1">
-      <div class="card"><h3>Event sourcing parcial</h3><p>El log es de auditoría; el estado no se reconstruye desde los eventos.</p></div>
-      <div class="card"><h3>Deuda técnica</h3><p>Una segunda capa de compensación en el orquestador es redundante y registra un evento de más cuando falla el paso 5.</p></div>
-      <div class="card"><h3>Privacidad</h3><p>Sin endpoint de baja, sin cifrado de campos, sin k-anonimato.</p></div>
-    </div>
-  </div>
-  <div class="footer"><span>Detalle en jmeter/README.md y brain/learnings/learnings.md</span><span>19</span></div>
-</section>
-
-<!-- 20. Cierre -->
+<!-- 15. Cierre -->
 <section class="slide dark" style="justify-content:center; gap:40px">
   <div class="kicker">Cierre</div>
   <h2 style="font-size:76px">Consistencia fuerte donde se mueve plata.<br>Disponibilidad en el catálogo.</h2>
-  <p class="lead">SAGA orquestada sobre una Chain of Responsibility, Lua atómico para el stock, auditoría completa en PostgreSQL y lecturas que sobreviven a la caída de MongoDB.</p>
   <div style="display:flex; gap:16px; margin-top:16px">
     <span class="tag">make up</span><span class="tag">make test</span><span class="tag orange">make jmeter</span><span class="tag green">python3 demo/servidor.py</span>
   </div>
-  <div class="footer"><span>Demo en vivo a continuación</span><span>20</span></div>
+  <div class="footer"><span>Demo en vivo a continuación</span><span>15</span></div>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>

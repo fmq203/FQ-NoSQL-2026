@@ -1,19 +1,19 @@
 # Presentación de la defensa
 
-[`EventFlow-defensa.pdf`](./EventFlow-defensa.pdf): 20 diapositivas 16:9 para acompañar la defensa.
+[`EventFlow-defensa.pdf`](./EventFlow-defensa.pdf): 15 diapositivas 16:9 para acompañar la defensa, con poco texto y prioridad a los diagramas.
 
 | # | Tema |
 |---|------|
-| 1-3 | Portada, agenda, el problema y los requisitos |
-| 4 | Arquitectura (servicios y qué base usa cada uno) |
-| 5-6 | Selección de bases y estrategia de tres bases |
-| 7 | Modelado: embebido vs referencia |
-| 8-9 | Consistencia por operación y caché AP |
-| 10-11 | Chain of Responsibility (diagrama y código) |
-| 12-13 | SAGA orquestada y compensaciones (con una auditoría real) |
-| 14-15 | Atomicidad (Lua + JMeter) e idempotencia/resiliencia |
-| 16-17 | Event log + CQRS y export anonimizado |
-| 18-20 | Resultados, límites y cierre |
+| 1-2 | Portada y el problema |
+| 3 | Arquitectura (servicios y qué base usa cada uno) |
+| 4-5 | Selección de bases y estrategia de tres bases |
+| 6 | Modelado: embebido vs referencia |
+| 7 | Consistencia por operación (AP/CP) y caché |
+| 8 | Diagrama de la cadena (Chain of Responsibility) |
+| 9-10 | SAGA orquestada y compensaciones (con una auditoría real) |
+| 11-12 | Atomicidad (Lua + JMeter) e idempotencia |
+| 13 | Event log + CQRS |
+| 14-15 | Resultados y límites, cierre |
 
 ## Editar y regenerar
 

@@ -673,3 +673,15 @@ Todo lo borrado se puede recuperar del historial de git.
 **Lo que mostró la revisión visual:** los diagramas heredaban el estilo de los bloques de código (fondo oscuro); la arquitectura con Mermaid quedaba enredada con 12 conexiones y se rehízo en HTML (servicio por columna con las bases que usa debajo); la cadena de 6 handlers se desbordaba en una fila y pasó a dos filas de tres; el salto de página del último slide agregaba una hoja en blanco. El comando de regeneración documentado se probó tal cual.
 
 **Tags:** #presentacion #defensa #pdf #mermaid #playwright #claude-opus-5
+
+---
+
+## 2026-11-05 — Presentación simplificada (20 → 15 diapositivas) y diagrama de la cadena
+
+**Pedido:** "simplificar la presentación un poco" y "agregar el Diagrama de la Cadena" (el de `brain/patterns/chain-of-responsibility.md`).
+
+**Qué se sacó:** agenda, el código de la cadena, privacidad (export anonimizado) y la tabla de consistencia como diapositiva aparte; resultados y límites quedaron en una sola. El resto pasó a frases cortas: la tabla de bases perdió la columna de alternativas descartadas, el Lua se muestra en pseudocódigo y la consistencia se resume en dos tarjetas (AP/CP) junto al diagrama de la caché.
+
+**Diagrama de la cadena:** primero se probó en Mermaid. En horizontal quedaba diminuto y en escalera; con subgrafos, Mermaid ignora la dirección interna cuando hay aristas que salen del subgrafo. Se hizo en HTML: una fila por handler con su salida de error o compensación al costado. Reemplaza a la grilla anterior de la cadena, que mostraba lo mismo.
+
+**Tags:** #presentacion #defensa #mermaid #claude-opus-5
