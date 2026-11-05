@@ -183,6 +183,10 @@ python3 demo/servidor.py   # abrir http://localhost:8080/index.html
 
 `servidor.py` además habilita los botones para subir y bajar cada contenedor desde la página (solo desde `127.0.0.1` y desde la propia página).
 
+### Presentación
+
+[`presentacion/EventFlow-defensa.pdf`](./presentacion/EventFlow-defensa.pdf): 20 diapositivas con los diagramas de arquitectura, selección de bases, Chain of Responsibility, SAGA y compensaciones, consistencia, auditoría y resultados. Fuente editable y cómo regenerarla en [`presentacion/README.md`](./presentacion/README.md).
+
 ### Verificar que todo funciona
 
 ```bash
@@ -537,6 +541,7 @@ TAREA 2/
 ├── README.md                   # Este archivo
 ├── demo/                       # GUI HTML estática para mostrar el funcionamiento
 ├── jmeter/                     # Plan de pruebas de carga (JMeter) + resumen de resultados
+├── presentacion/               # Diapositivas de la defensa (PDF + fuente HTML)
 ├── .gitignore
 ├── .specify/                   # Spec-kit (especificaciones)
 │   └── specs/

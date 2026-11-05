@@ -661,3 +661,15 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 Todo lo borrado se puede recuperar del historial de git.
 
 **Tags:** #limpieza #repo #ci #claude-opus-5
+
+---
+
+### 2026-11-05 — Presentación en PDF para la defensa
+
+**Contexto:** Pedido de un PDF tipo presentación para acompañar la defensa y subir al repositorio, priorizando diagramas (arquitectura, selección de bases, estrategia de tres bases, Chain of Responsibility, SAGA y lo que hiciera falta).
+
+**Decisión:** HTML con una `<section>` 16:9 por diapositiva y diagramas Mermaid, impreso a PDF con Chromium (Playwright en Docker, sin instalar nada en el host). Se eligió así para versionar una fuente editable y poder **revisar cada diapositiva antes de entregarla** (capturas por slide + chequeo automático de desbordes). 20 diapositivas en `presentacion/`; el `.gitignore` (que ignora `*.html`) suma `!presentacion/*.html`.
+
+**Lo que mostró la revisión visual:** los diagramas heredaban el estilo de los bloques de código (fondo oscuro); la arquitectura con Mermaid quedaba enredada con 12 conexiones y se rehízo en HTML (servicio por columna con las bases que usa debajo); la cadena de 6 handlers se desbordaba en una fila y pasó a dos filas de tres; el salto de página del último slide agregaba una hoja en blanco. El comando de regeneración documentado se probó tal cual.
+
+**Tags:** #presentacion #defensa #pdf #mermaid #playwright #claude-opus-5
