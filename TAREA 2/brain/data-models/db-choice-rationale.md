@@ -14,8 +14,8 @@ metadata:
 
 | Entidad | Base Principal | Base Secundaria | Patrón |
 |---------|----------------|-----------------|--------|
-| Usuario | MongoDB | Redis DB 1 (caché de lecturas) | Embedded (historial) |
-| Evento | MongoDB | Redis DB 1 (caché de lecturas) | Embedded (precios/ubicacion) |
+| Usuario | MongoDB | Redis `redis-cache` (caché de lecturas) | Embedded (historial) |
+| Evento | MongoDB | Redis `redis-cache` (caché de lecturas) | Embedded (precios/ubicacion) |
 | Reserva | MongoDB | Redis (transacción), PostgreSQL (audit) | Reference |
 | Pago | Redis | — | Atomic Lua |
 | Auditoría | PostgreSQL | — | Event Sourcing |
@@ -65,7 +65,7 @@ metadata:
 
 No hay listado ni búsqueda de eventos implementados (ni índice de texto o de fecha); MongoDB los permitiría sin cambiar el modelo.
 
-**Redis como caché AP de lecturas (`services/lectura_cache.py`):** se cachea el documento completo en `cache:evento:{id}` (Redis DB 1). Fresco 30 s; vencido, se relee de MongoDB; si MongoDB no responde, se sirve la copia vencida (`X-Cache: STALE`, se guarda hasta 1 h). La SAGA la saltea con `Cache-Control: no-cache`. Las escrituras de inventario la invalidan. Usuarios usa el mismo módulo (`cache:usuario:{id}`, 10 min).
+**Redis como caché AP de lecturas (`services/lectura_cache.py`):** se cachea el documento completo en `cache:evento:{id}` (instancia `redis-cache`). Fresco 30 s; vencido, se relee de MongoDB; si MongoDB no responde, se sirve la copia vencida (`X-Cache: STALE`, se guarda hasta 1 h). La SAGA la saltea con `Cache-Control: no-cache`. Las escrituras de inventario la invalidan. Usuarios usa el mismo módulo (`cache:usuario:{id}`, 10 min).
 
 **Por qué NO solo Redis:**
 - Consultas flexibles a futuro (rangos de fecha, filtros)
@@ -127,7 +127,7 @@ No hay listado ni búsqueda de eventos implementados (ni índice de texto o de f
 | **Escalabilidad escritura** | Sharding | Cluster (limitado) | Read replicas / Citus |
 | **Latencia típica** | 5-20ms | **< 1ms** | 2-10ms |
 | **Persistencia** | WAL + snapshots | AOF + RDB | WAL (crash-safe) |
-| **Caso de uso EventFlow** | Usuarios, Eventos, Reservas | Pagos, Inventario (DB 0), caché de lecturas (DB 1) | Audit Log, vistas CQRS |
+| **Caso de uso EventFlow** | Usuarios, Eventos, Reservas | Pagos e inventario (`redis`), caché de lecturas (`redis-cache`) | Audit Log, vistas CQRS |
 
 ---
 

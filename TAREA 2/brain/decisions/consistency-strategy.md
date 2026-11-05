@@ -43,7 +43,7 @@ Configuración real de los clientes (`*/src/services/mongodb.py`, `reservas-serv
 
 > **Ojo si se pasa a replica set:** con un nodo standalone estas preferencias no tienen efecto, pero en un replica set fallarían: MongoDB rechaza `maxStalenessSeconds` menor a 90 (afecta a Usuarios y a Eventos), y además `SECONDARY` (Usuarios) no cae al primario si no hay secundarios disponibles. Antes de agregar réplicas habría que pasar ambos a `secondaryPreferred` con `maxStalenessSeconds >= 90`.
 
-### Redis (DB 0: pagos e inventario; DB 1: caché de lecturas)
+### Redis (dos instancias: `redis` para pagos e inventario; `redis-cache` para la caché de lecturas)
 
 ```python
 # Redis: Consistencia fuerte inherentemente (single-threaded)
@@ -52,7 +52,8 @@ Configuración real de los clientes (`*/src/services/mongodb.py`, `reservas-serv
 ```
 
 - **Consistencia**: Fuerte (single-threaded event loop)
-- **Persistencia**: AOF (`redis-server --appendonly yes`)
+- **Persistencia**: `redis` con AOF (`--appendonly yes`); `redis-cache` sin persistencia (copia descartable, `allkeys-lru` 128 MB)
+- **Independencia**: caídas separadas. Sin `redis-cache` las lecturas van a MongoDB y las compras siguen; sin `redis` las lecturas siguen desde la caché y solo falla comprar (500 `PAYMENT_FAILED`)
 - **Replicación**: ninguna (un solo nodo)
 
 ### PostgreSQL (Audit Log)

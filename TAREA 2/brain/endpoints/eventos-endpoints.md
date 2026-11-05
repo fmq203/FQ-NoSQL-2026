@@ -72,7 +72,7 @@ No se valida que la fecha sea futura.
 
 **Response 200** (`EventoResponse`): evento completo con `precios[].disponibles` y `entradas_disponibles`.
 
-**Caché AP** (`services/lectura_cache.py`, Redis DB 1, clave `cache:evento:{id}`): header `X-Cache` = `HIT` (< 30 s), `MISS`, `STALE` (MongoDB caído, copia vencida de hasta 1 h) o `BYPASS` (`Cache-Control: no-cache`, lo manda la SAGA). Los 404 no se cachean.
+**Caché AP** (`services/lectura_cache.py`, Redis `redis-cache`, clave `cache:evento:{id}`): header `X-Cache` = `HIT` (< 30 s), `MISS`, `STALE` (MongoDB caído, copia vencida de hasta 1 h) o `BYPASS` (`Cache-Control: no-cache`, lo manda la SAGA). Los 404 no se cachean.
 
 **Errores**: 404 no existe; 422 UUID inválido; 503 MongoDB no disponible sin copia en caché.
 

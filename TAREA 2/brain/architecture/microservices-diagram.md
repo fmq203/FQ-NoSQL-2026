@@ -24,7 +24,8 @@ graph TB
 
     subgraph Databases["Bases de Datos Políglotas"]
         MG[(MongoDB\n:27017\nBD eventflow: una colección\npor servicio)]
-        RD[(Redis\n:6379\nDB0: pagos + inventario Lua\nDB1: caché de lecturas)]
+        RD[(Redis\n:6379\npagos + inventario Lua)]
+        RC[(Redis caché\n:6380\ncaché de lecturas)]
         PG[(PostgreSQL\n:5432\nAudit Log, Event Sourcing)]
     end
 
@@ -54,8 +55,8 @@ graph TB
 ## Descripción de Interacciones
 
 ### 1. Cliente → Servicios (Directo)
-- **GET /api/usuarios/{id}** → Usuarios Service → caché Redis (DB 1) o MongoDB
-- **GET /api/eventos/{id}** → Eventos Service → caché Redis (DB 1) o MongoDB
+- **GET /api/usuarios/{id}** → Usuarios Service → caché Redis (`redis-cache`) o MongoDB
+- **GET /api/eventos/{id}** → Eventos Service → caché Redis (`redis-cache`) o MongoDB
 - **POST /api/reservar** → Reservas Service (Orquestador)
 
 ### 2. Reservas Service → Otros Servicios (Orquestación SAGA)
@@ -83,7 +84,8 @@ Las llamadas HTTP tienen 3 reintentos con backoff y circuit breaker por servicio
 | Base de Datos | Escritura | Lectura |
 |---------------|-----------|---------|
 | **MongoDB** | Usuarios (+ historial), Eventos (+ inventario), Reservas | Usuarios, Eventos, Reservas |
-| **Redis** | DB 0: pago e inventario (Lua). DB 1: caché de lecturas | DB 1: GET de usuarios y eventos (HIT/STALE) |
+| **Redis** (`redis`) | Pago e inventario (Lua) | Ninguna: las lecturas no dependen de esta instancia |
+| **Redis caché** (`redis-cache`) | Caché de lecturas | GET de usuarios y eventos (HIT/STALE) |
 | **PostgreSQL** | Audit log (Event Sourcing) | Reportes, Compliance |
 
 ---

@@ -73,7 +73,7 @@ Si fallan los pasos 1 a 3 no se modificó nada: 404 / 409 / 422 / 503 y `SAGA_FA
 sequenceDiagram
     participant Client
     participant S as Usuarios / Eventos Service
-    participant Cache as Redis DB 1
+    participant Cache as Redis caché
     participant MongoDB
 
     Client->>S: GET /api/usuarios/{id} (o /api/eventos/{id})

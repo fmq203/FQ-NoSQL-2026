@@ -41,14 +41,14 @@ Se deben elegir **al menos dos bases de datos NoSQL** y justificar su asignació
 
 | Microservicio | Base de Datos Primaria | Base de Datos Secundaria | Justificación |
 |---------------|------------------------|--------------------------|---------------|
-| **Usuarios** | **MongoDB** | Redis (caché de lecturas, DB 1) | Documentos anidados (historial_compras[]), consultas flexibles, embedded pattern natural |
-| **Eventos** | **MongoDB** | Redis (caché de lecturas, DB 1) | Lecturas masivas de eventos, aforo dinámico, embedded para ubicación/precios |
+| **Usuarios** | **MongoDB** | Redis (caché de lecturas, instancia aparte) | Documentos anidados (historial_compras[]), consultas flexibles, embedded pattern natural |
+| **Eventos** | **MongoDB** | Redis (caché de lecturas, instancia aparte) | Lecturas masivas de eventos, aforo dinámico, embedded para ubicación/precios |
 | **Reservas y Pagos** | **Redis** (pagos) + **MongoDB** (reservas) + **PostgreSQL** (auditoría) | — | Redis: atomicidad Lua para pago+inventario; MongoDB: persistencia reserva; PostgreSQL: ACID audit log |
 
 ### Bases de Datos NoSQL Seleccionadas (Mínimo 2)
 
 1. **MongoDB** — Base documental principal para Usuarios, Eventos, Reservas
-2. **Redis** — Clave-valor in-memory para pagos atómicos e inventario (DB 0) y caché de lecturas (DB 1)
+2. **Redis** — Clave-valor in-memory para pagos atómicos e inventario, y (en una instancia aparte, para que una caída no arrastre a la otra) caché de lecturas
 
 > **Nota**: PostgreSQL se usa como base relacional complementaria para auditoría/Event Sourcing, no cuenta como NoSQL. Las tres bases corren en un solo nodo cada una (un único contenedor MongoDB con una colección por servicio).
 

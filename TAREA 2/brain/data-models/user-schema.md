@@ -114,7 +114,7 @@ db.usuarios.createIndex({ nombre: 1 })
 
 | Operación | Índice | Consistencia |
 |-----------|--------|--------------|
-| `GET /api/usuarios/{id}` → `findOne({_id})` | Primario (y caché Redis DB 1) | Eventual (AP) |
+| `GET /api/usuarios/{id}` → `findOne({_id})` | Primario (y caché `redis-cache`) | Eventual (AP) |
 | `GET /api/usuarios?skip&limit` | Colección | Eventual |
 | Alta → unicidad de email y documento | Únicos | Fuerte (`w=majority`, journal) |
 | Export → `find({})` | Recorrido completo | Eventual |

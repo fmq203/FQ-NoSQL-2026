@@ -17,13 +17,13 @@ metadata:
                    EVENTFLOW 3-DATABASE ARCHITECTURE
 
 ┌──────────────────────┐  ┌───────────────────────┐  ┌──────────────────────┐
-│ MONGODB              │  │ REDIS                 │  │ POSTGRESQL           │
-│ (datos de negocio)   │  │ (transacción + caché) │  │ (auditoría)          │
+│ MONGODB              │  │ REDIS (2 instancias)  │  │ POSTGRESQL           │
+│ (datos de negocio)   │  │                       │  │ (auditoría)          │
 ├──────────────────────┤  ├───────────────────────┤  ├──────────────────────┤
-│ eventflow.usuarios   │  │ DB 0:                 │  │ event_log            │
+│ eventflow.usuarios   │  │ redis (transacción):  │  │ event_log            │
 │   + historial        │  │  pago:{reserva_id}    │  │   (append-only)      │
 │ eventflow.eventos    │  │  evento:..:disponibles│  │ vistas CQRS:         │
-│   + precios          │  │ DB 1:                 │  │  ventas_por_evento   │
+│   + precios          │  │ redis-cache (lecturas)│  │  ventas_por_evento   │
 │ eventflow.reservas   │  │  cache:usuario:{id}   │  │  tasa_exito_saga     │
 │   + saga_log         │  │  cache:evento:{id}    │  │  compensaciones_...  │
 └──────────────────────┘  └───────────────────────┘  └──────────────────────┘
@@ -40,11 +40,12 @@ metadata:
 - Un contenedor, una base (`eventflow`), una colección por servicio.
 - Escrituras con `w=majority` + journal; índices únicos para email, documento, nombre de evento y número de confirmación.
 
-### Redis — transacción crítica y caché
+### Redis — transacción crítica y caché (dos instancias)
 
-- **DB 0** (Reservas): `evento:{id}:categoria:{cat}:disponibles` (contador) y `pago:{reserva_id}` (hash, TTL 90 días). El script Lua `pagar_y_decrementar` chequea stock, descuenta y registra el pago en una sola operación: Redis ejecuta un script a la vez, así que **no hay doble venta**. `compensar_pago` lo revierte.
-- **DB 1** (Usuarios y Eventos): caché de lecturas stale-if-error (fresco 30 s; copia vencida hasta 10 min / 1 h si MongoDB cae).
-- Persistencia AOF. Sin réplica.
+- **`redis`** (Reservas): `evento:{id}:categoria:{cat}:disponibles` (contador) y `pago:{reserva_id}` (hash, TTL 90 días). El script Lua `pagar_y_decrementar` chequea stock, descuenta y registra el pago en una sola operación: Redis ejecuta un script a la vez, así que **no hay doble venta**. `compensar_pago` lo revierte.
+- **`redis-cache`** (Usuarios y Eventos): caché de lecturas stale-if-error (fresco 30 s; copia vencida hasta 10 min / 1 h si MongoDB cae). Sin persistencia (es una copia descartable) y con tope de 128 MB (`allkeys-lru`).
+- **Por qué dos instancias:** si la caché compartiera servidor con los pagos, un corte de Redis tumbaría las lecturas y las compras a la vez. Separadas, cada caída afecta solo a lo suyo (verificado: con `redis-cache` caído las compras siguen dando 201; con `redis` caído las lecturas siguen dando 200 `HIT` y solo falla comprar con 500 `PAYMENT_FAILED`).
+- `redis` con persistencia AOF; ninguna de las dos tiene réplica.
 
 ### PostgreSQL — auditoría
 
@@ -59,7 +60,7 @@ metadata:
 ```
 POST /api/reservar
  ├─ Validar usuario y evento        → HTTP a Usuarios / Eventos (leen MongoDB, sin caché)
- ├─ Cobrar + descontar (atómico)    → Redis DB 0, Lua
+ ├─ Cobrar + descontar (atómico)    → Redis (`redis`), Lua
  ├─ Sincronizar inventario          → HTTP a Eventos → MongoDB ($elemMatch + $inc)
  ├─ Confirmar reserva               → MongoDB eventflow.reservas
  ├─ Registrar historial             → HTTP a Usuarios → MongoDB ($push idempotente)

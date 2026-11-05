@@ -26,7 +26,8 @@ No hace falta Python ni dependencias instaladas en el host para levantar ni test
 | Base | Imagen | Notas |
 |------|--------|-------|
 | MongoDB | `mongo:7.0` | Un nodo, sin replica set |
-| Redis | `redis:7.0-alpine` | `--appendonly yes`; DB 0 transacciones, DB 1 caché |
+| Redis (`redis`) | `redis:7.0-alpine` | `--appendonly yes`; pagos e inventario |
+| Redis (`redis-cache`) | `redis:7.0-alpine` | sin persistencia, `--maxmemory 128mb --maxmemory-policy allkeys-lru`; caché de lecturas |
 | PostgreSQL | `postgres:15-alpine` | `eventflow` / `eventflow_user`; el esquema lo crea Reservas al iniciar |
 
 ## Dependencias Python por servicio
@@ -41,7 +42,7 @@ Valores por defecto en `docker-compose.yml` y ejemplo en `.env.example`. Las que
 
 ```bash
 EXPORT_PSEUDONYM_KEY=        # vacía: seudónimos efímeros (anonimización); con valor: estables
-CACHE_REDIS_URL=redis://redis:6379/1
+CACHE_REDIS_URL=redis://redis-cache:6379/0
 ```
 
 Detalle completo en [[docker-compose]].

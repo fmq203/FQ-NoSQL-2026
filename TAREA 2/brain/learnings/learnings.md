@@ -685,3 +685,26 @@ Todo lo borrado se puede recuperar del historial de git.
 **Diagrama de la cadena:** primero se probó en Mermaid. En horizontal quedaba diminuto y en escalera; con subgrafos, Mermaid ignora la dirección interna cuando hay aristas que salen del subgrafo. Se hizo en HTML: una fila por handler con su salida de error o compensación al costado. Reemplaza a la grilla anterior de la cadena, que mostraba lo mismo.
 
 **Tags:** #presentacion #defensa #mermaid #claude-opus-5
+
+---
+
+## 2026-11-05 — Redis separado: `redis` (pagos) y `redis-cache` (lecturas)
+
+**Pedido:** "separar redis db0 y db1 para eliminar la codependencia".
+
+**Problema:** las DB 0 (pagos e inventario de Reservas) y DB 1 (caché de Usuarios y Eventos) vivían en el mismo servidor Redis. Eran bases lógicas distintas pero un solo proceso: si Redis caía, se perdían a la vez la caché de lecturas (AP) y la compra (CP), lo que contradecía el argumento de que "las lecturas sobreviven".
+
+**Cambio:** nuevo contenedor `redis-cache` (puerto host 6380), sin persistencia (`--save "" --appendonly no`) y con `--maxmemory 128mb --maxmemory-policy allkeys-lru`; la caché es una copia descartable. Usuarios y Eventos apuntan a `redis://redis-cache:6379/0` y **ya no dependen de Redis para arrancar** (`depends_on` solo de MongoDB): la caché es opcional y el código ya toleraba que no esté. El código de los servicios no cambió; solo el valor por defecto de `cache_redis_url` (`localhost:6380/0`). El demo (whitelist, "Limpiar datos" con `FLUSHALL` en ambas, tarjeta Docker), el Makefile (`shell-redis-cache`), `.env.example`, el brain, el README, el guion y la presentación quedaron actualizados.
+
+**Verificado en vivo (mismo evento, mismo stack):**
+
+| Caído | GET evento | POST reservar |
+|---|---|---|
+| nada | 200 `MISS` → `HIT` | 201 |
+| `redis-cache` | 200 `MISS` (va a MongoDB) | 201 |
+| `redis` | 200 `HIT` | 500 `PAYMENT_FAILED` |
+| ambos recuperados | 200 `HIT` | 201 |
+
+**Lo que sigue sin resolver:** cada Redis es un solo nodo sin réplica; la independencia evita que una caída arrastre a la otra, no que cada una deje de ser un punto único de falla para lo suyo.
+
+**Tags:** #redis #disponibilidad #cache #docker #claude-sonnet-5

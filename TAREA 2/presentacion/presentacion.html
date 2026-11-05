@@ -153,7 +153,7 @@
       <div class="col" style="gap:16px">
         <div class="svc"><h3>Usuarios :8001</h3><p>perfil · historial</p></div>
         <div class="chip mongo"><b>MongoDB</b>usuarios</div>
-        <div class="chip redis dashed"><b>Redis</b>caché de lecturas</div>
+        <div class="chip redis dashed"><b>Redis caché</b>instancia aparte</div>
       </div>
       <div class="link"><span class="arrow">◀────</span>valida usuario</div>
       <div class="col" style="gap:16px">
@@ -166,11 +166,11 @@
       <div class="col" style="gap:16px">
         <div class="svc"><h3>Eventos :8002</h3><p>precios · inventario</p></div>
         <div class="chip mongo"><b>MongoDB</b>eventos</div>
-        <div class="chip redis dashed"><b>Redis</b>caché de lecturas</div>
+        <div class="chip redis dashed"><b>Redis caché</b>instancia aparte</div>
       </div>
     </div>
   </div>
-  <div class="footer"><span>Cada servicio toca solo sus datos · entre servicios: HTTP con reintentos y circuit breaker</span><span>3</span></div>
+  <div class="footer"><span>Dos Redis separados: la caída de la caché no frena las compras y la de pagos no frena las lecturas · entre servicios: HTTP con reintentos y circuit breaker</span><span>3</span></div>
 </section>
 
 <!-- 4. Selección de bases -->
@@ -180,7 +180,7 @@
   <table>
     <tr><th style="width:24%">Base</th><th style="width:34%">Qué guarda</th><th>Por qué</th></tr>
     <tr><td><b>MongoDB</b><br><span class="muted">documental · NoSQL</span></td><td>Usuarios, eventos y reservas</td><td>Un documento trae todo junto, sin joins</td></tr>
-    <tr><td><b>Redis</b><br><span class="muted">clave-valor · NoSQL</span></td><td>Stock, pagos y caché</td><td>Un script Lua atómico decide la venta en &lt; 1 ms</td></tr>
+    <tr><td><b>Redis</b><br><span class="muted">clave-valor · NoSQL</span></td><td>Stock y pagos; otra instancia aparte para la caché</td><td>Un script Lua atómico decide la venta en &lt; 1 ms</td></tr>
     <tr><td><b>PostgreSQL</b><br><span class="muted">relacional</span></td><td>Event log de cada compra</td><td>SQL y vistas para auditar y analizar</td></tr>
   </table>
   <div class="footer"><span>Las dos NoSQL exigidas: MongoDB y Redis</span><span>4</span></div>

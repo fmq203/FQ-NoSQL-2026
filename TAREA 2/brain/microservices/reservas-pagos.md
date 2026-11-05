@@ -20,7 +20,7 @@ Revisado contra el código: 2026-11-05 (`reservas-service/src/`).
 
 - **Framework**: FastAPI (Python 3.11)
 - **Datos**:
-  - Redis DB 0 — `pago:{reserva_id}` y `evento:{id}:categoria:{cat}:disponibles` (scripts Lua)
+  - Redis `redis` — `pago:{reserva_id}` y `evento:{id}:categoria:{cat}:disponibles` (scripts Lua)
   - MongoDB — `eventflow.reservas`
   - PostgreSQL — `event_log` + vistas CQRS (los crea `init_pg_schema()` al iniciar)
 - **Clientes HTTP**: httpx async hacia Usuarios y Eventos (timeout 5 s, 3 reintentos con backoff, circuit breaker)

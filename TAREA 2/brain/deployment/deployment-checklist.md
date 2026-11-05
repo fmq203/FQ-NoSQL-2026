@@ -23,8 +23,8 @@ metadata:
 
 ### Docker
 - [x] `make up` levanta todo healthy
-- [x] Health checks pasan en los 6 contenedores
-- [x] `docker compose ps` muestra 6 contenedores Up (healthy)
+- [x] Health checks pasan en los 7 contenedores
+- [x] `docker compose ps` muestra 7 contenedores Up (healthy)
 - [x] Logs estructurados (JSON) sin errores en el camino feliz
 - [ ] ❌ Escaneo de vulnerabilidades de imágenes
 
@@ -40,6 +40,7 @@ metadata:
 - [x] Compensación del paso 4 (`?simular_fallo=sync_pago`): aforo igual antes y después
 - [x] Servicio caído (Eventos) → 503; al volver, reintento → 201 → 200
 - [x] MongoDB caído → lecturas `STALE` desde la caché; lectura estricta → 503
+- [x] `redis-cache` caído → lecturas desde MongoDB y compras 201; `redis` caído → lecturas `HIT` y compra 500 `PAYMENT_FAILED` (caídas independientes)
 - [x] JMeter: doble venta 300 intentos / stock 50 → exactamente 50 ventas
 - [ ] ❌ Compensación del paso 5 (fallo de MongoDB) probada solo en tests, no en vivo
 
@@ -49,7 +50,7 @@ metadata:
 
 ### Infraestructura
 - [ ] MongoDB: Replica Set 3 nodos, readPreference secondaryPreferred configurado
-- [ ] Redis: Cluster o Master-Replica + Sentinel, AOF enabled
+- [ ] Redis: Cluster o Master-Replica + Sentinel, AOF enabled (hoy: `redis` con AOF y `redis-cache` sin persistencia, sin réplicas)
 - [ ] PostgreSQL: Primary-Standby con Patroni, backups automáticos
 - [ ] Kubernetes: Deployments + Services + HPA configurados
 - [ ] Ingress: TLS terminación, rate limiting, path routing

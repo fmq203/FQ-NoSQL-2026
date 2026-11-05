@@ -19,7 +19,7 @@ Revisado contra el código: 2026-11-05.
 ## Tecnologías
 
 - **Framework**: FastAPI (Python 3.11)
-- **Base de Datos**: MongoDB (`eventflow.usuarios`) + Redis DB 1 (caché de lecturas, `cache:usuario:{id}`)
+- **Base de Datos**: MongoDB (`eventflow.usuarios`) + Redis `redis-cache` (caché de lecturas, `cache:usuario:{id}`)
 - **Puerto**: 8001
 - **Documentación**: http://localhost:8001/docs (Swagger), http://localhost:8001/redoc (ReDoc)
 

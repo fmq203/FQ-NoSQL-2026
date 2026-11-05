@@ -28,7 +28,8 @@ Desplegar 3 microservicios + 3 bases de datos con:
 # docker-compose.yml - Ya implementado
 services:
   mongodb:    # MongoDB 7.0
-  redis:      # Redis 7.0-alpine
+  redis:      # Redis 7.0-alpine (pagos e inventario)
+  redis-cache: # Redis 7.0-alpine (caché de lecturas, sin persistencia)
   postgresql: # PostgreSQL 15-alpine
   usuarios-service:  # Python FastAPI
   eventos-service:   # Python FastAPI
@@ -78,13 +79,13 @@ MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow
 SERVICE_PORT=8001
 EXPORT_PSEUDONYM_KEY=          # vacía → seudónimos efímeros (anonimización)
-CACHE_REDIS_URL=redis://redis:6379/1
+CACHE_REDIS_URL=redis://redis-cache:6379/0
 
 # Eventos Service
 MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow
 SERVICE_PORT=8002
-CACHE_REDIS_URL=redis://redis:6379/1
+CACHE_REDIS_URL=redis://redis-cache:6379/0
 
 # Reservas Service
 MONGODB_URI=mongodb://mongodb:27017
@@ -121,6 +122,7 @@ POSTGRES_PASSWORD=eventflow_password
 |----------|------------------|-------------|-----|
 | MongoDB | 27017 | 27017 | Cliente MongoDB, debugging |
 | Redis | 6379 | 6379 | Cliente Redis, debugging |
+| Redis caché | 6379 | 6380 | Cliente Redis de la caché |
 | PostgreSQL | 5432 | 5432 | pgAdmin, reportes, debugging |
 | Usuarios | 8001 | 8001 | API Usuarios, Swagger `/docs` |
 | Eventos | 8002 | 8002 | API Eventos, Swagger `/docs` |

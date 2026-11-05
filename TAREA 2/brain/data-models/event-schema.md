@@ -110,7 +110,7 @@ Si ese decremento falla, la SAGA revierte Redis (compensación del paso 4). El i
 
 | Operación | Índice | Consistencia |
 |-----------|--------|--------------|
-| `GET /api/eventos/{id}` → `findOne({_id})` | Primario (y caché Redis DB 1) | Eventual (AP) |
+| `GET /api/eventos/{id}` → `findOne({_id})` | Primario (y caché `redis-cache`) | Eventual (AP) |
 | Alta → unicidad de `nombre` | Único | Fuerte |
 | Decremento/incremento de inventario | Primario + `$elemMatch` | Fuerte (operación atómica sobre el documento) |
 

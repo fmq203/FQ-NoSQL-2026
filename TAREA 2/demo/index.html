@@ -219,11 +219,13 @@
     <div class="svc-col">
       <div class="box svc"><b>Usuarios Service</b><span class="port">:8001</span></div>
       <div class="box db">MongoDB<br>colección <b>usuarios</b><br>(perfil + historial)</div>
+      <div class="box db">Redis caché<br>(lecturas AP, instancia aparte)</div>
     </div>
     <div class="conn">⇄</div>
     <div class="svc-col">
       <div class="box svc"><b>Eventos Service</b><span class="port">:8002</span></div>
       <div class="box db">MongoDB<br>colección <b>eventos</b><br>(fecha, lugar, inventario)</div>
+      <div class="box db">Redis caché<br>(lecturas AP, instancia aparte)</div>
     </div>
     <div class="conn">⇄</div>
     <div class="svc-col">
@@ -477,7 +479,7 @@ refreshHealth();
 
 // ---- Contenedores Docker (vía demo/servidor.py, mismo origen que la página) ----
 
-const DOCKER_SERVICES = ['mongodb', 'redis', 'postgresql', 'usuarios-service', 'eventos-service', 'reservas-service'];
+const DOCKER_SERVICES = ['mongodb', 'redis', 'redis-cache', 'postgresql', 'usuarios-service', 'eventos-service', 'reservas-service'];
 const CONTROL_HEADERS = { 'X-Demo-Control': '1' };
 let dockerOcupado = false;
 

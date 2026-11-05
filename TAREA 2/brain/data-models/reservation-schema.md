@@ -76,7 +76,7 @@ Escritura con `w=majority` + `journal`.
 
 ---
 
-## Redis DB 0: Claves transaccionales
+## Redis (`redis`): claves transaccionales
 
 ### Inventario por evento y categoría
 
@@ -101,7 +101,7 @@ TTL:   90 días
 
 Su existencia hace idempotente al Lua y le dice a la compensación qué clave y cuánto devolver. No hay locks distribuidos: la atomicidad la da el script Lua.
 
-La caché de lecturas de Usuarios y Eventos usa **Redis DB 1** (`cache:usuario:{id}`, `cache:evento:{id}`), separada de estas claves.
+La caché de lecturas de Usuarios y Eventos usa **otra instancia, `redis-cache`** (`cache:usuario:{id}`, `cache:evento:{id}`), separada de estas claves y del servidor que las guarda.
 
 ---
 

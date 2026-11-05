@@ -20,9 +20,9 @@ metadata:
 
 | Servicio | Puerto | Responsabilidad Principal | Datos |
 |----------|--------|---------------------------|-------|
-| **Usuarios** | 8001 | Perfiles, historial de compras embebido, exportación anonimizada | MongoDB `eventflow.usuarios` + caché de lecturas en Redis (DB 1) |
-| **Eventos** | 8002 | Eventos, fecha, precios por categoría, inventario | MongoDB `eventflow.eventos` + caché de lecturas en Redis (DB 1) |
-| **Reservas y Pagos** | 8003 | Orquestador SAGA, Chain of Responsibility, cobro e inventario atómicos, auditoría | Redis DB 0 (pagos + inventario, Lua), MongoDB `eventflow.reservas`, PostgreSQL `event_log` |
+| **Usuarios** | 8001 | Perfiles, historial de compras embebido, exportación anonimizada | MongoDB `eventflow.usuarios` + caché de lecturas en Redis (`redis-cache`) |
+| **Eventos** | 8002 | Eventos, fecha, precios por categoría, inventario | MongoDB `eventflow.eventos` + caché de lecturas en Redis (`redis-cache`) |
+| **Reservas y Pagos** | 8003 | Orquestador SAGA, Chain of Responsibility, cobro e inventario atómicos, auditoría | Redis `redis` (pagos + inventario, Lua), MongoDB `eventflow.reservas`, PostgreSQL `event_log` |
 
 Un **único contenedor MongoDB** con una colección por servicio: separación lógica (cada servicio solo accede a la suya y llega a los datos de otro por su API), no *database-per-service* física.
 
@@ -33,7 +33,7 @@ Un **único contenedor MongoDB** con una colección por servicio: separación l�
 | DB | Tipo | Uso | Justificación |
 |----|------|-----|---------------|
 | **MongoDB 7.0** | Documental | Usuarios (con historial embebido), Eventos (precios embebidos), Reservas (con `saga_log`) | Esquema flexible, documentos embebidos, índices únicos |
-| **Redis 7.0** | Clave-valor en memoria | DB 0: `pago:{reserva_id}` y `evento:{id}:categoria:{cat}:disponibles` (scripts Lua). DB 1: caché AP de lecturas (`cache:usuario:*`, `cache:evento:*`) | Atomicidad de los scripts Lua (un script a la vez), velocidad, TTL |
+| **Redis 7.0** | Clave-valor en memoria | Dos instancias: `redis` guarda `pago:{reserva_id}` y `evento:{id}:categoria:{cat}:disponibles` (scripts Lua); `redis-cache` guarda la caché AP de lecturas (`cache:usuario:*`, `cache:evento:*`) | Atomicidad de los scripts Lua (un script a la vez), velocidad, TTL |
 | **PostgreSQL 15** | Relacional | `event_log` append-only (JSONB) + vistas CQRS | ACID, consultas analíticas, índice GIN sobre el payload |
 
 ---
@@ -73,7 +73,7 @@ Ver [[consistency-strategy]].
 
 - **Docker Compose**: 3 bases + 3 servicios, `make up` (build + up).
 - **Health checks** en todos los contenedores; `/health` de cada servicio revisa sus dependencias.
-- **Red compartida** `eventflow_network`; **volúmenes persistentes** `mongodb_data`, `redis_data` (AOF), `postgresql_data`.
+- **Red compartida** `eventflow_network`; **volúmenes persistentes** `mongodb_data`, `redis_data` (AOF, solo `redis`; `redis-cache` no persiste), `postgresql_data`.
 
 ---
 

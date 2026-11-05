@@ -7,7 +7,7 @@
 # Variables
 COMPOSE_FILE = docker-compose.yml
 SERVICES = usuarios-service eventos-service reservas-service
-DBS = mongodb redis postgresql
+DBS = mongodb redis redis-cache postgresql
 
 # Colores para output
 GREEN = \033[0;32m
@@ -127,10 +127,10 @@ rebuild: down build up ## Reconstruir y reiniciar todo
 
 # Comandos por servicio
 up-usuarios: ## Levantar solo usuarios-service
-	docker compose -f $(COMPOSE_FILE) up -d mongodb usuarios-service
+	docker compose -f $(COMPOSE_FILE) up -d mongodb redis-cache usuarios-service
 
 up-eventos: ## Levantar solo eventos-service
-	docker compose -f $(COMPOSE_FILE) up -d mongodb eventos-service
+	docker compose -f $(COMPOSE_FILE) up -d mongodb redis-cache eventos-service
 
 up-reservas: ## Levantar solo reservas-service
 	docker compose -f $(COMPOSE_FILE) up -d mongodb redis postgresql reservas-service
@@ -161,8 +161,11 @@ shell-reservas: ## Abrir shell en contenedor reservas-service
 shell-mongo: ## Abrir shell en MongoDB
 	docker compose -f $(COMPOSE_FILE) exec mongodb mongosh
 
-shell-redis: ## Abrir shell en Redis
+shell-redis: ## Abrir shell en Redis (pagos e inventario)
 	docker compose -f $(COMPOSE_FILE) exec redis redis-cli
+
+shell-redis-cache: ## Abrir shell en Redis (caché de lecturas)
+	docker compose -f $(COMPOSE_FILE) exec redis-cache redis-cli
 
 shell-pg: ## Abrir shell en PostgreSQL
 	docker compose -f $(COMPOSE_FILE) exec postgresql psql -U eventflow_user -d eventflow

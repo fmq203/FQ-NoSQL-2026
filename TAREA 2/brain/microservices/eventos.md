@@ -20,7 +20,7 @@ Revisado contra el código: 2026-11-05.
 
 - **Framework**: FastAPI (Python 3.11)
 - **Base de Datos**: MongoDB (`eventflow.eventos`)
-- **Caché**: Redis DB 1 (`cache:evento:{id}`, stale-if-error)
+- **Caché**: Redis `redis-cache` (`cache:evento:{id}`, stale-if-error)
 - **Puerto**: 8002
 - **Documentación**: http://localhost:8002/docs
 
@@ -119,7 +119,7 @@ sequenceDiagram
     Redis-->>R: OK
     R->>E: POST /decrementar-inventario {categoria, cantidad}
     E->>M: find_one_and_update ($elemMatch disponibles >= cantidad, $inc)
-    E->>Redis: DEL cache:evento:{id} (DB 1)
+    E->>Redis: DEL cache:evento:{id} (redis-cache)
     E-->>R: 200 {disponibles, entradas_disponibles}
 ```
 

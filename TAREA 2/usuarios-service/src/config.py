@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     # relacionar entre reinicios). Con valor = pseudonimizacion estable.
     export_pseudonym_key: str = ""
 
-    # Cache de lecturas (GET) en Redis, DB 1 (reservas usa la 0). Ver services/lectura_cache.py
+    # Cache de lecturas (GET) en Redis (instancia aparte de la de reservas). Ver services/lectura_cache.py
     cache_enabled: bool = True
-    cache_redis_url: str = "redis://localhost:6379/1"
+    cache_redis_url: str = "redis://localhost:6380/0"
     cache_fresh_seconds: int = 30
     cache_stale_seconds: int = 600
 

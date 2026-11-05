@@ -33,7 +33,7 @@ services:
     networks:
       - eventflow_network
 
-  # ============ REDIS ============
+  # ============ REDIS (transaccional: pagos e inventario de Reservas) ============
   redis:
     image: redis:7.0-alpine
     container_name: eventflow_redis
@@ -42,6 +42,24 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - eventflow_network
+
+  # ============ REDIS CACHE (lecturas AP de Usuarios y Eventos) ============
+  # Instancia propia: una caída de la caché no toca las compras, y una caída
+  # de Redis transaccional no toca las lecturas. Sin persistencia (es una
+  # copia descartable) y con tope de memoria: al llenarse desaloja lo menos usado.
+  redis-cache:
+    image: redis:7.0-alpine
+    container_name: eventflow_redis_cache
+    ports:
+      - "6380:6379"
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -82,13 +100,11 @@ services:
       SERVICE_PORT: 8001
       # Vacio = clave aleatoria por proceso (anonimizacion). Con valor = pseudonimos estables.
       EXPORT_PSEUDONYM_KEY: ${EXPORT_PSEUDONYM_KEY:-}
-      CACHE_REDIS_URL: redis://redis:6379/1
+      CACHE_REDIS_URL: redis://redis-cache:6379/0
     ports:
       - "8001:8001"
     depends_on:
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -108,13 +124,11 @@ services:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DB: eventflow
       SERVICE_PORT: 8002
-      CACHE_REDIS_URL: redis://redis:6379/1
+      CACHE_REDIS_URL: redis://redis-cache:6379/0
     ports:
       - "8002:8002"
     depends_on:
       mongodb:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
@@ -216,7 +230,8 @@ También se pueden subir y bajar contenedores desde la demo (`python3 demo/servi
 | Servicio | Puerto Contenedor | Puerto Host | Uso |
 |----------|------------------|-------------|-----|
 | MongoDB | 27017 | 27017 | Cliente MongoDB, debugging |
-| Redis | 6379 | 6379 | Cliente Redis, debugging |
+| Redis (`redis`) | 6379 | 6379 | Cliente Redis, debugging |
+| Redis caché (`redis-cache`) | 6379 | 6380 | Cliente Redis de la caché |
 | PostgreSQL | 5432 | 5432 | pgAdmin, reportes |
 | Usuarios | 8001 | 8001 | API + Swagger `/docs` |
 | Eventos | 8002 | 8002 | API + Swagger `/docs` |
@@ -232,7 +247,7 @@ MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow                     # sin efecto: la config lee MONGODB_DATABASE (default eventflow)
 SERVICE_PORT=8001
 EXPORT_PSEUDONYM_KEY=                    # vacía → seudónimos efímeros por proceso
-CACHE_REDIS_URL=redis://redis:6379/1     # caché de lecturas
+CACHE_REDIS_URL=redis://redis-cache:6379/0   # caché de lecturas (instancia aparte)
 ```
 
 ### Eventos Service
@@ -240,7 +255,7 @@ CACHE_REDIS_URL=redis://redis:6379/1     # caché de lecturas
 MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow
 SERVICE_PORT=8002
-CACHE_REDIS_URL=redis://redis:6379/1
+CACHE_REDIS_URL=redis://redis-cache:6379/0
 ```
 
 ### Reservas Service
@@ -261,7 +276,7 @@ SERVICE_PORT=8003
 | Servicio | Comando | Intervalo | Timeout | Reintentos |
 |----------|---------|-----------|---------|------------|
 | MongoDB | `mongosh --eval "db.runCommand({ping:1})"` | 10s | 5s | 3 |
-| Redis | `redis-cli ping` | 10s | 5s | 3 |
+| Redis y Redis caché | `redis-cli ping` | 10s | 5s | 3 |
 | PostgreSQL | `pg_isready -U eventflow_user` | 10s | 5s | 3 |
 | Usuarios | `curl -f http://localhost:8001/health` | 10s | 5s | 3 |
 | Eventos | `curl -f http://localhost:8002/health` | 10s | 5s | 3 |
@@ -295,7 +310,7 @@ volumes:
 | Servicios no inician | `docker compose logs <servicio>` - revisar dependencias |
 | Puerto ocupado | Cambiar puerto host en `ports:` o detener proceso local |
 | Permisos volúmenes | `docker compose down -v` y reconstruir |
-| Redis connection refused | Verificar `redis-cli ping` en contenedor redis |
+| Redis connection refused | Verificar `redis-cli ping` en el contenedor `redis` (pagos) o `redis-cache` (lecturas) |
 
 ---
 

@@ -36,6 +36,7 @@ JMETER_TIMEOUT_SEGUNDOS = 900
 SERVICIOS = (
     "mongodb",
     "redis",
+    "redis-cache",
     "postgresql",
     "usuarios-service",
     "eventos-service",
@@ -77,7 +78,8 @@ _LIMPIAR_MONGO_JS = (
 )
 LIMPIEZA = (
     ("mongodb", ["mongosh", "--quiet", "--eval", _LIMPIAR_MONGO_JS]),
-    ("redis", ["redis-cli", "FLUSHALL"]),  # DB 0 (pagos/inventario) y DB 1 (caché de lecturas)
+    ("redis", ["redis-cli", "FLUSHALL"]),  # pagos e inventario
+    ("redis-cache", ["redis-cli", "FLUSHALL"]),  # caché de lecturas
     ("postgresql", ["sh", "-c", 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "TRUNCATE event_log RESTART IDENTITY"']),
 )
 
