@@ -646,3 +646,18 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 6. Dependencias listadas y no usadas (`testcontainers`; `asyncpg`/`psycopg`/`sqlalchemy` en Usuarios).
 
 **Tags:** #brain #documentacion #revision #deuda-tecnica #claude-opus-5
+
+---
+
+### 2026-11-05 — Limpieza: se borran `.github` y `.opencode`
+
+**Contexto:** Pedido de borrar `.opencode`, `.specify` y `.github`. Antes de borrar se revisó qué contenía cada una y qué dependía de ellas.
+
+**Decisión:**
+- `.github/workflows/ci.yml` se borra: estaba dentro de `TAREA 2/`, pero el repositorio es `NoSQL/` y GitHub solo lee `.github` en la raíz, así que ese CI **nunca corrió**. El pipeline local sigue siendo `make ci` / `make verify`.
+- `.opencode/` se borra: comandos y skills del agente de IA (opencode + speckit) y sus `node_modules` (63 MB, sin versionar). Herramienta de desarrollo, no parte de la entrega; nada del proyecto la referenciaba.
+- `.specify/` **se conserva**: tiene las especificaciones de los tres servicios (spec, plan, tasks), incluido el criterio RP-SC-007 que citan el README y `jmeter/README.md`; es la evidencia del desarrollo guiado por especificaciones.
+
+Todo lo borrado se puede recuperar del historial de git.
+
+**Tags:** #limpieza #repo #ci #claude-opus-5
