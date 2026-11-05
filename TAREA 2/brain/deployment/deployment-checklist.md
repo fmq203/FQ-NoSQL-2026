@@ -8,35 +8,40 @@ metadata:
 
 # Deployment Checklist - EventFlow
 
+**Revisado 2026-11-05.** La sección *Pre-Deployment* refleja el estado real del proyecto (✅ verificado, ❌ no hecho). *Staging*, *Production* y *Post-Deployment* son una referencia de qué haría falta para producción: están fuera del alcance de la tarea y no se hicieron.
+
 ## Pre-Deployment (Desarrollo)
 
 ### Código y Tests
-- [ ] Todos los tests pasan: `pytest -v` en cada servicio
-- [ ] Contract tests pasan (OpenAPI compliance)
-- [ ] Integration tests SAGA happy path + compensaciones
-- [ ] Unit tests handlers Chain of Responsibility
-- [ ] Coverage ≥ 80% en lógica de negocio
-- [ ] No secrets hardcodeados (revisar `.env.example` vs `.env`)
-- [ ] Linting pasa: `flake8`, `black --check`, `mypy`
+- [x] Todos los tests pasan: `make test` → usuarios 56, eventos 93, reservas 112 (+4 skipped)
+- [x] Contract tests (OpenAPI; schemathesis en eventos)
+- [x] Integration tests SAGA happy path + compensaciones + fault injection
+- [x] Unit tests de los handlers de la Chain of Responsibility
+- [ ] ❌ Coverage medido ≥ 80% (no se midió de forma sistemática)
+- [ ] ❌ Sin secrets hardcodeados: las credenciales de desarrollo de PostgreSQL están en `docker-compose.yml`
+- [ ] ❌ Linting (`flake8`/`black`/`mypy`) no configurado; reservas corre `pyflakes` en un test
 
 ### Docker
-- [ ] `docker compose up -d --build` levanta todos los servicios healthy
-- [ ] Health checks pasan en todos los contenedores
-- [ ] `docker compose ps` muestra 6 contenedores Up (healthy)
-- [ ] Logs sin errores críticos: `docker compose logs`
-- [ ] Imágenes build sin vulnerabilidades críticas (`docker scan` o `trivy`)
+- [x] `make up` levanta todo healthy
+- [x] Health checks pasan en los 6 contenedores
+- [x] `docker compose ps` muestra 6 contenedores Up (healthy)
+- [x] Logs estructurados (JSON) sin errores en el camino feliz
+- [ ] ❌ Escaneo de vulnerabilidades de imágenes
 
 ### Funcionalidad Manual
-- [ ] POST /api/usuarios → 201, GET /api/usuarios/{id} → 200
-- [ ] GET /api/usuarios/exportar → JSON/CSV anonimizado sin PII
-- [ ] POST /api/eventos → 201, GET /api/eventos/{id} → 200 con aforo
-- [ ] POST /api/reservar (happy path) → 201 con confirmación
-- [ ] POST /api/reservar (inventario insuficiente) → 409
-- [ ] POST /api/reservar (usuario inexistente) → 404
-- [ ] Verificar MongoDB: reserva + saga_log
-- [ ] Verificar Redis: pago + inventario decrementado
-- [ ] Verificar PostgreSQL: 7 eventos en event_log ordenados
-- [ ] Probar compensación: fallo MongoDB → rollback Redis
+- [x] POST /api/usuarios → 201, GET /api/usuarios/{id} → 200
+- [x] GET /api/usuarios/exportar → JSON/CSV sin datos personales (verificado con grep sobre el export)
+- [x] POST /api/eventos → 201, GET /api/eventos/{id} → 200 con aforo
+- [x] POST /api/reservar (happy path) → 201; reintento mismo `reserva_id` → 200
+- [x] POST /api/reservar (inventario insuficiente) → 409; (usuario inexistente) → 404
+- [x] MongoDB: reserva + saga_log; historial del usuario actualizado
+- [x] Redis: `pago:{reserva_id}` + inventario decrementado
+- [x] PostgreSQL: 8 eventos ordenados en una compra exitosa (incluye `HISTORIAL_ACTUALIZADO`)
+- [x] Compensación del paso 4 (`?simular_fallo=sync_pago`): aforo igual antes y después
+- [x] Servicio caído (Eventos) → 503; al volver, reintento → 201 → 200
+- [x] MongoDB caído → lecturas `STALE` desde la caché; lectura estricta → 503
+- [x] JMeter: doble venta 300 intentos / stock 50 → exactamente 50 ventas
+- [ ] ❌ Compensación del paso 5 (fallo de MongoDB) probada solo en tests, no en vivo
 
 ---
 
@@ -67,7 +72,7 @@ metadata:
 - [ ] CORS configurado restrictivamente
 
 ### Performance
-- [ ] Load test: 100 req/s concurrentes SAGA, p99 < 1s
+- [ ] Load test: 100 req/s concurrentes SAGA, p99 < 1s (**medido: no se cumple**, satura en ≈ 50 req/s; ver `jmeter/README.md`)
 - [ ] Stress test: 2x carga esperada, sin degradación
 - [ ] Soak test: 1 hora carga sostenida, sin memory leaks
 - [ ] Cache hit rate Redis > 90%
@@ -111,7 +116,7 @@ metadata:
 ### Validación Negocio
 - [ ] Reservas creadas = pagos confirmados
 - [ ] Inventario Redis = MongoDB entradas_disponibles
-- [ ] Event log completo (7 eventos/reserva exitosa)
+- [ ] Event log completo (8 eventos/reserva exitosa)
 - [ ] Exportación GDPR funcional
 - [ ] Número confirmación único y formato correcto
 
@@ -134,8 +139,8 @@ metadata:
 
 ## Referencias
 
-- [[deployment/docker-compose]] - docker-compose.yml
-- [[deployment/docker-setup]] - Dockerfiles
-- [[decisions/deployment-strategy]] - Estrategia completa K8s
-- [[architecture/saga-flow]] - Validación compensaciones
+- [[docker-compose]] - docker-compose.yml
+- [[docker-setup]] - Dockerfiles
+- [[deployment-strategy]] - Estrategia (K8s solo diseño)
+- [[saga-flow]] - Validación compensaciones
 - [[chain-of-responsibility]] - Validación handlers

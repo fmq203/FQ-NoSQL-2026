@@ -8,220 +8,96 @@ metadata:
 
 # Docker Setup - Configuración por Servicio
 
-## Estructura de Dockerfiles
+**Última revisión contra el código:** 2026-11-05
+
+## Estructura
 
 ```
-usuarios-service/
-├── Dockerfile
-├── requirements.txt
-└── src/
-
-eventos-service/
-├── Dockerfile
-├── requirements.txt
-└── src/
-
-reservas-service/
-├── Dockerfile
-├── requirements.txt
-└── src/
+usuarios-service/   eventos-service/   reservas-service/
+├── Dockerfile      ├── Dockerfile     ├── Dockerfile
+├── requirements.txt├── requirements.txt├── requirements.txt
+├── pytest.ini      ├── pytest.ini     ├── pytest.ini
+├── src/            ├── src/           ├── src/
+└── tests/          └── tests/         └── tests/
 ```
 
 ---
 
-## Usuarios Service - Dockerfile
+## Dockerfile (igual en los tres; cambia el puerto: 8001 / 8002 / 8003)
 
 ```dockerfile
 FROM python:3.11-slim
-
 WORKDIR /app
 
-# Instalar curl para healthcheck
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código
-COPY src/ .
+COPY src/ ./src/
 
 EXPOSE 8001
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${SERVICE_PORT:-8001}/health || exit 1
+
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${SERVICE_PORT:-8001}"]
 ```
 
-**Variables de Entorno**:
-```bash
-MONGODB_URI=mongodb://mongodb:27017
-MONGODB_DB=eventflow
-SERVICE_PORT=8001
-ANONYMIZATION_SALT=eventflow-salt-2026-change-in-production
-```
+- Se copia **solo `src/`**: los tests no van en la imagen. `make test` corre cada suite dentro de su contenedor montando `tests/`, `pytest.ini` y el `Dockerfile` en modo lectura (`docker compose exec <svc> pytest` sin montarlos no encuentra tests).
+- La app se importa como `src.main:app`.
+- `curl` es para el health check; `gcc` para compilar dependencias nativas.
 
-**Healthcheck**:
-```yaml
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-  interval: 10s
-  timeout: 5s
-  retries: 3
-```
+Variables de entorno por servicio: ver [[docker-compose]].
 
 ---
 
-## Eventos Service - Dockerfile
+## Dependencias principales (`requirements.txt`)
 
-```dockerfile
-FROM python:3.11-slim
+| | usuarios | eventos | reservas |
+|---|---|---|---|
+| Web | fastapi 0.109, uvicorn[standard] 0.27, pydantic 2.5 + settings | ídem | ídem |
+| MongoDB | motor 3.3.2, pymongo 4.6.1 | ídem | ídem |
+| Redis | redis 5.0 (caché) | redis 5.0 (caché) | redis 5.0 (Lua) |
+| PostgreSQL | (asyncpg, psycopg, sqlalchemy listados pero no usados) | — | asyncpg 0.29 |
+| HTTP | httpx | httpx | httpx (clientes hacia Usuarios/Eventos), requests (tests) |
+| Métricas | prometheus-client 0.19 | ídem | ídem |
+| Tests | pytest 7.4, pytest-asyncio, fakeredis 2.20 (testcontainers listado, no usado) | pytest, fakeredis, **schemathesis 3.39.16**, pytest-cov | pytest, fakeredis, pyflakes |
 
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY src/ .
-
-EXPOSE 8002
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
-```
-
-**Variables de Entorno**:
-```bash
-MONGODB_URI=mongodb://mongodb:27017
-MONGODB_DB=eventflow
-REDIS_URL=redis://redis:6379
-SERVICE_PORT=8002
-```
-
-**Healthcheck**:
-```yaml
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-  interval: 10s
-  timeout: 5s
-  retries: 3
-```
-
----
-
-## Reservas Service - Dockerfile
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY src/ .
-
-EXPOSE 8003
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
-```
-
-**Variables de Entorno**:
-```bash
-MONGODB_URI=mongodb://mongodb:27017
-MONGODB_DB=eventflow
-REDIS_URL=redis://redis:6379
-POSTGRESQL_URI=postgresql://eventflow_user:eventflow_password@postgresql:5432/eventflow
-USUARIOS_SERVICE_URL=http://usuarios-service:8001
-EVENTOS_SERVICE_URL=http://eventos-service:8002
-SERVICE_PORT=8003
-```
-
-**Healthcheck**:
-```yaml
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
-  interval: 10s
-  timeout: 5s
-  retries: 3
-```
-
----
-
-## Requirements.txt Común (Base)
-
-```txt
-# Core
-fastapi==0.104.0
-uvicorn==0.24.0
-pydantic>=2.0.0,<3.0.0
-pydantic-extra-types==2.0.0
-email-validator==2.1.0
-
-# Databases
-pymongo==4.5.0
-redis==5.0.0
-psycopg[binary]==3.2.6
-sqlalchemy==2.0.0
-
-# Utilities
-python-dotenv==1.0.0
-python-multipart==0.0.6
-httpx==0.25.0
-requests==2.31.0
-```
-
-### Adicionales por Servicio
-
-**usuarios-service**: Base only
-
-**eventos-service**: Base + redis
-
-**reservas-service**: Base + redis + psycopg + sqlalchemy + httpx
+Las dependencias de test van en la misma `requirements.txt` (por eso `make test` puede correr dentro de la imagen del servicio).
 
 ---
 
 ## Build y Run
 
 ```bash
-# Build individual
-docker build -t eventflow-usuarios ./usuarios-service
-docker build -t eventflow-eventos ./eventos-service
-docker build -t eventflow-reservas ./reservas-service
+make up                                   # build + up de todo
+docker compose build reservas-service     # rebuild de uno
+docker compose up -d reservas-service
+```
 
-# Run individual (requiere BDs corriendo)
-docker run -d -p 8001:8001 --name usuarios \
-  -e MONGODB_URI=mongodb://host.docker.internal:27017 \
-  eventflow-usuarios
+Correr un servicio suelto (fuera de compose) requiere apuntar sus variables a las bases:
+
+```bash
+docker build -t eventflow-usuarios ./usuarios-service
+docker run -d -p 8001:8001 -e MONGODB_URI=mongodb://host.docker.internal:27017 eventflow-usuarios
 ```
 
 ---
 
-## Multi-stage Build (Producción)
+## Mejoras no implementadas
 
-```dockerfile
-# Builder stage
-FROM python:3.11-slim as builder
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
-
-# Runtime stage
-FROM python:3.11-slim
-WORKDIR /app
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
-COPY src/ .
-EXPOSE 8001
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
-```
+- Build multi-stage (imagen final sin `gcc`).
+- Separar dependencias de test (`requirements-dev.txt`).
+- Usuario no root en la imagen.
 
 ---
 
 ## Referencias
 
-- [[deployment/docker-compose]] - docker-compose.yml completo
-- [[deployment/deployment-checklist]] - Checklist pre-producción
-- [[decisions/deployment-strategy]] - Estrategia completa
+- [[docker-compose]] - docker-compose.yml real y variables
+- [[deployment-checklist]] - Checklist
+- [[deployment-strategy]] - Estrategia completa

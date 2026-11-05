@@ -18,45 +18,20 @@ Bienvenido al **segundo cerebro del proyecto EventFlow**. Este es un repositorio
 
 ```
 brain/
-├── CLAUDE.md                          ← MAPA PRINCIPAL (Lee primero!)
-├── index.md                           ← Catálogo master
-│
-├── decisions/                         ← Decisiones arquitectónicas
-│   ├── db-selection.md               ✅ MongoDB + Redis justificado
-│   └── consistency-strategy.md        ✅ AP vs CP por operación
-│
-├── architecture/                      ← Diagramas y overview
-│   ├── overview.md                   ✅ Vista general del sistema
-│   └── (diagrama-images-TBD)
-│
-├── microservices/                     ← Especificación de cada service
-│   ├── usuarios.md                   ✅ GET/POST usuarios
-│   ├── eventos.md                    ✅ GET/POST eventos
-│   └── reservas-pagos.md             ✅ SAGA orchestrator
-│
-├── endpoints/                         ← APIs REST
-│   ├── usuarios-endpoints.md         ✅ POST/GET usuarios
-│   ├── eventos-endpoints.md          ✅ POST/GET eventos
-│   └── reservas-endpoints.md         ✅ POST /reservar (SAGA)
-│
-├── data-models/                       ← Schemas NoSQL
-│   ├── user-schema.md                ✅ MongoDB usuario
-│   ├── event-schema.md               ✅ MongoDB evento
-│   └── reservation-schema.md         ✅ Redis reserva (atomic)
-│
-├── patterns/                          ← Patrones de diseño
-│   ├── saga-pattern.md               ✅ SAGA orchestration
-│   ├── chain-of-responsibility.md ✅ Validadores modulares
-│   └── event-sourcing-cqrs.md        ⏳ (Opcional)
-│
-├── deployment/                        ← Docker & deploy
-│   ├── docker-setup.md               ✅ Dockerfiles
-│   ├── docker-compose.md             ✅ Compose template
-│   └── deployment-checklist.md       ⏳ (TBD)
-│
-└── learnings/                         ← Apuntes y insights
-    └── learnings.md                  ✅ Aprendizajes en vivo
+├── CLAUDE.md              ← mapa (leer primero)
+├── index.md               ← catálogo completo con enlaces
+├── decisions/             db-selection, three-database-strategy, consistency-strategy, deployment-strategy
+├── architecture/          overview, microservices-diagram, data-flow, saga-flow
+├── microservices/         usuarios, eventos, reservas-pagos
+├── endpoints/             usuarios-, eventos-, reservas-endpoints
+├── data-models/           user-, event-, reservation-, event-log-schema, db-choice-rationale
+├── patterns/              saga-pattern, chain-of-responsibility, event-log-pattern, event-sourcing-cqrs
+├── deployment/            docker-setup, docker-compose, deployment-checklist, requirements,
+│                          spec-kit-setup, postgresql-init.sql (+ 2 bocetos históricos)
+└── learnings/learnings.md ← registro append-only (incluye interacciones con IA)
 ```
+
+Todo el brain fue revisado contra el código el **2026-11-05**: lo que dice cada doc es lo que hace el código, y lo que no está implementado está marcado como tal.
 
 ---
 
@@ -69,9 +44,8 @@ brain/
 | **Estrategia Consistencia** | ✅ Done | [`consistency-strategy.md`](./decisions/consistency-strategy.md) |
 | **Arquitectura Overview** | ✅ Done | [`overview.md`](./architecture/overview.md) |
 | **Microservicios Spec** | ✅ Done | [`microservices/`](./microservices/) |
-| **Endpoints APIs (spec-kit)** | ✅ Done | [`spec-kit-setup.md`](./deployment/spec-kit-setup.md) |
-| **OpenAPI Template** | ✅ Done | [`openapi-template.json`](./deployment/openapi-template.json) |
-| **Code Example** | ✅ Done | [`spec-kit-code-example.py`](./deployment/spec-kit-code-example.py) |
+| **Endpoints APIs** | ✅ Done | [`endpoints/`](./endpoints/) (OpenAPI generada por FastAPI) |
+| **Spec Kit (spec-driven)** | ✅ Done | [`spec-kit-setup.md`](./deployment/spec-kit-setup.md), `.specify/specs/` |
 | **Data Models** | ✅ Done | [`data-models/`](./data-models/) |
 | **Event Log Schema** | ✅ Done | [`event-log-schema.md`](./data-models/event-log-schema.md) |
 | **SAGA Pattern** | ✅ Done | [`saga-pattern.md`](./patterns/saga-pattern.md) |
@@ -81,7 +55,11 @@ brain/
 | **docker-compose.yml** | ✅ Done | [`docker-compose.md`](./deployment/docker-compose.md) |
 | **Event Sourcing/CQRS** | ✅ Done | Vistas `ventas_por_evento`/`tasa_exito_saga`/`compensaciones_por_tipo` + índice GIN en `reservas-service/src/services/postgresql.py::init_pg_schema()` |
 | **Implementación Código** | ✅ Done | usuarios-service, eventos-service, reservas-service (SAGA + Chain of Responsibility) implementados y corriendo vía `docker compose` |
-| **Tests** | ✅ Done | usuarios 38/38, eventos 80/80, reservas 100/104 (4 skipped, 1 flaky de performance) — ver `learnings.md` |
+| **Tests** | ✅ Done | `make test`: usuarios 56, eventos 93, reservas 112 (+4 skipped) |
+| **Caché AP de lecturas** | ✅ Done | [`consistency-strategy.md`](./decisions/consistency-strategy.md) |
+| **Export anonimizado** | ✅ Done | [`user-schema.md`](./data-models/user-schema.md) |
+| **JMeter** | ✅ Done | `jmeter/README.md`: sin doble venta; la compra satura en ≈ 50 req/s |
+| **Demo** | ✅ Done | `demo/` (`python3 demo/servidor.py`) |
 
 ---
 
@@ -110,11 +88,10 @@ brain/
 
 ### Paso 4: Testea Localmente
 ```
-docker-compose up -d
-# Tu service ahora se conecta a:
-# - MongoDB: mongodb://mongodb:27017
-# - Redis: redis://redis:6379
-# - Otros services: http://service-name:port
+make up      # build + levanta todo
+make test    # suites de los 3 servicios en sus contenedores
+# Dentro de la red de compose: mongodb://mongodb:27017, redis://redis:6379,
+# postgresql://...@postgresql:5432/eventflow, http://<servicio>-service:<puerto>
 ```
 
 ---
@@ -127,8 +104,8 @@ docker-compose up -d
 - Ver: [`patterns/saga-pattern.md`](./patterns/saga-pattern.md)
 
 ### Consistencia
-- **Lecturas (Usuarios, Eventos):** Eventual consistency (caché Redis OK)
-- **Escrituras (Reservas, Pagos):** Strong consistency (Redis atomic + validaciones)
+- **Lecturas (Usuarios, Eventos):** Eventual (caché Redis stale-if-error; MongoDB en un solo nodo)
+- **Escrituras (Reservas, Pagos):** Fuerte (Lua atómico + idempotencia + SAGA con compensación)
 - Ver: [`decisions/consistency-strategy.md`](./decisions/consistency-strategy.md)
 
 ### Data Modeling
@@ -149,8 +126,8 @@ docker-compose up -d
 
 ## 📅 Fechas Clave
 
-- **Pre-defensa:** Jueves 5 de noviembre (~15 días)
-- **Defensa final:** Jueves 12 de noviembre (~22 días)
+- **Pre-defensa:** Jueves 5 de noviembre de 2026
+- **Defensa final:** Jueves 12 de noviembre de 2026
 - **Tiempo presentación:** ~12 min (demo + arquitectura)
 
 ---
@@ -176,7 +153,7 @@ R: Ver [`patterns/saga-pattern.md`](./patterns/saga-pattern.md) — pasos secuen
 R: Ver [`patterns/chain-of-responsibility.md`](./patterns/chain-of-responsibility.md) — cadena modular de validadores.
 
 **P: ¿Cómo inicio los servicios?**  
-R: Ver [`deployment/docker-compose.md`](./deployment/docker-compose.md) — `docker-compose up -d`
+R: `make up` desde `TAREA 2/`. Ver [`deployment/docker-compose.md`](./deployment/docker-compose.md).
 
 ---
 
@@ -227,4 +204,4 @@ Para mantener trazabilidad y reproducibilidad, todas las interacciones significa
 
 ## 📝 Última Actualización
 
-**2026-09-26** — Remediación completa de los hallazgos de `/speckit.analyze` sobre `003-reservation-payment` (11 hallazgos: retries HTTP, circuit breaker completo, vistas CQRS, filtros de listado, códigos de error específicos, PII en logs, alineación spec/código) más el barrido de tests conocidos rotos en usuarios-service y eventos-service (middleware de correlation-id, boundary de health check, normalización de email, `test_openapi_compliance.py` reparado de raíz, chequeo de evento duplicado). Detalle completo en [`learnings/learnings.md`](./learnings/learnings.md). Los tres servicios pasan su suite completa (ver tabla de arriba).
+**2026-11-05** — Revisión completa del brain contra el código: endpoints, modelos, índices, claves Redis, Lua, payloads del event_log, read preferences reales, Dockerfiles y variables de entorno. Se reescribieron los docs que describían el diseño inicial en vez de lo implementado y se marcaron como históricos los bocetos que no corresponden. Detalle y hallazgos en [`learnings/learnings.md`](./learnings/learnings.md).

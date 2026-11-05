@@ -10,9 +10,11 @@ metadata:
 
 ## Fuente de Verdad
 
-**OpenAPI Spec auto-generado por FastAPI**: http://localhost:8002/openapi.json  
-**Swagger UI**: http://localhost:8002/docs  
+**OpenAPI Spec auto-generado por FastAPI**: http://localhost:8002/openapi.json
+**Swagger UI**: http://localhost:8002/docs
 **ReDoc**: http://localhost:8002/redoc
+
+Revisado contra el código: 2026-11-05 (`eventos-service/src/api/routes/eventos.py`).
 
 ---
 
@@ -20,9 +22,14 @@ metadata:
 
 | Método | Ruta | Descripción | Consistencia |
 |--------|------|-------------|--------------|
-| GET | `/health` | Health check | — |
-| POST | `/api/eventos` | Crear evento | Fuerte |
-| GET | `/api/eventos/{evento_id}` | Obtener evento + aforo | Eventual |
+| GET | `/health` | Health check (MongoDB) | — |
+| GET | `/metrics` | Métricas Prometheus | — |
+| POST | `/api/eventos` | Crear evento | Fuerte (`w=majority`) |
+| GET | `/api/eventos/{evento_id}` | Obtener evento (caché AP) | Eventual |
+| POST | `/api/eventos/{evento_id}/decrementar-inventario` | Descontar entradas de una categoría (paso 4 de la SAGA) | Fuerte (operación atómica) |
+| POST | `/api/eventos/{evento_id}/incrementar-inventario` | Devolver entradas (compensación del paso 5) | Fuerte |
+
+No hay listado (`GET /api/eventos`), ni `PUT`/`PATCH`/`DELETE`. Si MongoDB no responde (y no hay caché que servir) se devuelve **503** con `Retry-After: 5`.
 
 ---
 
@@ -34,69 +41,70 @@ metadata:
 ```json
 {
   "nombre": "Concierto Rock 2026",
-  "descripcion": "Gran festival de rock",
+  "estado": "publicado",
   "fecha": "2026-12-15T20:00:00Z",
-  "ubicacion": {
-    "venue": "Estadio Central",
-    "direccion": "Av. Principal 123",
-    "ciudad": "Madrid",
-    "pais": "España",
-    "coordenadas": {"lat": 40.4168, "lng": -3.7038}
-  },
-  "fecha": "2026-12-01T20:00:00Z",
-  "aforo_total": 50000,
+  "aforo_total": 100,
+  "entradas_disponibles": 100,
   "precios": [
-    {"categoria": "VIP", "precio": 200.0, "disponibles": 1000},
-    {"categoria": "General", "precio": 80.0, "disponibles": 30000},
-    {"categoria": "Popular", "precio": 40.0, "disponibles": 19000}
+    {"categoria": "vip", "precio": 20000.00, "disponibles": 20},
+    {"categoria": "general", "precio": 5000.00, "disponibles": 80}
   ],
-  "categorias": ["musica", "rock", "festival"]
+  "ubicacion": {"ciudad": "Buenos Aires", "pais": "Argentina", "direccion": "Av. Siempre Viva 123"}
 }
 ```
 
-**Response 201** (`Evento`):
-```json
-{
-  "evento_id": "550e8400-e29b-41d4-a716-446655440001",
-  "nombre": "Concierto Rock 2026",
-  "fecha": "2026-12-15T20:00:00Z",
-  "fecha": "2026-12-01T20:00:00Z",
-  "aforo_total": 50000,
-  "entradas_disponibles": 50000,
-  "estado": "borrador"
-}
-```
+**Response 201** (`EventoResponse`): el mismo cuerpo más `evento_id`, `creado_en`, `actualizado_en` (con `fecha` normalizada a UTC).
 
-**Validaciones (422)**:
-- Fecha debe ser futura
-- Aforo > 0
-- Suma precios[].disponibles <= aforo_total
-- Categorías únicas en precios[]
+**Validaciones (422, RFC 7807)**:
+- `fecha` ISO 8601 entre 1970 y 2100 (sin zona se toma UTC)
+- `entradas_disponibles ≤ aforo_total`
+- `sum(precios[].disponibles) ≤ entradas_disponibles`
+- Categorías únicas en `precios[]`; `precio ≥ 0` con 2 decimales como máximo
+- `estado` ∈ `borrador`, `publicado`, `cancelado`, `finalizado`
+
+**409**: ya existe un evento con ese `nombre`.
+
+No se valida que la fecha sea futura.
 
 ---
 
 ### GET /api/eventos/{evento_id}
 
-**Path Parameter**: `evento_id` (UUID)
+**Response 200** (`EventoResponse`): evento completo con `precios[].disponibles` y `entradas_disponibles`.
 
-**Response 200** (`Evento`): Evento completo con `entradas_disponibles` actualizado
+**Caché AP** (`services/lectura_cache.py`, Redis DB 1, clave `cache:evento:{id}`): header `X-Cache` = `HIT` (< 30 s), `MISS`, `STALE` (MongoDB caído, copia vencida de hasta 1 h) o `BYPASS` (`Cache-Control: no-cache`, lo manda la SAGA). Los 404 no se cachean.
 
-**Cache**: Redis cache-aside (TTL 30s) para `entradas_disponibles`
+**Errores**: 404 no existe; 422 UUID inválido; 503 MongoDB no disponible sin copia en caché.
 
-**Errores**:
-- 404: Evento no encontrado
-- 422: UUID inválido
+---
+
+### POST /api/eventos/{evento_id}/decrementar-inventario · /incrementar-inventario
+
+**Request Body** (`AjusteInventarioRequest`):
+```json
+{"categoria": "general", "cantidad": 2}
+```
+
+**Response 200** (`AjusteInventarioResponse`):
+```json
+{"evento_id": "uuid", "categoria": "general", "disponibles": 78, "entradas_disponibles": 98}
+```
+
+Una sola operación atómica sobre el documento (`find_one_and_update` con `$elemMatch` + `$inc` sobre la categoría y el total). Al decrementar exige stock suficiente en la categoría.
+
+**Errores**: 404 evento inexistente; 422 categoría inexistente o cantidad ≤ 0; 409 stock insuficiente (solo al decrementar). Ambos invalidan la caché del evento.
 
 ---
 
 ## Modelos Pydantic (Referencia)
 
-Ver `brain/data-models/event-schema.md` para definiciones completas.
+Ver [[event-schema]] para las definiciones completas.
 
-- `PrecioCategoria` - categoría, precio, disponibles
-- `Ubicacion` - venue, direccion, ciudad, pais, coordenadas
+- `PrecioCategoria` - categoria, precio (Decimal), disponibles
+- `Ubicacion` - ciudad, pais, direccion (opcional)
 - `EventoCreate` - Request POST
-- `Evento` - Response con entradas_disponibles
+- `EventoResponse` - Response
+- `AjusteInventarioRequest` / `AjusteInventarioResponse` - Inventario
 - `EstadoEvento` - Enum: borrador, publicado, cancelado, finalizado
 
 ---
@@ -112,7 +120,7 @@ curl http://localhost:8002/openapi.json | jq '.components.schemas'
 
 ## Referencias Relacionadas
 
-- [[microservices/eventos]] - Spec completa servicio
-- [[data-models/event-schema]] - Modelo de datos MongoDB + Redis
-- [[architecture/saga-flow]] - Uso en SAGA paso 3-4
-- [[decisions/consistency-strategy]] - Consistencia eventual en lecturas
+- [[eventos]] - Spec completa servicio
+- [[event-schema]] - Modelo de datos MongoDB
+- [[saga-flow]] - Uso en los pasos 3 a 5 de la SAGA
+- [[consistency-strategy]] - Consistencia eventual en lecturas

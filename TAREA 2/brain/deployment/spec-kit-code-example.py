@@ -1,3 +1,11 @@
+# ============================================================================
+# BOCETO HISTÓRICO DE LA ETAPA DE DISEÑO (revisado 2026-11-05)
+# No refleja el código real: no existe un paquete "spec-kit" con decoradores
+# que genere spec.json, y los modelos/rutas de abajo no son los del servicio.
+# Código real: usuarios-service/src/. OpenAPI real: http://localhost:8001/openapi.json
+# Ver brain/deployment/spec-kit-setup.md.
+# ============================================================================
+
 """
 Ejemplo: Usuarios Service con spec-kit decorators
 Esto genera spec.json automáticamente desde los decoradores.

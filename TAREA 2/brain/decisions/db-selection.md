@@ -8,6 +8,8 @@ metadata:
 
 # Decisión: Selección de Bases de Datos NoSQL
 
+**Última revisión contra el código:** 2026-11-05
+
 ## Problema
 
 EventFlow requiere almacenar datos heterogéneos con distintos patrones de acceso:
@@ -39,16 +41,16 @@ Se deben elegir **al menos dos bases de datos NoSQL** y justificar su asignació
 
 | Microservicio | Base de Datos Primaria | Base de Datos Secundaria | Justificación |
 |---------------|------------------------|--------------------------|---------------|
-| **Usuarios** | **MongoDB** | — | Documentos anidados (historial_compras[]), consultas flexibles, embedded pattern natural |
-| **Eventos** | **MongoDB** | Redis (cache) | Lecturas masivas de eventos, aforo dinámico, embedded para ubicaciones/precios |
+| **Usuarios** | **MongoDB** | Redis (caché de lecturas, DB 1) | Documentos anidados (historial_compras[]), consultas flexibles, embedded pattern natural |
+| **Eventos** | **MongoDB** | Redis (caché de lecturas, DB 1) | Lecturas masivas de eventos, aforo dinámico, embedded para ubicación/precios |
 | **Reservas y Pagos** | **Redis** (pagos) + **MongoDB** (reservas) + **PostgreSQL** (auditoría) | — | Redis: atomicidad Lua para pago+inventario; MongoDB: persistencia reserva; PostgreSQL: ACID audit log |
 
 ### Bases de Datos NoSQL Seleccionadas (Mínimo 2)
 
 1. **MongoDB** — Base documental principal para Usuarios, Eventos, Reservas
-2. **Redis** — Clave-valor in-memory para pagos atómicos, inventario temporal, cache
+2. **Redis** — Clave-valor in-memory para pagos atómicos e inventario (DB 0) y caché de lecturas (DB 1)
 
-> **Nota**: PostgreSQL se usa como base relacional complementaria para auditoría/Event Sourcing (requerimiento de consistencia fuerte en escritura), no cuenta como NoSQL.
+> **Nota**: PostgreSQL se usa como base relacional complementaria para auditoría/Event Sourcing, no cuenta como NoSQL. Las tres bases corren en un solo nodo cada una (un único contenedor MongoDB con una colección por servicio).
 
 ---
 
@@ -58,15 +60,15 @@ Se deben elegir **al menos dos bases de datos NoSQL** y justificar su asignació
 
 **Patrón Embedded vs Reference:**
 
-- **Usuarios**: `historial_compras[]` **EMBEDDED** — Acceso frecuente junto al perfil, tamaño acotado (últimas 50 compras), atomicidad de actualización
-- **Eventos**: `ubicacion`, `precios[]`, `categorias[]` **EMBEDDED** — Datos que siempre se leen juntos, no compartidos
+- **Usuarios**: `historial_compras[]` **EMBEDDED** — Acceso frecuente junto al perfil, pocas compras por usuario (sin tope implementado), `$push` atómico e idempotente por `reserva_id`
+- **Eventos**: `ubicacion`, `precios[]` **EMBEDDED** — Datos que siempre se leen juntos, no compartidos
 - **Referencias**: `usuario_id` en Reservas, `evento_id` en Reservas — Relaciones many-to-one, consultas independientes
 
 **Ventajas:**
 - Un solo query trae usuario + historial (sin joins)
 - Esquema flexible para agregar campos (ej: preferencias, notificaciones)
 - Índices compuestos para consultas frecuentes (`email` unique, `nro_documento` unique)
-- Sharding por `usuario_id` o `evento_id` para escalar
+- Sharding por `usuario_id` o `evento_id` posible para escalar (no usado)
 
 ### Redis para Pagos e Inventario
 
@@ -82,7 +84,7 @@ Se deben elegir **al menos dos bases de datos NoSQL** y justificar su asignació
 
 - **Atomicidad**: Lua scripts se ejecutan sin interleaving
 - **Velocidad**: < 1ms latencia, crítico para alta concurrencia
-- **TTL automático**: Limpieza de pagos pendientes/expirados
+- **TTL automático**: el registro `pago:{reserva_id}` vence a los 90 días
 - **Estructuras**: Hash para pago, String para contador inventario
 
 ### PostgreSQL para Auditoría (Event Sourcing)
@@ -90,7 +92,7 @@ Se deben elegir **al menos dos bases de datos NoSQL** y justificar su asignació
 - **ACID completo** para compliance financiero
 - **Event Log** inmutable: cada paso SAGA = evento
 - **Consultas complejas**: Reportes, reconciliación, debugging
-- **CQRS natural**: Escritura en event_log, lectura en vistas materializadas
+- **CQRS natural**: escritura en `event_log`, lectura en vistas (`ventas_por_evento`, `tasa_exito_saga`, `compensaciones_por_tipo`; vistas comunes, no materializadas)
 
 ---
 
@@ -107,6 +109,6 @@ Se deben elegir **al menos dos bases de datos NoSQL** y justificar su asignació
 
 ## Referencias
 
-- [[data-models/db-choice-rationale]] — Razonamiento detallado por entidad
-- [[architecture/overview]] — Vista general arquitectura
-- [[patterns/saga-pattern]] — Uso de Redis en SAGA
+- [[db-choice-rationale]] — Razonamiento detallado por entidad
+- [[overview]] — Vista general arquitectura
+- [[saga-pattern]] — Uso de Redis en SAGA

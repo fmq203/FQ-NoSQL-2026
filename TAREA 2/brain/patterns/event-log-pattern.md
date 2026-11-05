@@ -3,23 +3,47 @@ name: event-log-pattern
 description: Patrón Append-Only Event Log con PostgreSQL
 metadata:
   type: pattern
-  status: in-progress
+  status: complete
 ---
 
 # Patrón Event Log (Append-Only)
 
+**Última revisión contra el código:** 2026-11-05 (`reservas-service/src/services/postgresql.py`)
+
 ## Concepto
 
-El **Event Log** es un registro inmutable de todos los eventos importantes del sistema. No es una base de datos "normal" — es una **cinta de auditoría** que solo crece (append-only).
+El **event log** es una cinta de auditoría que solo crece: cada paso de cada compra agrega una fila y nunca se modifica ni se borra. Registra también los **fallos y las compensaciones**, que es justamente lo que el modelo operativo (MongoDB, donde solo quedan las reservas confirmadas) no muestra.
 
-```
-Transacción 1 → evento_creado → ✅ Agregado al log
-Transacción 2 → pago_procesado → ✅ Agregado al log
-Transacción 3 → inventario_decrementado → ✅ Agregado al log
+Relación con [[event-sourcing-cqrs]]: este doc es el *cómo* (la tabla y la escritura); aquel, el *para qué* (auditoría + CQRS).
 
-Nunca se modifica ni elimina (immutable).
-Solo se agrega al final.
+---
+
+## Implementación real
+
+Una sola función, llamada desde el orquestador y desde cada handler:
+
+```python
+async def insert_event_log(event_type, aggregate_id, payload,
+                           correlation_id=None, aggregate_type="Reserva") -> None:
+    """Un fallo al escribir en el event log NUNCA debe abortar la SAGA."""
+    try:
+        pool = await get_pg_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO event_log
+                       (event_type, aggregate_id, aggregate_type, payload, correlation_id)
+                   VALUES ($1, $2, $3, $4::jsonb, $5)""",
+                _event_type_value(event_type), aggregate_id, aggregate_type,
+                json.dumps(payload, default=str), correlation_id,
+            )
+    except Exception as e:
+        logger.warning(f"No se pudo registrar evento {event_type} en event_log: {e}")
 ```
+
+- `id` (BIGSERIAL) y `timestamp` (`NOW()`) los pone PostgreSQL.
+- Pool `asyncpg`; cada `INSERT` es su propia transacción.
+- **No bloqueante**: si PostgreSQL no responde, warning y la compra sigue.
+- Lectura: `get_events_by_aggregate(reserva_id)` → `GET /api/reservar/{id}/audit`.
 
 ---
 
@@ -27,253 +51,79 @@ Solo se agrega al final.
 
 ```
 POST /api/reservar
-    │
-    ├─ SAGA Step 1: Validar
-    │  └─ evento: RESERVA_INICIADA
-    │     insertado en PostgreSQL ✅
-    │
-    ├─ SAGA Step 2: Validar inventario
-    │  └─ evento: INVENTARIO_VALIDADO
-    │     insertado en PostgreSQL ✅
-    │
-    ├─ SAGA Step 3: Procesar pago (Redis)
-    │  ├─ éxito: evento: PAGO_PROCESADO ✅
-    │  └─ fallo: evento: PAGO_RECHAZADO ❌
-    │     insertado en PostgreSQL
-    │
-    ├─ SAGA Step 4: Decrement inventario (MongoDB)
-    │  ├─ éxito: evento: INVENTARIO_DECREMENTADO ✅
-    │  └─ fallo: evento: INVENTARIO_FALLO ❌
-    │
-    ├─ SAGA Step 5: Confirmar en MongoDB
-    │  ├─ éxito: evento: RESERVA_CONFIRMADA ✅
-    │  └─ fallo: evento: RESERVA_FALLIDA ❌
-    │
-    └─ Resultado final registrado en PostgreSQL
-       (auditoría completa de qué pasó)
+ ├─ SAGA_STARTED
+ ├─ Paso 2 OK → USUARIO_VALIDADO
+ ├─ Paso 3 OK → EVENTO_VALIDADO
+ ├─ Paso 4: Lua cobra → PAGO_PROCESADO
+ │    ├─ Eventos sincronizado → INVENTARIO_DECREMENTADO
+ │    └─ falla la sync → COMPENSACION_EJECUTADA → SAGA_FAILED
+ ├─ Paso 5 OK → RESERVA_CONFIRMADA → HISTORIAL_ACTUALIZADO | HISTORIAL_PENDIENTE
+ │    └─ falla el insert → COMPENSACION_EJECUTADA → SAGA_FAILED
+ └─ Paso 6 → SAGA_COMPLETED
 
-** IMPORTANTE **
-- PostgreSQL registra incluso los FALLOS
-- Si SAGA falla en Step 3, queda registrado:
-  PAGO_RECHAZADO → RESERVA_FALLIDA
-  (trazabilidad completa para debugging)
+Cualquier fallo en los pasos 1-3 → SAGA_FAILED (sin compensación)
+```
+
+### Timelines reales (de la demo)
+
+```
+Éxito (≈ 105 ms):
+  SAGA_STARTED → USUARIO_VALIDADO (+21) → EVENTO_VALIDADO (+42) → PAGO_PROCESADO (+47)
+  → INVENTARIO_DECREMENTADO (+68) → RESERVA_CONFIRMADA (+80) → HISTORIAL_ACTUALIZADO (+101)
+  → SAGA_COMPLETED (+105)
+
+Compensación del paso 4 (≈ 51 ms):
+  SAGA_STARTED → USUARIO_VALIDADO (+18) → EVENTO_VALIDADO (+36) → PAGO_PROCESADO (+42)
+  → COMPENSACION_EJECUTADA (+47) → SAGA_FAILED (+51)
 ```
 
 ---
 
-## Implementación: Pseudocódigo
-
-```python
-class EventLog:
-    def __init__(self, postgresql_connection):
-        self.db = postgresql_connection
-    
-    def registrar_evento(self, tipo, usuario_id, evento_id, datos, ip_address=None):
-        """Registra un evento en el log (append-only)."""
-        query = """
-        INSERT INTO event_log 
-          (tipo, usuario_id, evento_id, datos, ip_address, hash_anterior)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        RETURNING id, timestamp;
-        """
-        
-        # Obtener hash del evento anterior (para chain integrity)
-        hash_anterior = self.obtener_ultimo_evento_id(usuario_id)
-        
-        resultado = self.db.execute(query, [
-            tipo,
-            usuario_id,
-            evento_id,
-            json.dumps(datos),  # JSONB
-            ip_address,
-            hash_anterior
-        ])
-        
-        return resultado
-    
-    def obtener_ultimo_evento_id(self, usuario_id):
-        """Obtiene el ID del último evento del usuario (para chain)."""
-        query = """
-        SELECT evento_id FROM event_log
-        WHERE usuario_id = %s
-        ORDER BY timestamp DESC LIMIT 1;
-        """
-        resultado = self.db.execute(query, [usuario_id])
-        return resultado[0]['evento_id'] if resultado else None
-
-# ============ EN SAGA ORCHESTRATOR ============
-
-class ReservasOrchestrator:
-    def __init__(self, redis, mongodb, postgresql):
-        self.redis = redis
-        self.mongodb = mongodb
-        self.event_log = EventLog(postgresql)
-    
-    def procesar_reserva(self, solicitud):
-        try:
-            # Step 1: Validar usuario
-            usuario = self.mongodb.usuarios.findOne({'_id': solicitud.usuario_id})
-            if not usuario:
-                # Registrar FALLO en PostgreSQL
-                self.event_log.registrar_evento(
-                    tipo='RESERVA_INICIADA',
-                    usuario_id=solicitud.usuario_id,
-                    evento_id=solicitud.evento_id,
-                    datos={'paso_fallo': 1, 'razon': 'usuario_no_existe'},
-                    ip_address=solicitud.ip
-                )
-                raise ValidationError("Usuario no existe")
-            
-            # ✅ Registrar evento exitoso
-            self.event_log.registrar_evento(
-                tipo='USUARIO_VALIDADO',
-                usuario_id=solicitud.usuario_id,
-                evento_id=solicitud.evento_id,
-                datos={'usuario_nombre': usuario['nombre']}
-            )
-            
-            # Step 2: Validar inventario
-            evento = self.mongodb.eventos.findOne({'_id': solicitud.evento_id})
-            if evento['entradas_disponibles'] < solicitud.cantidad:
-                self.event_log.registrar_evento(
-                    tipo='INVENTARIO_INSUFICIENTE',
-                    usuario_id=solicitud.usuario_id,
-                    evento_id=solicitud.evento_id,
-                    datos={'disponibles': evento['entradas_disponibles']}
-                )
-                raise ValidationError("Inventario insuficiente")
-            
-            # ✅ Registrar
-            self.event_log.registrar_evento(
-                tipo='INVENTARIO_VALIDADO',
-                usuario_id=solicitud.usuario_id,
-                evento_id=solicitud.evento_id,
-                datos={'cantidad_solicitada': solicitud.cantidad}
-            )
-            
-            # Step 3: Procesar pago en Redis (atomic)
-            pago_result = self.redis.execute_lua_script(PAGO_SCRIPT, solicitud)
-            
-            if not pago_result['ok']:
-                # ❌ Registrar FALLO en PostgreSQL
-                self.event_log.registrar_evento(
-                    tipo='PAGO_RECHAZADO',
-                    usuario_id=solicitud.usuario_id,
-                    evento_id=solicitud.evento_id,
-                    datos={'razon': pago_result['err']}
-                )
-                raise PaymentError(pago_result['err'])
-            
-            # ✅ Registrar pago exitoso
-            self.event_log.registrar_evento(
-                tipo='PAGO_PROCESADO',
-                usuario_id=solicitud.usuario_id,
-                evento_id=solicitud.evento_id,
-                datos={
-                    'pago_id': pago_result['pago_id'],
-                    'monto': solicitud.monto
-                }
-            )
-            
-            # Step 4-5: Actualizar MongoDB y confirmar
-            # ... (resto de SAGA steps)
-            
-            # ✅ ÉXITO: Registrar confirmación final
-            self.event_log.registrar_evento(
-                tipo='RESERVA_CONFIRMADA',
-                usuario_id=solicitud.usuario_id,
-                evento_id=solicitud.evento_id,
-                datos={
-                    'reserva_id': nueva_reserva.id,
-                    'numero_confirmacion': nueva_reserva.confirmacion
-                }
-            )
-            
-            return {'status': 'éxito', 'reserva_id': nueva_reserva.id}
-        
-        except Exception as e:
-            # ❌ Registrar FALLO general
-            self.event_log.registrar_evento(
-                tipo='RESERVA_FALLIDA',
-                usuario_id=solicitud.usuario_id,
-                evento_id=solicitud.evento_id,
-                datos={
-                    'razon': str(e),
-                    'paso_fallo': self.detectar_paso_fallo(e)
-                }
-            )
-            # Compensaciones...
-            raise SagaFailure(str(e))
-```
-
----
-
-## Ventajas del Patrón
-
-| Ventaja | Ejemplo |
-|---------|---------|
-| **Auditoría Completa** | Ver EXACTAMENTE qué pasó en cada paso |
-| **Debugging** | "¿Por qué falló esta compra?" → buscar en event log |
-| **Compliance GDPR** | Registro inmutable de accesos a datos personales |
-| **Trazabilidad** | Chain of events con timestamps ordenados |
-| **Replay** | Potencialmente reconstruir estado (Event Sourcing avanzado) |
-| **Analytics** | SQL queries sobre eventos históricos |
-
----
-
-## Queries Útiles para Debugging
-
-### ¿Por qué falló la compra del usuario X?
+## Consultas de debugging
 
 ```sql
-SELECT timestamp, tipo, datos
-FROM event_log
-WHERE usuario_id = 'user-456'
-  AND evento_id = 'evt-789'
-ORDER BY timestamp;
+-- ¿Qué pasó con esta compra?
+SELECT event_type, payload, timestamp FROM event_log
+WHERE aggregate_id = '<reserva_id>' ORDER BY timestamp, id;
 
--- Resultado:
--- 10:05:30 | USUARIO_VALIDADO | {...}
--- 10:05:31 | INVENTARIO_VALIDADO | {...}
--- 10:05:32 | PAGO_PROCESADO | {...}
--- 10:05:33 | INVENTARIO_DECREMENTADO | {...}
--- 10:05:34 | RESERVA_CONFIRMADA | {...}  ← Éxito
+-- ¿Dónde fallan las compras hoy?
+SELECT payload->>'failed_step' AS paso, COUNT(*) FROM event_log
+WHERE event_type = 'SAGA_FAILED' AND timestamp > NOW() - INTERVAL '1 day'
+GROUP BY 1;
 
--- O si falló:
--- 10:05:30 | USUARIO_VALIDADO | {...}
--- 10:05:31 | PAGO_RECHAZADO | {"razon": "fondos insuficientes"}  ← FALLO
--- 10:05:31 | RESERVA_FALLIDA | {"paso_fallo": 3}
+-- Compras que se cobraron y se revirtieron
+SELECT aggregate_id FROM event_log WHERE event_type = 'COMPENSACION_EJECUTADA';
 ```
+
+Más consultas y las vistas CQRS en [[event-log-schema]].
 
 ---
 
-## Características de PostgreSQL Aprovechadas
+## Características de PostgreSQL aprovechadas
 
 | Característica | Uso |
 |---------------|-----|
-| **JSONB** | `datos` almacena cualquier estructura |
-| **Timestamps** | `timestamp` garantiza orden (no confuso como en NoSQL) |
-| **Indexes** | Búsquedas rápidas por usuario, tipo, timestamp |
-| **Partitioning** | Para tablas enormes, particionar por mes/trimestre |
-| **WAL (Write-Ahead Logging)** | Durabilidad garantizada |
-| **ACID** | Garantía de que evento se escribió o no (no medio escrito) |
+| **JSONB + índice GIN** | Payload flexible por tipo de evento, consultable (`payload @> '{...}'`) |
+| **BIGSERIAL + TIMESTAMPTZ** | Orden total de los eventos (se ordena por `timestamp, id`) |
+| **Índices** | Por `aggregate_id`, `event_type`, `timestamp`, `correlation_id` |
+| **Vistas** | `ventas_por_evento`, `tasa_exito_saga`, `compensaciones_por_tipo` |
+| **ACID / WAL** | Cada evento se escribe completo o no se escribe |
 
 ---
 
-## Limitaciones & Mitigaciones
+## Limitaciones
 
-| Limitación | Mitigación |
-|-----------|-----------|
-| **Tabla crece indefinidamente** | Archivado a tabla histórica después de 1-2 años |
-| **Búsquedas lentas en tabla gigante** | Partitioning por timestamp + indexes |
-| **No es "real-time"** | PostgreSQL is fast pero no como Redis (< 1ms) |
+| Limitación | Estado |
+|-----------|--------|
+| Append-only solo por convención (la app no hace UPDATE/DELETE; la base no lo impide) | Se podría reforzar con permisos o un trigger |
+| Si PostgreSQL cae, los eventos de ese lapso se pierden | Aceptado: la auditoría no bloquea la compra |
+| La tabla crece sin límite | Sin retención ni particionamiento implementados |
+| Sin integridad encadenada (hash entre eventos) | Evaluado en el diseño, no implementado |
 
 ---
 
-## Próximos Pasos
+## Referencias
 
-- [ ] Implementar EventLog class en Python
-- [ ] Agregar async writes (si volumen es muy alto)
-- [ ] Crear vistas SQL para queries comunes
-- [ ] Set up archivado automático de eventos viejos
-- [ ] Dashboards de eventos (Grafana)
+- [[event-log-schema]] - Tabla, índices, consultas
+- [[event-sourcing-cqrs]] - Auditoría + CQRS
+- [[saga-flow]] - Qué paso emite cada evento

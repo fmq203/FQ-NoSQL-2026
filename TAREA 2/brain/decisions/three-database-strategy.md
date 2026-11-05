@@ -3,261 +3,136 @@ name: three-database-strategy
 description: Estrategia de 3 bases de datos - MongoDB, Redis, PostgreSQL
 metadata:
   type: decision
-  status: in-progress
-  last-updated: 2026-09-20
+  status: complete
+  last-updated: 2026-11-05
 ---
 
 # Estrategia de 3 Bases de Datos
+
+**Última revisión contra el código:** 2026-11-05
 
 ## Arquitectura
 
 ```
                    EVENTFLOW 3-DATABASE ARCHITECTURE
 
-┌──────────────────┐    ┌─────────────────┐    ┌──────────────────┐
-│  MONGODB         │    │  REDIS          │    │  POSTGRESQL      │
-│  (Datos maestros)│    │  (Transacciones)│    │  (Auditoría)     │
-├──────────────────┤    ├─────────────────┤    ├──────────────────┤
-│ Usuarios         │    │ Pagos (atomic)  │    │ Event Log        │
-│ Eventos          │    │ Reservas temp   │    │ Compliance Log   │
-│ Sesiones         │    │ Caché caliente  │    │ Auditoría        │
-│ Historial        │    │                 │    │ GDPR Tracking    │
-│                  │    │ TTL: 5-90 días  │    │                  │
-└──────────────────┘    └─────────────────┘    └──────────────────┘
-     AP (Eventual)          CP (Strong)             CA (ACID logs)
+┌──────────────────────┐  ┌───────────────────────┐  ┌──────────────────────┐
+│ MONGODB              │  │ REDIS                 │  │ POSTGRESQL           │
+│ (datos de negocio)   │  │ (transacción + caché) │  │ (auditoría)          │
+├──────────────────────┤  ├───────────────────────┤  ├──────────────────────┤
+│ eventflow.usuarios   │  │ DB 0:                 │  │ event_log            │
+│   + historial        │  │  pago:{reserva_id}    │  │   (append-only)      │
+│ eventflow.eventos    │  │  evento:..:disponibles│  │ vistas CQRS:         │
+│   + precios          │  │ DB 1:                 │  │  ventas_por_evento   │
+│ eventflow.reservas   │  │  cache:usuario:{id}   │  │  tasa_exito_saga     │
+│   + saga_log         │  │  cache:evento:{id}    │  │  compensaciones_...  │
+└──────────────────────┘  └───────────────────────┘  └──────────────────────┘
+  lecturas AP (vía caché)    compra CP (Lua atómico)    registro ACID, no bloquea
 ```
 
 ---
 
 ## Responsabilidades por BD
 
-### 📊 MongoDB — Datos de Negocio
+### MongoDB — datos de negocio
 
-**Qué almacena:**
-- Usuarios (perfil, email, documento)
-- Eventos (nombre, fecha, lugar, aforo)
-- Historial de compras (embebido en usuarios)
-- Sesiones de usuario
+- **Usuarios** (perfil + `historial_compras[]` embebido), **Eventos** (`precios[]` y `ubicacion` embebidos, inventario por categoría) y **Reservas** confirmadas (con `saga_log[]`).
+- Un contenedor, una base (`eventflow`), una colección por servicio.
+- Escrituras con `w=majority` + journal; índices únicos para email, documento, nombre de evento y número de confirmación.
 
-**Características:**
-- Escalabilidad horizontal (sharding)
-- Flexible schema (puede evolucionar)
-- Búsquedas rápidas (indexes)
-- **Consistency:** AP (Eventual) — OK para lecturas
+### Redis — transacción crítica y caché
 
-**Ejemplo:**
-```javascript
-db.usuarios.findOne({ email: "juan@example.com" })
-// Retorna: usuario completo con historial
+- **DB 0** (Reservas): `evento:{id}:categoria:{cat}:disponibles` (contador) y `pago:{reserva_id}` (hash, TTL 90 días). El script Lua `pagar_y_decrementar` chequea stock, descuenta y registra el pago en una sola operación: Redis ejecuta un script a la vez, así que **no hay doble venta**. `compensar_pago` lo revierte.
+- **DB 1** (Usuarios y Eventos): caché de lecturas stale-if-error (fresco 30 s; copia vencida hasta 10 min / 1 h si MongoDB cae).
+- Persistencia AOF. Sin réplica.
+
+### PostgreSQL — auditoría
+
+- `event_log` append-only: un evento por paso de cada SAGA (incluidas las fallidas y las compensaciones), con `correlation_id` para seguir la petición.
+- Vistas CQRS para análisis; índice GIN para consultar dentro del payload JSONB.
+- No es fuente de verdad del negocio: si no responde, la compra sigue (se pierde ese registro).
+
+---
+
+## Flujo de una compra exitosa
+
+```
+POST /api/reservar
+ ├─ Validar usuario y evento        → HTTP a Usuarios / Eventos (leen MongoDB, sin caché)
+ ├─ Cobrar + descontar (atómico)    → Redis DB 0, Lua
+ ├─ Sincronizar inventario          → HTTP a Eventos → MongoDB ($elemMatch + $inc)
+ ├─ Confirmar reserva               → MongoDB eventflow.reservas
+ ├─ Registrar historial             → HTTP a Usuarios → MongoDB ($push idempotente)
+ └─ Un evento por paso              → PostgreSQL event_log
+Resultado: 201 Created
+```
+
+## Flujo de compensación
+
+```
+Falla la sincronización con Eventos (paso 4)
+ ├─ Redis: Lua compensar_pago (INCRBY inventario + DEL pago)
+ └─ PostgreSQL: PAGO_PROCESADO ya registrado → COMPENSACION_EJECUTADA → SAGA_FAILED
+Resultado: 503 SERVICE_UNAVAILABLE (el cliente puede reintentar con el mismo reserva_id)
+
+Falla el insert en MongoDB (paso 5)
+ ├─ Redis: Lua compensar_pago
+ ├─ Eventos: POST /incrementar-inventario
+ └─ PostgreSQL: COMPENSACION_EJECUTADA → SAGA_FAILED
+Resultado: 500 RESERVATION_FAILED
 ```
 
 ---
 
-### ⚡ Redis — Transacciones Críticas
+## Casos de uso de la auditoría
 
-**Qué almacena:**
-- Reservas en proceso (transacciones)
-- Pagos (pendientes, completados)
-- Caché de eventos/usuarios (TTL 5-10 min)
-- Sesiones (TTL horas)
+**"Me cobraron pero la compra falló"**: la línea de tiempo de la reserva muestra si el cobro se revirtió.
 
-**Características:**
-- In-memory ultra-rápido (< 10ms)
-- Transacciones atómicas (Lua scripts)
-- No hay race conditions
-- Persistence (RDB/AOF) como backup
-- **Consistency:** CP (Strong) — NO hay dobles ventas
-
-**Ejemplo:**
-```lua
--- Lua script: procesar pago atomically
-if redis.call('GET', 'evento:123:disponibles') >= 2 then
-  redis.call('DECRBY', 'evento:123:disponibles', 2)
-  redis.call('INCR', 'pago:completados')
-  return { ok = true }
-else
-  return { err = "Inventario insuficiente" }
-end
-```
-
----
-
-### 📋 PostgreSQL — Auditoría e Compliance
-
-**Qué almacena:**
-- **Event Log (append-only):** Cada evento importante queda registrado
-- **Compliance Log:** Quién accedió qué, cuándo
-- **GDPR Tracking:** Modificaciones a datos personales
-- **Debugging:** Replay de transacciones fallidas
-
-**Características:**
-- ACID transactions (garantía fuerte)
-- Ordered by timestamp (auditoría temporal)
-- Immutable (append-only pattern)
-- SQL para análisis histórico
-- **Consistency:** CA (ACID logs)
-
-**Ejemplo — Event Log:**
 ```sql
-INSERT INTO event_log (evento_id, tipo, usuario_id, datos, timestamp)
-VALUES (
-  'uuid-123',
-  'RESERVA_CREADA',
-  'user-456',
-  '{"evento_id":"evt-789","cantidad":2,"precio":300}',
-  NOW()
-);
-
--- Luego: SELECT * FROM event_log WHERE usuario_id = 'user-456' ORDER BY timestamp
--- Auditoría completa de todo lo que hizo ese usuario
+SELECT event_type, payload, timestamp FROM event_log
+WHERE aggregate_id = '<reserva_id>' ORDER BY timestamp, id;
+-- ... PAGO_PROCESADO → COMPENSACION_EJECUTADA → SAGA_FAILED
 ```
 
----
+(Es lo que muestra `GET /api/reservar/{id}/audit` y la tarjeta "Auditoría" de la demo.)
 
-## Flujo de Transacción Exitosa (3 BDs)
+**¿Dónde fallan las compras?**
 
-```
-1. POST /api/reservar
-   │
-   ├─ Validar en MongoDB
-   │  └─ GET usuarios/{id}, eventos/{id}
-   │     (eventual consistency OK)
-   │
-   ├─ Procesar en Redis (ATOMIC)
-   │  └─ Lua script: pago + decrement inventario
-   │     (strong consistency garantizada)
-   │
-   ├─ Confirmar en MongoDB
-   │  └─ UPDATE eventos{} (inventario final)
-   │     db.reservas.insert() (registro de compra)
-   │
-   └─ AUDITORÍA en PostgreSQL (APPEND-ONLY)
-      └─ INSERT event_log { tipo: 'RESERVA_CREADA', usuario_id, ... }
-         (immutable timestamp, para debugging SAGA)
-
-Result: 201 Created
-```
-
----
-
-## Casos de Uso Específicos
-
-### 1. Debuggear por qué falló una compra
-
-**Problema:** Un usuario reporta que su compra falló pero le cobraron.
-
-**Solución:**
 ```sql
--- PostgreSQL: ver exactamente qué pasó
-SELECT * FROM event_log 
-WHERE usuario_id = 'user-456' 
-  AND tipo IN ('RESERVA_INICIADA', 'PAGO_PROCESADO', 'RESERVA_CONFIRMADA', 'PAGO_REVERTIDO')
-ORDER BY timestamp;
-
--- Resultado: puede ver toda la timeline de su transacción fallida
+SELECT payload->>'failed_step' AS paso, COUNT(*) FROM event_log
+WHERE event_type = 'SAGA_FAILED' GROUP BY 1;
 ```
+
+**Ventas por evento**: `SELECT * FROM ventas_por_evento;`
 
 ---
 
-### 2. Compliance & GDPR
+## Ventajas
 
-**Problema:** Usuario solicita "derecho al olvido" (GDPR).
-
-**Solución:**
-```sql
--- PostgreSQL: registro de todas las modificaciones de datos personales
-SELECT * FROM event_log 
-WHERE tipo = 'DATOS_PERSONALES_MODIFICADOS' 
-  AND usuario_id = 'user-456';
-
--- Resultado: historial completo de cambios, antes/después
-```
-
----
-
-### 3. Análisis de Eventos Problemáticos
-
-**Problema:** El evento "Concierto 2026" tiene muchas transacciones fallidas.
-
-**Solución:**
-```sql
--- PostgreSQL: análisis de fallos por evento
-SELECT 
-  COUNT(*) as fallos,
-  tipo,
-  DATE(timestamp) as fecha
-FROM event_log
-WHERE evento_id = 'evt-concierto-2026'
-  AND tipo LIKE '%FALLIDA%'
-GROUP BY tipo, fecha;
-```
-
----
-
-## Flujo de Compensación (Fallo en SAGA)
-
-```
-1. SAGA Step 3 falla (pago rechazado)
-   │
-   ├─ Redis: Rollback (revertir fondos)
-   │
-   ├─ MongoDB: No actualizar inventario
-   │
-   └─ PostgreSQL: Registrar evento de FALLO
-      INSERT event_log {
-        tipo: 'RESERVA_FALLIDA',
-        razon: 'PAGO_RECHAZADO',
-        timestamp: NOW()
-      }
-      (Queda registro inmutable del fallo para auditoría)
-
-Result: 500 Error + Auditoría completa del fallo
-```
-
----
-
-## Ventajas de 3 BDs
-
-| Ventaja | Detalles |
-|---------|----------|
-| **Especialización** | Cada BD optimizada para su caso de uso |
-| **Consistencia Flexible** | Eventual (MongoDB), Strong (Redis), ACID (PostgreSQL) |
-| **Debuggabilidad** | PostgreSQL como "caja negra" (black box) para ver qué pasó |
-| **Compliance** | Auditoría inmutable en PostgreSQL |
-| **Escalabilidad** | MongoDB horizontal, Redis Cluster, PostgreSQL standby |
-| **Performance** | Redis ultra-rápido para crítico, MongoDB para lectura, PostgreSQL para análisis offline |
-
----
+| Ventaja | Detalle |
+|---------|---------|
+| **Especialización** | Documentos para el negocio, atomicidad en memoria para la venta, SQL para el análisis |
+| **Consistencia por operación** | Lecturas AP (caché), compra fuerte (Lua + idempotencia + SAGA) |
+| **Trazabilidad** | Cada compra, fallida o no, queda reconstruible desde PostgreSQL |
+| **Privacidad** | Los datos personales viven solo en `eventflow.usuarios`; auditoría y reservas guardan identificadores |
 
 ## Desafíos
 
-| Desafío | Mitigación |
-|---------|-----------|
-| **Complejidad operacional** | Documentación clara (este brain), scripts de deployment |
-| **Sincronización entre BDs** | SAGA coordina, PostgreSQL es eventual (no es master) |
-| **Backups** | Estrategia separada para cada BD |
-| **Monitoring** | Dashboards que lean de las 3 BDs |
+| Desafío | Cómo se manejó |
+|---------|----------------|
+| Dos contadores de stock (Redis y MongoDB) | Redis decide la venta; MongoDB se sincroniza en el mismo paso y, si falla, se revierte Redis |
+| Complejidad operacional | Docker Compose, `make up` / `make test`, health checks por dependencia |
+| Un solo nodo por base | Documentado; la disponibilidad de lecturas se resuelve con la caché, no con réplicas |
+| Backups | No implementados |
 
 ---
 
-## Alternativas Rechazadas
+## Alternativas rechazadas
 
-### ❌ Solo MongoDB
-- No garantiza atomicidad en pagos
-- No tiene auditoria built-in
+- **Solo MongoDB**: la venta necesitaría transacciones multi-documento o un lock; el Lua de Redis lo resuelve en una operación sub-milisegundo.
+- **MongoDB + Redis**: sin un log SQL append-only, analizar y auditar compras fallidas sería más difícil.
+- **MongoDB + Redis + PostgreSQL**: seleccionada.
 
-### ❌ MongoDB + Redis
-- Sin auditoría legal/compliance
-- Difícil debuggear transacciones fallidas
+## Pendiente / no implementado
 
-### ✅ MongoDB + Redis + PostgreSQL
-- **Seleccionada:** Balancea performance + compliance + debuggabilidad
-
----
-
-## Próximas Decisiones
-
-- [ ] Schema de event_log en PostgreSQL (ver [[event-log-schema]])
-- [ ] Política de retention: ¿cuánto tiempo guardar event log?
-- [ ] Encryption de datos sensibles en PostgreSQL
-- [ ] Backup strategy para 3 BDs
+- Política de retención del `event_log`, cifrado de datos sensibles, backups, réplicas.

@@ -2,7 +2,7 @@
 
 **Rol:** Asistente especializado en diseño e implementación del sistema de microservicios **EventFlow** para gestión de eventos.
 
-**Última actualización:** 2026-09-20  
+**Última actualización:** 2026-11-05 (brain completo revisado contra el código)  
 **Fecha entrega pre-defensa:** 2026-11-05  
 **Fecha entrega final:** 2026-11-12
 
@@ -19,7 +19,7 @@ Decisiones de diseño arquitectónico y justificaciones.
 ### `architecture/`
 Diagramas, esquemas y vista general del sistema.
 - **Dueño:** Yo (Claude) + equipo (revisan y sugieren cambios).
-- Contiene: `overview.md`, `microservices-diagram.md`, `data-flow.md`, `saga-flow.md`, `chain-of-responsibility.md`.
+- Contiene: `overview.md`, `microservices-diagram.md`, `data-flow.md`, `saga-flow.md` (la cadena está en `patterns/chain-of-responsibility.md`).
 
 ### `microservices/`
 Especificación detallada de cada microservicio (Usuarios, Eventos, Reservas).
@@ -27,25 +27,24 @@ Especificación detallada de cada microservicio (Usuarios, Eventos, Reservas).
 - Estructura: `usuarios.md`, `eventos.md`, `reservas-pagos.md`.
 
 ### `endpoints/`
-Especificación de APIs REST (referencias a spec-kit OpenAPI).
-- **Dueño:** spec-kit genera spec.json automáticamente desde código.
-- **Brain referencia:** `usuarios-endpoints.md` → punto a `/spec.json` (no duplica).
-- **Fuente de verdad:** `/usuarios-service/spec.json` (generado automáticamente).
+Especificación de APIs REST.
+- **Fuente de verdad:** la OpenAPI que genera FastAPI en `http://localhost:800{1,2,3}/openapi.json` (Swagger en `/docs`).
+- **Brain:** `*-endpoints.md` resume cada endpoint, errores y comportamiento (caché, idempotencia) que la spec no explica.
 
 ### `data-models/`
 Schemas NoSQL, decisiones embed vs reference, modelos de datos.
 - **Dueño:** Equipo + yo.
-- Archivos: `user-schema.md`, `event-schema.md`, `reservation-schema.md`, `db-choice-rationale.md`.
+- Archivos: `user-schema.md`, `event-schema.md`, `reservation-schema.md`, `event-log-schema.md`, `db-choice-rationale.md`.
 
 ### `patterns/`
 Implementación de patrones: SAGA (orquestación), Chain of Responsibility, Event Sourcing, CQRS.
 - **Dueño:** Equipo (código) + yo (documenta patrones).
-- Archivos: `saga-pattern.md`, `chain-of-responsibility.md`, `event-sourcing-cqrs.md`.
+- Archivos: `saga-pattern.md`, `chain-of-responsibility.md`, `event-log-pattern.md`, `event-sourcing-cqrs.md`.
 
 ### `deployment/`
-Docker, Docker Compose, Kubernetes, variables de entorno, configuración.
-- **Dueño:** Equipo + yo (mantengo templates).
-- Archivos: `docker-setup.md`, `docker-compose.md`, `deployment-checklist.md`.
+Docker, Docker Compose, variables de entorno, configuración (Kubernetes solo como diseño).
+- **Dueño:** Equipo + yo.
+- Archivos: `docker-setup.md`, `docker-compose.md`, `deployment-checklist.md`, `requirements.md`, `spec-kit-setup.md`, `postgresql-init.sql`; bocetos históricos `openapi-template.json`, `spec-kit-code-example.py`.
 
 ### `learnings/`
 Notas, lecciones aprendidas, decisiones fallidas, insights técnicos.
@@ -97,11 +96,12 @@ Contenido...
 
 ## 📝 Checklist
 
-- [ ] Decisiones de BD seleccionadas
-- [ ] Arquitectura diagrama completada
-- [ ] APIs especificadas
-- [ ] Data models decididos
-- [ ] Patrones SAGA + CoR documentados
-- [ ] Docker Compose funcional
+- [x] Decisiones de BD seleccionadas
+- [x] Arquitectura diagrama completada
+- [x] APIs especificadas
+- [x] Data models decididos
+- [x] Patrones SAGA + CoR documentados
+- [x] Docker Compose funcional
+- [x] Brain revisado contra el código (2026-11-05)
 - [ ] Pre-defensa 2026-11-05
 - [ ] Defensa final 2026-11-12

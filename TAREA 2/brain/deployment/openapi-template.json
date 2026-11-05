@@ -3,7 +3,7 @@
   "info": {
     "title": "EventFlow - Usuarios Service",
     "version": "1.0.0",
-    "description": "API para gestión de usuarios y perfiles",
+    "description": "BOCETO HISTÓRICO de la etapa de diseño (revisado 2026-11-05): no refleja las APIs reales. La OpenAPI real la genera FastAPI en http://localhost:8001/openapi.json (y :8002, :8003). Ver brain/deployment/spec-kit-setup.md. | API para gestión de usuarios y perfiles",
     "contact": {
       "name": "Equipo EventFlow"
     }

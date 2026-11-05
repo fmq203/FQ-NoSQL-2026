@@ -8,6 +8,8 @@ metadata:
 
 # Flujo de Datos — EventFlow
 
+**Última revisión contra el código:** 2026-11-05
+
 ## Flujo Principal: Compra de Entrada (SAGA)
 
 ```mermaid
@@ -20,34 +22,84 @@ sequenceDiagram
     participant MongoDB
     participant PG as PostgreSQL
 
-    Client->>RS: POST /api/reservar\n{usuario_id, evento_id, cantidad, metodo_pago}
-    
-    Note over RS: Chain of Responsibility\n1. ValidadorDeDatos\n2. ValidadorInventario\n3. ProcesadorPago\n4. ConfirmadorReserva\n5. Auditor
+    Client->>RS: POST /api/reservar<br/>{usuario_id, evento_id, cantidad, categoria, metodo_pago, reserva_id?}
 
-    RS->>US: GET /api/usuarios/{usuario_id}
-    US-->>RS: 200 OK / 404
-    
-    RS->>ES: GET /api/eventos/{evento_id}
-    ES-->>RS: 200 OK {entradas_disponibles} / 404
-    
-    Note over RS,Redis: Paso atómico en Redis (Lua Script)
-    RS->>Redis: EVAL lua_pago_inventario\n{usuario_id, evento_id, cantidad, precio}
-    Redis-->>RS: {pago_ok, inventario_ok}
-    
-    alt Éxito
-        RS->>MongoDB: INSERT reserva
-        RS->>PG: INSERT audit_event (SAGA_COMPLETED)
-        RS-->>Client: 201 {reserva_id, estado: "confirmada", numero_confirmacion}
-    else Fallo
-        RS->>Redis: COMPENSACIÓN (rollback pago/inventario)
-        RS->>PG: INSERT audit_event (SAGA_FAILED + compensaciones)
-        RS-->>Client: 400/409/500 {error, detalle}
+    Note over RS: Chain of Responsibility (en serie):<br/>1. ValidadorDeDatos 2. ValidadorInventario (usuario)<br/>3. ValidadorEvento 4. ProcesadorPago<br/>5. ConfirmadorReserva 6. Auditor
+
+    RS->>PG: SAGA_STARTED
+    RS->>US: GET /api/usuarios/{usuario_id} (no-cache)
+    US-->>RS: 200 / 404 USER_NOT_FOUND
+    RS->>PG: USUARIO_VALIDADO
+
+    RS->>ES: GET /api/eventos/{evento_id} (no-cache)
+    ES-->>RS: 200 (estado, precios[], disponibles) / 404
+    RS->>PG: EVENTO_VALIDADO
+
+    Note over RS,Redis: Paso 4: Lua pagar_y_decrementar (atómico)
+    RS->>Redis: EVALSHA (inventario_key, pago:{reserva_id})
+    Redis-->>RS: OK / INVENTARIO_INSUFICIENTE
+    RS->>PG: PAGO_PROCESADO
+    RS->>ES: POST /api/eventos/{id}/decrementar-inventario
+
+    alt Eventos no responde
+        RS->>Redis: Lua compensar (INCRBY + DEL pago)
+        RS->>PG: COMPENSACION_EJECUTADA, SAGA_FAILED
+        RS-->>Client: 503 SERVICE_UNAVAILABLE
+    else Eventos OK
+        RS->>PG: INVENTARIO_DECREMENTADO
+        RS->>MongoDB: insert reserva (_id = reserva_id)
+        alt Insert falla
+            RS->>Redis: Lua compensar
+            RS->>ES: POST /incrementar-inventario
+            RS->>PG: COMPENSACION_EJECUTADA, SAGA_FAILED
+            RS-->>Client: 500 RESERVATION_FAILED
+        else Insert OK
+            RS->>PG: RESERVA_CONFIRMADA
+            RS->>US: POST /api/usuarios/{id}/historial (best-effort)
+            RS->>PG: HISTORIAL_ACTUALIZADO o HISTORIAL_PENDIENTE
+            RS->>PG: SAGA_COMPLETED
+            RS-->>Client: 201 {reserva_id, estado: "confirmada", numero_confirmacion}
+        end
     end
 ```
 
+Si fallan los pasos 1 a 3 no se modificó nada: 404 / 409 / 422 / 503 y `SAGA_FAILED`, sin compensación. Un reintento con el mismo `reserva_id` de una reserva ya confirmada devuelve **200** sin volver a cobrar.
+
 ---
 
-## Flujo: Lectura de Usuario
+## Flujo: Lectura de Usuario o Evento (caché AP)
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant S as Usuarios / Eventos Service
+    participant Cache as Redis DB 1
+    participant MongoDB
+
+    Client->>S: GET /api/usuarios/{id} (o /api/eventos/{id})
+    S->>Cache: GET cache:usuario:{id}
+    alt Fresca (< 30 s)
+        Cache-->>S: documento
+        S-->>Client: 200 (X-Cache: HIT)
+    else Vencida o ausente
+        S->>MongoDB: findOne({_id: id})
+        alt MongoDB responde
+            MongoDB-->>S: documento
+            S->>Cache: SET (TTL stale: 600 s usuarios / 3600 s eventos)
+            S-->>Client: 200 (X-Cache: MISS)
+        else MongoDB caído y hay entrada vencida
+            S-->>Client: 200 (X-Cache: STALE)
+        else MongoDB caído sin entrada
+            S-->>Client: 503 + Retry-After: 5
+        end
+    end
+```
+
+Con `Cache-Control: no-cache` (lo usa la SAGA) se lee siempre de MongoDB (`X-Cache: BYPASS`). Las escrituras que cambian el dato (inventario, historial) invalidan la entrada; los 404 no se cachean.
+
+---
+
+## Flujo: Exportación Anonimizada
 
 ```mermaid
 sequenceDiagram
@@ -55,72 +107,33 @@ sequenceDiagram
     participant US as Usuarios Service
     participant MongoDB
 
-    Client->>US: GET /api/usuarios/{id}
-    US->>MongoDB: findOne({_id: id})
-    MongoDB-->>US: Documento usuario + historial_compras[]
-    US-->>Client: 200 {usuario_id, nombre, email, historial_compras[]}
-```
-
----
-
-## Flujo: Lectura de Evento
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant ES as Eventos Service
-    participant MongoDB
-
-    Client->>ES: GET /api/eventos/{id}
-    ES->>MongoDB: findOne({_id: id})
-    MongoDB-->>ES: Documento evento
-    ES-->>Client: 200 {evento_id, nombre, fecha, aforo_total, entradas_disponibles}
-```
-
----
-
-## Flujo: Exportación Anonimizada (GDPR)
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant US as Usuarios Service
-    participant MongoDB
-
-    Client->>US: GET /api/usuarios/exportar?format=json
-    US->>MongoDB: find({}, {projection: {historial_compras: 1}})
+    Client->>US: GET /api/usuarios/exportar?format=json|csv
+    US->>MongoDB: find({})
     MongoDB-->>US: Cursor usuarios
-    
-    Note over US: Anonimización por minimización:\n- Eliminar: nombre, apellido, email, nro_documento\n- pseudonimo = HMAC-SHA256(clave, usuario_id)\n- Generalizar: mes de alta, día de compra\n- Preservar: historial de compras
 
-    US-->>Client: 200 [{pseudonimo, tipo_documento, mes_alta, historial_compras}]  (o text/csv)
+    Note over US: Minimización:<br/>- Se eliminan nombre, apellido, email, nro_documento, usuario_id, reserva_id<br/>- pseudonimo = HMAC-SHA256(clave, usuario_id)[:32]<br/>- Se generalizan mes de alta y fecha de compra<br/>- CSV: celdas neutralizadas contra inyección de fórmulas
+
+    US-->>Client: 200 [{pseudonimo, tipo_documento, mes_alta, historial_compras}] (o text/csv)
 ```
 
 ---
 
-## Flujo: Escritura de Evento (Audit Log)
+## Flujo: Escritura del Event Log
 
-```mermaid
-sequenceDiagram
-    participant RS as Reservas Service
-    participant PG as PostgreSQL
+`insert_event_log(event_type, aggregate_id, payload, correlation_id)` → `INSERT INTO event_log (event_type, aggregate_id, aggregate_type, payload, correlation_id)`; `id` y `timestamp` los pone PostgreSQL. La función atrapa sus errores: si PostgreSQL falla, la compra sigue.
 
-    RS->>PG: INSERT INTO event_log\n(event_type, aggregate_id, payload, metadata, timestamp)
-    
-    Note over RS,PG: Eventos almacenados:\n- SAGA_STARTED\n- USUARIO_VALIDADO\n- EVENTO_VALIDADO\n- PAGO_PROCESADO\n- INVENTARIO_DECREMENTADO\n- RESERVA_CONFIRMADA\n- SAGA_COMPLETED\n- SAGA_FAILED\n- COMPENSACION_EJECUTADA
-```
+Eventos: `SAGA_STARTED`, `USUARIO_VALIDADO`, `EVENTO_VALIDADO`, `PAGO_PROCESADO`, `INVENTARIO_DECREMENTADO`, `RESERVA_CONFIRMADA`, `HISTORIAL_ACTUALIZADO` / `HISTORIAL_PENDIENTE`, `SAGA_COMPLETED`, `SAGA_FAILED`, `COMPENSACION_EJECUTADA`.
 
 ---
 
 ## Resumen de Flujos por Consistencia
 
-| Flujo | Consistencia | Latencia Objetivo | Patrón |
-|-------|--------------|-------------------|--------|
-| Lectura Usuario | Eventual | < 50ms | Direct MongoDB |
-| Lectura Evento | Eventual | < 50ms | Direct MongoDB |
-| Listar Usuarios | Eventual | < 100ms | Paginado MongoDB |
-| Compra Entrada | **Fuerte** | < 500ms | SAGA + Redis Lua |
-| Exportar Anonimizado | Eventual | < 2s | Batch + Hash |
+| Flujo | Consistencia | Medido | Patrón |
+|-------|--------------|--------|--------|
+| Lectura usuario / evento | Eventual (AP) | p50 ≈ 8-10 ms local | Caché stale-if-error + MongoDB |
+| Listar usuarios / reservas | Eventual | — | Paginado (`skip`, `limit` ≤ 100) |
+| Compra de entrada | **Fuerte** | ≈ 100 ms aislada; satura en ≈ 50 req/s | SAGA + Redis Lua |
+| Export anonimizado | Eventual | — | Minimización + HMAC |
 
 ---
 
@@ -128,20 +141,20 @@ sequenceDiagram
 
 | Origen → Destino | Datos | Frecuencia |
 |------------------|-------|------------|
-| Reservas → Usuarios | `usuario_id` (validación) | Por reserva |
-| Reservas → Eventos | `evento_id`, `cantidad` (validación + decremento) | Por reserva |
-| Reservas → Redis | `pago_data`, `inventario_delta` | Por reserva (atómico) |
-| Reservas → MongoDB | `reserva_document` | Por reserva exitosa |
-| Reservas → PostgreSQL | `audit_event` | Por paso SAGA |
+| Reservas → Usuarios | `GET` usuario (validación); `POST historial` (compra) | Por reserva |
+| Reservas → Eventos | `GET` evento; `decrementar-inventario` (y `incrementar` al compensar) | Por reserva |
+| Reservas → Redis | `pago:{reserva_id}`, `evento:{id}:categoria:{cat}:disponibles` | Por reserva (atómico) |
+| Reservas → MongoDB | Documento de reserva con `saga_log` | Por reserva exitosa |
+| Reservas → PostgreSQL | Un evento por paso | Por paso de la SAGA |
 
 ---
 
 ## Consideraciones de Rendimiento
 
-1. **Lecturas paralelas**: Usuarios y Eventos se validan en paralelo en SAGA
-2. **Redis Lua**: Pago + inventario en una sola operación atómica (single round-trip)
-3. **Índices MongoDB**: 
-   - `usuarios`: `_id`, `email` (unique), `nro_documento` (unique)
-   - `eventos`: `_id`, `fecha`
-   - `reservas`: `usuario_id`, `evento_id`, `estado`
-4. **Connection pooling**: httpx.AsyncClient con límites
+1. **Validaciones en serie**: la cadena valida usuario y después evento (no en paralelo).
+2. **Redis Lua**: pago + inventario en una sola operación atómica (un round-trip).
+3. **Índices MongoDB** (reales):
+   - `usuarios`: `email` (único), `nro_documento` (único), `creado_en`, `tipo_documento`, `nombre`
+   - `eventos`: `nombre` (único), `estado`, `creado_en`, `{estado, creado_en}`
+   - `reservas`: `usuario_id`, `evento_id`, `estado`, `creado_en`, `{usuario_id, creado_en}`, `{evento_id, estado}`, `numero_confirmacion` (único), `{estado, creado_en}` y TTL de 24 h para `pendiente`/`fallida`
+4. **Clientes HTTP**: `httpx.AsyncClient` reutilizado, 3 reintentos con backoff y circuit breaker.

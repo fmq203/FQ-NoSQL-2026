@@ -8,235 +8,142 @@ metadata:
 
 # Event Sourcing + CQRS en EventFlow
 
-## Contexto
+**Última revisión contra el código:** 2026-11-05 (`reservas-service/src/services/postgresql.py`, `chain/validators.py`, `services/saga_orchestrator.py`)
 
-El **Servicio de Reservas y Pagos** implementa **Event Sourcing** y **CQRS (Command Query Responsibility Segregation)** usando PostgreSQL como event store para auditoría completa y consultas analíticas.
+## Qué se implementó (y qué no)
+
+Reservas registra **cada paso de cada SAGA como un evento inmutable** en PostgreSQL (`event_log`) y expone **vistas de lectura** separadas del modelo operativo. Es Event Sourcing **aplicado a la auditoría**:
+
+- ✅ Log append-only de eventos con tipo, payload JSONB, `aggregate_id` y `correlation_id`.
+- ✅ Vistas CQRS sobre ese log para análisis.
+- ✅ La línea de tiempo de cualquier reserva (incluidas las fallidas) se reconstruye con una consulta (`GET /api/reservar/{id}/audit`).
+- ❌ El estado de la reserva **no** se deriva de los eventos: la fuente de verdad operativa es el documento en `eventflow.reservas` (MongoDB). No hay replay, snapshots ni versionado de eventos.
+
+En la defensa conviene decirlo así: "event log como fuente de verdad de la **auditoría**, CQRS para el análisis; el estado operativo vive en MongoDB".
 
 ---
 
-## Event Sourcing
-
-### Principio
-
-> **"Almacenar eventos en lugar de estados"**
-
-En lugar de guardar solo el estado final de una reserva, se persiste la **secuencia completa de eventos** que llevaron a ese estado.
-
-### Event Store: Tabla `event_log` (PostgreSQL)
+## Event Store: `event_log`
 
 ```sql
-CREATE TABLE event_log (
+CREATE TABLE IF NOT EXISTS event_log (
     id BIGSERIAL PRIMARY KEY,
-    event_type VARCHAR(50) NOT NULL,           -- Tipo de evento
-    aggregate_id UUID NOT NULL,                -- ID del agregado (reserva_id)
-    aggregate_type VARCHAR(50) NOT NULL,       -- 'Reserva'
-    payload JSONB NOT NULL,                    -- Datos del evento
-    metadata JSONB,                            -- Contexto: correlation_id, service, etc.
+    event_type VARCHAR(50) NOT NULL,
+    aggregate_id UUID NOT NULL,                 -- reserva_id
+    aggregate_type VARCHAR(50) NOT NULL DEFAULT 'Reserva',
+    payload JSONB NOT NULL,
+    correlation_id UUID,
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- índices: aggregate_id, event_type, timestamp DESC, correlation_id, GIN(payload)
 ```
 
-### Eventos Generados por SAGA
+Detalle y consultas en [[event-log-schema]].
 
-| Event Type | Aggregate | Payload Clave | Cuándo |
-|------------|-----------|---------------|--------|
-| `SAGA_STARTED` | Reserva | Request completo | Inicio POST /api/reservar |
-| `USUARIO_VALIDADO` | Reserva | usuario_id, nombre | Paso 2 OK |
-| `EVENTO_VALIDADO` | Reserva | evento_id, aforo_disponible | Paso 3 OK |
-| `PAGO_PROCESADO` | Reserva | reserva_id, monto, metodo_pago | Paso 4: cobro OK en Redis (se emite antes de sincronizar con Eventos; si esa sincronización falla, le sigue `COMPENSACION_EJECUTADA`) |
-| `INVENTARIO_DECREMENTADO` | Reserva | evento_id, cantidad | Paso 4 OK: Redis y Eventos Service alineados |
-| `RESERVA_CONFIRMADA` | Reserva | reserva_id, numero_confirmacion, monto_total | Paso 5 OK |
-| `SAGA_COMPLETED` | Reserva | pasos_completados: 6 | Paso 6 OK |
-| `SAGA_FAILED` | Reserva | error, paso_fallido, compensaciones | Cualquier fallo |
-| `COMPENSACION_EJECUTADA` | Reserva | paso_compensado, accion, resultado | Rollback |
+### Eventos emitidos
 
-### Ventajas en EventFlow
+| Event Type | Payload | Cuándo |
+|------------|---------|--------|
+| `SAGA_STARTED` | usuario_id, evento_id, cantidad, metodo_pago | Inicio |
+| `USUARIO_VALIDADO` | usuario_id | Paso 2 OK |
+| `EVENTO_VALIDADO` | evento_id, aforo_disponible | Paso 3 OK |
+| `PAGO_PROCESADO` | monto, metodo_pago | Paso 4: cobro OK en Redis (se emite antes de sincronizar con Eventos; si esa sincronización falla, le sigue `COMPENSACION_EJECUTADA`) |
+| `INVENTARIO_DECREMENTADO` | evento_id, cantidad | Paso 4 OK: Redis y Eventos Service alineados |
+| `RESERVA_CONFIRMADA` | reserva_id, evento_id, numero_confirmacion, cantidad, monto_total | Paso 5 OK |
+| `HISTORIAL_ACTUALIZADO` / `HISTORIAL_PENDIENTE` | usuario_id (+ error) | Paso 5, registro en Usuarios |
+| `SAGA_COMPLETED` | pasos_completados: 6, reserva_id | Paso 6 |
+| `SAGA_FAILED` | error, failed_step | Cualquier fallo |
+| `COMPENSACION_EJECUTADA` | paso_compensado, accion, resultado | Rollback en paso 4 o 5 |
+
+Sin datos personales en los payloads (lo verifica un test).
+
+### Para qué sirve en EventFlow
 
 | Beneficio | Aplicación |
 |-----------|------------|
-| **Auditoría inmutable** | Compliance financiero, no se puede alterar historial |
-| **Debugging temporal** | Reconstruir estado en cualquier punto: `SELECT * FROM event_log WHERE aggregate_id = ? ORDER BY timestamp` |
-| **Reproducción de bugs** | Replay eventos en entorno de test |
-| **Análisis de fallos** | Query: `WHERE event_type = 'SAGA_FAILED' AND timestamp > NOW() - INTERVAL '24h'` |
-| **Métricas de negocio** | Tasa éxito, compensaciones por tipo, latencia por paso |
+| **Auditoría** | Toda compra, exitosa o no, queda con su secuencia de pasos y tiempos |
+| **Debugging** | "¿Me cobraron?": `PAGO_PROCESADO` seguido de `COMPENSACION_EJECUTADA` dice que se cobró y se revirtió |
+| **Análisis de fallos** | `SAGA_FAILED` agrupado por `failed_step` |
+| **Métricas de negocio** | Ventas, tasa de éxito y compensaciones salen de las vistas |
+
+Escribir en el log **no bloquea** la compra: `insert_event_log` atrapa sus errores. Si PostgreSQL cae, la compra sigue y ese evento se pierde (decisión consciente: la auditoría no es precondición del negocio).
 
 ---
 
-## CQRS (Command Query Responsibility Segregation)
-
-### Separación Explícita
+## CQRS
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    COMMAND SIDE (Escritura)                 │
-├─────────────────────────────────────────────────────────────┤
-│  POST /api/reservar                                         │
-│       │                                                     │
-│       ▼                                                     │
-│  SAGA Orchestrator → Chain of Responsibility                │
-│       │                                                     │
-│       ├── Redis Lua (Pago + Inventario)  ──► Event Log PG  │
-│       ├── MongoDB (Reserva)              ──► Event Log PG  │
-│       └── PostgreSQL (Audit)             ──► Event Log PG  │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│ COMMAND (escritura)                                        │
+│ POST /api/reservar → SagaOrchestrator → 6 handlers         │
+│   Redis (cobro/inventario), Eventos, MongoDB (reserva)     │
+│   └── cada paso → INSERT event_log                         │
+└────────────────────────────────────────────────────────────┘
                               │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    QUERY SIDE (Lectura)                     │
-├─────────────────────────────────────────────────────────────┤
-│  Operacional (MongoDB)          │  Analítica (PostgreSQL)   │
-│  ─────────────────────────      │  ───────────────────────  │
-│  GET /api/reservas/{id}         │  Ventas por evento        │
-│  Historial por usuario          │  Tasa éxito SAGA          │
-│  Ocupación por evento           │  Compensaciones por tipo  │
-│  Lookup por confirmación        │  Ingresos por periodo     │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────┴──────────────────────────────┐
+│ QUERY (lectura)                                            │
+│ Operacional (MongoDB)            │ Analítica (PostgreSQL)  │
+│ GET /api/reservar/{id}           │ ventas_por_evento       │
+│ GET /api/reservar?usuario_id=... │ tasa_exito_saga         │
+│ GET /api/reservar/{id}/audit (PG)│ compensaciones_por_tipo │
+└────────────────────────────────────────────────────────────┘
 ```
 
-### Modelos de Lectura
-
-#### 1. Vista Operacional (MongoDB - Colección `reservas`)
-```javascript
-// Optimizada para: lookup por ID, historial usuario, ocupación evento
-{
-  _id: UUID,                    // PK = reserva_id
-  usuario_id: UUID,             // Índice: usuario_id + creado_en
-  evento_id: UUID,              // Índice: evento_id + estado
-  numero_confirmacion: String,  // Índice único
-  estado: String,               // Índice: estado + creado_en
-  saga_log: Array               // Embedded para debugging
-}
-```
-
-#### 2. Vista Analítica (PostgreSQL - Vistas Materializadas / Queries)
+### Vistas (las crea `init_pg_schema()` con `CREATE OR REPLACE VIEW`; son vistas comunes, no materializadas)
 
 ```sql
--- Ventas por evento (últimos 30 días)
-CREATE VIEW ventas_por_evento AS
-SELECT 
-    payload->>'evento_id' as evento_id,
-    COUNT(*) as total_reservas,
-    SUM((payload->>'cantidad')::int) as total_entradas,
-    SUM((payload->>'monto_total')::numeric) as ingreso_total
+CREATE OR REPLACE VIEW ventas_por_evento AS          -- últimos 30 días
+SELECT payload->>'evento_id' AS evento_id, COUNT(*) AS total_reservas,
+       SUM((payload->>'cantidad')::int) AS total_entradas,
+       SUM((payload->>'monto_total')::numeric) AS ingreso_total
 FROM event_log
-WHERE event_type = 'RESERVA_CONFIRMADA'
-  AND timestamp > NOW() - INTERVAL '30 days'
+WHERE event_type = 'RESERVA_CONFIRMADA' AND timestamp > NOW() - INTERVAL '30 days'
 GROUP BY payload->>'evento_id';
 
--- Tasa éxito SAGA diaria
-CREATE VIEW saga_success_rate AS
-SELECT 
-    DATE_TRUNC('day', timestamp) as dia,
-    COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') as exitosas,
-    COUNT(*) FILTER (WHERE event_type = 'SAGA_FAILED') as fallidas,
-    ROUND(
-        COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') * 100.0 / 
-        NULLIF(COUNT(*) FILTER (WHERE event_type IN ('SAGA_COMPLETED', 'SAGA_FAILED')), 0), 2
-    ) as tasa_exito_pct
+CREATE OR REPLACE VIEW tasa_exito_saga AS            -- por día, últimos 7 días
+SELECT DATE_TRUNC('day', timestamp) AS dia,
+       COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') AS exitosas,
+       COUNT(*) FILTER (WHERE event_type = 'SAGA_FAILED') AS fallidas,
+       ROUND(COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') * 100.0 /
+             NULLIF(COUNT(*) FILTER (WHERE event_type IN ('SAGA_COMPLETED','SAGA_FAILED')), 0), 2) AS tasa_exito_pct
 FROM event_log
-WHERE event_type IN ('SAGA_COMPLETED', 'SAGA_FAILED')
-  AND timestamp > NOW() - INTERVAL '7 days'
-GROUP BY DATE_TRUNC('day', timestamp);
+WHERE event_type IN ('SAGA_COMPLETED', 'SAGA_FAILED') AND timestamp > NOW() - INTERVAL '7 days'
+GROUP BY DATE_TRUNC('day', timestamp) ORDER BY dia DESC;
 
--- Compensaciones por tipo (últimas 24h)
-CREATE VIEW compensaciones_por_tipo AS
-SELECT 
-    payload->>'paso_compensado' as paso,
-    COUNT(*) as total_compensaciones
+CREATE OR REPLACE VIEW compensaciones_por_tipo AS    -- últimas 24 h
+SELECT payload->>'paso_compensado' AS paso, COUNT(*) AS total_compensaciones
 FROM event_log
-WHERE event_type = 'COMPENSACION_EJECUTADA'
-  AND timestamp > NOW() - INTERVAL '24 hours'
+WHERE event_type = 'COMPENSACION_EJECUTADA' AND timestamp > NOW() - INTERVAL '24 hours'
 GROUP BY payload->>'paso_compensado';
 ```
 
+Como las ventas se cuentan por `RESERVA_CONFIRMADA`, un cobro compensado no infla `ventas_por_evento`. En `compensaciones_por_tipo` el paso aparece como `PROCESAR_PAGO` (compensación del paso 4) o `PAGO_PROCESADO` (compensación del paso 5): los dos handlers usan nombres distintos.
+
 ---
 
-## Correlation ID: Trazabilidad Distribuida
+## Correlation ID
 
-### Propagación
-
-```python
-# Generado al inicio de SAGA
-correlation_id = uuid4()
-
-# Propagado en:
-# 1. Logs estructurados (JSON)
-logger.info("SAGA_STARTED", correlation_id=correlation_id, reserva_id=reserva_id)
-
-# 2. HTTP Headers a servicios downstream
-headers = {"X-Correlation-ID": str(correlation_id)}
-await http_client.get(url, headers=headers)
-
-# 3. PostgreSQL event_log
-metadata = {"correlation_id": str(correlation_id), "service": "reservas-service"}
-await pg.execute(INSERT_EVENT_LOG, ..., metadata=json.dumps(metadata))
-
-# 4. Redis keys (opcional, para debugging)
-await redis.hset(f"pago:{reserva_id}", "correlation_id", str(correlation_id))
-```
-
-### Query Cross-Service
+- Lo pone el middleware `CorrelationIDMiddleware` (`X-Correlation-ID`, se genera si no viene) y vuelve en la respuesta.
+- Va en los logs JSON, en el header de las llamadas a Usuarios y Eventos y en la **columna** `correlation_id` del `event_log`.
+- No se guarda en Redis.
 
 ```sql
--- Buscar todos los eventos de una SAGA completa
-SELECT * FROM event_log 
-WHERE correlation_id = 'uuid-correlation-id' 
-ORDER BY timestamp;
-
--- Vincular con logs de Usuarios/Eventos (si propagaron correlation_id)
--- Requiere logging centralizado (ELK/Loki) con correlation_id como campo
+SELECT event_type, aggregate_id, timestamp FROM event_log
+WHERE correlation_id = '<uuid>' ORDER BY id;
 ```
 
 ---
 
-## Reconstrucción de Estado (Event Replay)
+## Si se quisiera Event Sourcing completo
 
-```python
-async def reconstruir_reserva(aggregate_id: UUID) -> ReservaState:
-    """Reconstruye estado actual desde event_log"""
-    events = await pg.fetch("""
-        SELECT event_type, payload, timestamp 
-        FROM event_log 
-        WHERE aggregate_id = $1 
-        ORDER BY timestamp
-    """, aggregate_id)
-    
-    state = ReservaState()
-    for event in events:
-        state.apply(event)
-    return state
-
-class ReservaState:
-    def apply(self, event):
-        if event.type == 'RESERVA_CONFIRMADA':
-            self.estado = 'confirmada'
-            self.numero_confirmacion = event.payload['numero_confirmacion']
-        elif event.type == 'SAGA_FAILED':
-            self.estado = 'fallida'
-            self.error = event.payload['error']
-        # ... otros eventos
-```
-
----
-
-## Comparación: Con vs Sin Event Sourcing
-
-| Aspecto | Tradicional (Solo Estado) | Event Sourcing (EventFlow) |
-|---------|---------------------------|----------------------------|
-| **Auditoría** | Difícil (logs dispersos) | Nativa (event_log inmutable) |
-| **Debugging** | Estado final فقط | Historia completa reproducible |
-| **Compliance** | Manual | Automática (append-only) |
-| **Análisis** | Queries complejas sobre estado | Vistas SQL sobre eventos |
-| **Bugs temporales** | Imposible reproducir | Replay eventos en test |
-| **Esquema** | Migraciones riesgosas | Eventos versionados (upcasters) |
+Faltaría: derivar el estado de la reserva aplicando los eventos (en lugar de leer el documento de MongoDB), versionar los payloads, snapshots para agregados largos y una proyección asincrónica hacia las vistas. Para esta tarea se eligió el log de auditoría porque cubre el requerimiento (trazabilidad completa y análisis) sin duplicar la fuente de verdad.
 
 ---
 
 ## Referencias
 
-- `brain/architecture/saga-flow.md` - Generación de eventos por paso
-- `brain/patterns/chain-of-responsibility.md` - Auditor handler
-- `brain/data-models/reservation-schema.md` - Tabla event_log DDL
-- `brain/data-models/db-choice-rationale.md` - PostgreSQL para Event Sourcing
+- [[saga-flow]] - En qué paso se emite cada evento
+- [[chain-of-responsibility]] - Handlers que los emiten
+- [[event-log-schema]] - Tabla, índices y consultas
+- [[reservation-schema]] - Payloads
 - Martin Fowler - Event Sourcing: https://martinfowler.com/eaaDev/EventSourcing.html
-- Greg Young - CQRS: https://cqrs.nu/Faq

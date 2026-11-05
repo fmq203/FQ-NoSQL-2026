@@ -1,212 +1,184 @@
 ---
 name: reservation-schema
-description: Esquema de datos de Reserva para MongoDB y PostgreSQL
+description: Esquema de datos de Reserva en MongoDB, Redis y PostgreSQL
 metadata:
   type: specification
   status: complete
 ---
 
-# Esquema de Reserva — MongoDB + PostgreSQL
+# Esquema de Reserva — MongoDB + Redis + PostgreSQL
 
-## MongoDB: Colección `reservas`
+**Última revisión contra el código:** 2026-11-05 (`reservas-service/src/models/reserva.py`, `chain/validators.py`, `services/redis_pago.py`, `services/mongo.py`, `services/postgresql.py`)
 
-### Documento Completo
+## MongoDB: Colección `eventflow.reservas`
+
+### Documento real
 
 ```json
 {
-  "_id": { "$uuid": "550e8400-e29b-41d4-a716-446655440002" },
-  "usuario_id": { "$uuid": "550e8400-e29b-41d4-a716-446655440000" },
-  "evento_id": { "$uuid": "550e8400-e29b-41d4-a716-446655440001" },
-  "cantidad": { "$numberInt": "2" },
+  "_id": { "$binary": "<UUID = reserva_id>" },
+  "usuario_id": { "$binary": "<UUID>" },
+  "evento_id": { "$binary": "<UUID>" },
+  "cantidad": 2,
+  "categoria": "general",
   "metodo_pago": "tarjeta",
-  "monto_total": { "$numberDouble": "160.0" },
-  "numero_confirmacion": "CONF-20260920-A1B2C3D4",
+  "monto_total": 10000,
+  "numero_confirmacion": "CONF-20261105-52066ECC",
   "estado": "confirmada",
-  "creado_en": { "$date": "2026-09-20T10:05:00.000Z" },
+  "creado_en": { "$date": "2026-11-05T01:26:07.442Z" },
   "saga_log": [
-    { "paso": "USUARIO_VALIDADO", "timestamp": { "$date": "2026-09-20T10:05:00.001Z" }, "exitoso": true },
-    { "paso": "EVENTO_VALIDADO", "timestamp": { "$date": "2026-09-20T10:05:00.002Z" }, "exitoso": true },
-    { "paso": "PAGO_PROCESADO", "timestamp": { "$date": "2026-09-20T10:05:00.003Z" }, "exitoso": true },
-    { "paso": "RESERVA_CONFIRMADA", "timestamp": { "$date": "2026-09-20T10:05:00.004Z" }, "exitoso": true },
-    { "paso": "AUDITORIA_REGISTRADA", "timestamp": { "$date": "2026-09-20T10:05:00.005Z" }, "exitoso": true }
+    { "paso": "VALIDAR_DATOS", "timestamp": "2026-11-05T01:26:07.386565Z", "exitoso": true, "detalles": "Datos válidos" },
+    { "paso": "VALIDAR_USUARIO", "timestamp": "...", "exitoso": true, "detalles": "Usuario validado" },
+    { "paso": "VALIDAR_EVENTO", "timestamp": "...", "exitoso": true, "detalles": "Evento validado, aforo disponible (general): 100" },
+    { "paso": "PROCESAR_PAGO", "timestamp": "...", "exitoso": true, "detalles": "Pago procesado: 10000.0" },
+    { "paso": "RESERVA_CONFIRMADA", "timestamp": "...", "exitoso": true }
   ]
 }
 ```
 
-### Definición de Campos
+Solo se guardan reservas **confirmadas**: si la SAGA falla antes del paso 5 no hay documento (el rastro queda en `event_log`). El `saga_log` no guarda datos personales (antes guardaba el nombre del usuario; se quitó).
 
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `_id` | UUID | Sí | PK, auto v4 = `reserva_id` |
-| `usuario_id` | UUID | Sí | FK → usuarios |
-| `evento_id` | UUID | Sí | FK → eventos |
-| `cantidad` | Int | Sí | > 0 |
-| `metodo_pago` | String | Sí | Enum: tarjeta, transferencia, efectivo, mercadopago |
-| `monto_total` | Double | Sí | precio * cantidad |
-| `numero_confirmacion` | String | Sí | Formato: `CONF-YYYYMMDD-XXXXXXXX` |
-| `estado` | String | Sí | `confirmada`, `cancelada`, `fallida`, `pendiente` |
-| `creado_en` | DateTime | Sí | UTC now |
-| `saga_log` | Array | No | Historial pasos SAGA para debugging |
+### Campos
 
-### Índices MongoDB
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `_id` | UUID | `reserva_id`: clave de idempotencia (la manda el cliente o se genera) |
+| `usuario_id` | UUID | Referencia a `eventflow.usuarios` |
+| `evento_id` | UUID | Referencia a `eventflow.eventos` |
+| `cantidad` | Int | > 0 |
+| `categoria` | String | Categoría de precio del evento |
+| `metodo_pago` | String | `tarjeta`, `transferencia`, `efectivo`, `mercadopago` |
+| `monto_total` | Float | `precio de la categoría × cantidad` |
+| `numero_confirmacion` | String | `CONF-YYYYMMDD-XXXXXXXX` (derivado del `reserva_id`) |
+| `estado` | String | Enum `pendiente`, `confirmada`, `cancelada`, `fallida`; en la práctica se escribe `confirmada` |
+| `creado_en` | DateTime (UTC) | Al confirmar |
+| `saga_log` | Array | Pasos de la SAGA (`paso`, `timestamp`, `exitoso`, `detalles`) |
+
+### Índices (creados al iniciar el servicio)
 
 ```javascript
-// Consultas por usuario (historial)
-db.reservas.createIndex({ "usuario_id": 1, "creado_en": -1 }, { name: "idx_usuario_fecha" })
-
-// Consultas por evento (ocupación)
-db.reservas.createIndex({ "evento_id": 1, "estado": 1 }, { name: "idx_evento_estado" })
-
-// Búsqueda por confirmación (soporte cliente)
-db.reservas.createIndex({ "numero_confirmacion": 1 }, { unique: true, name: "idx_confirmacion_unique" })
-
-// Estados para reportes
-db.reservas.createIndex({ "estado": 1, "creado_en": -1 }, { name: "idx_estado_fecha" })
-
-// TTL para reservas fallidas/pendientes (limpieza automática 24h)
-db.reservas.createIndex(
-  { "creado_en": 1 }, 
-  { expireAfterSeconds: 86400, partialFilterExpression: { "estado": { "$in": ["pendiente", "fallida"] } } }
-)
+db.reservas.createIndex({ usuario_id: 1 })
+db.reservas.createIndex({ evento_id: 1 })
+db.reservas.createIndex({ estado: 1 })
+db.reservas.createIndex({ creado_en: 1 })
+db.reservas.createIndex({ usuario_id: 1, creado_en: -1 })
+db.reservas.createIndex({ evento_id: 1, estado: 1 })
+db.reservas.createIndex({ numero_confirmacion: 1 }, { unique: true })
+db.reservas.createIndex({ estado: 1, creado_en: -1 })
+// TTL: borra a las 24 h las reservas pendiente/fallida
+db.reservas.createIndex({ creado_en: 1 }, {
+  name: "idx_ttl_pendiente_fallida", expireAfterSeconds: 86400,
+  partialFilterExpression: { estado: { $in: ["pendiente", "fallida"] } }
+})
 ```
+
+Escritura con `w=majority` + `journal`.
 
 ---
 
-## Redis: Claves Transaccionales (Efímeras)
+## Redis DB 0: Claves transaccionales
 
-### Inventario por Evento
-```redis
-# String contador (inicializado por Eventos Service)
-KEY: inventario:{evento_id}
-VALUE: "48500"  (entradas disponibles)
-TTL: 86400 (renovado periódicamente)
+### Inventario por evento y categoría
+
+```
+KEY:   evento:{evento_id}:categoria:{categoria}:disponibles
+TIPO:  String (contador)
+VALOR: entradas disponibles de esa categoría
+TTL:   sin TTL
 ```
 
-### Pago por Reserva (Creado en SAGA paso 4)
-```redis
-# Hash con datos de pago
-KEY: pago:{reserva_id}
-FIELDS:
-  reserva_id: "uuid"
-  usuario_id: "uuid"
-  evento_id: "uuid"
-  cantidad: "2"
-  monto: "160.0"
-  metodo_pago: "tarjeta"
-  estado: "confirmado"
-  timestamp: "2026-09-20T10:05:00.000Z"
-TTL: 86400 (24h)
+No la crea Eventos: la siembra el propio Lua con `SETNX` (desde los `disponibles` que informó Eventos en el paso 3) la primera vez que se compra ese evento y categoría.
+
+### Pago por reserva (paso 4)
+
+```
+KEY:   pago:{reserva_id}
+TIPO:  Hash
+CAMPOS: usuario_id, evento_id, cantidad, monto, metodo_pago, categoria,
+        inventario_key, estado = "confirmado"
+TTL:   90 días
 ```
 
-### Lock Distribuido (Opcional, para alta concurrencia)
-```redis
-# Lock por evento durante SAGA
-KEY: lock:evento:{evento_id}
-VALUE: "reserva_id"
-TTL: 10 (expiración corta)
-# SET NX para adquirir, Lua para liberar seguro
-```
+Su existencia hace idempotente al Lua y le dice a la compensación qué clave y cuánto devolver. No hay locks distribuidos: la atomicidad la da el script Lua.
+
+La caché de lecturas de Usuarios y Eventos usa **Redis DB 1** (`cache:usuario:{id}`, `cache:evento:{id}`), separada de estas claves.
 
 ---
 
-## PostgreSQL: Tabla `event_log` (Event Sourcing)
+## PostgreSQL: Tabla `event_log`
 
-### DDL
+### DDL (lo crea `init_pg_schema()` al iniciar Reservas)
 
 ```sql
-CREATE TABLE event_log (
+CREATE TABLE IF NOT EXISTS event_log (
     id BIGSERIAL PRIMARY KEY,
     event_type VARCHAR(50) NOT NULL,
-    aggregate_id UUID NOT NULL,
+    aggregate_id UUID NOT NULL,                       -- reserva_id
     aggregate_type VARCHAR(50) NOT NULL DEFAULT 'Reserva',
     payload JSONB NOT NULL,
-    metadata JSONB,
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    correlation_id UUID
+    correlation_id UUID,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- Índices para consultas frecuentes
-CREATE INDEX idx_event_log_aggregate ON event_log(aggregate_id);
-CREATE INDEX idx_event_log_type ON event_log(event_type);
-CREATE INDEX idx_event_log_timestamp ON event_log(timestamp DESC);
-CREATE INDEX idx_event_log_correlation ON event_log(correlation_id);
-CREATE INDEX idx_event_log_payload_gin ON event_log USING GIN(payload);
-
--- Particionamiento por mes (opcional, para volumen alto)
--- CREATE TABLE event_log_2026_09 PARTITION OF event_log
--- FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
+CREATE INDEX IF NOT EXISTS idx_event_log_aggregate   ON event_log(aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_event_log_type        ON event_log(event_type);
+CREATE INDEX IF NOT EXISTS idx_event_log_timestamp   ON event_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_event_log_correlation ON event_log(correlation_id);
+CREATE INDEX IF NOT EXISTS idx_event_log_payload_gin ON event_log USING GIN(payload);
 ```
 
-### Event Types y Payloads
+No hay columna `metadata` ni particionamiento.
 
-| Event Type | aggregate_type | Payload Ejemplo |
-|------------|----------------|-----------------|
-| `SAGA_STARTED` | Reserva | `{usuario_id, evento_id, cantidad, metodo_pago}` |
-| `USUARIO_VALIDADO` | Reserva | `{usuario_id, usuario_nombre}` |
-| `EVENTO_VALIDADO` | Reserva | `{evento_id, evento_nombre, aforo_disponible}` |
-| `PAGO_PROCESADO` | Reserva | `{reserva_id, monto, metodo_pago, transaccion_id}` |
-| `INVENTARIO_DECREMENTADO` | Reserva | `{evento_id, cantidad, nuevo_disponible}` |
-| `RESERVA_CONFIRMADA` | Reserva | `{reserva_id, numero_confirmacion, monto_total}` |
-| `SAGA_COMPLETED` | Reserva | `{reserva_id, pasos_completados: 6}` |
-| `SAGA_FAILED` | Reserva | `{reserva_id, error, paso_fallido, compensaciones}` |
-| `COMPENSACION_EJECUTADA` | Reserva | `{paso_compensado, accion, resultado}` |
-| `RESERVA_CANCELADA` | Reserva | `{reserva_id, motivo, monto_reembolso}` |
+### Eventos y payloads reales
 
-### Consultas Analíticas (CQRS Read Model)
+| `event_type` | Payload |
+|--------------|---------|
+| `SAGA_STARTED` | `{usuario_id, evento_id, cantidad, metodo_pago}` |
+| `USUARIO_VALIDADO` | `{usuario_id}` |
+| `EVENTO_VALIDADO` | `{evento_id, aforo_disponible}` |
+| `PAGO_PROCESADO` | `{monto, metodo_pago}` |
+| `INVENTARIO_DECREMENTADO` | `{evento_id, cantidad}` |
+| `RESERVA_CONFIRMADA` | `{reserva_id, evento_id, numero_confirmacion, cantidad, monto_total}` |
+| `HISTORIAL_ACTUALIZADO` | `{usuario_id}` |
+| `HISTORIAL_PENDIENTE` | `{usuario_id, error}` |
+| `SAGA_COMPLETED` | `{pasos_completados: 6, reserva_id}` |
+| `SAGA_FAILED` | `{error, failed_step}` |
+| `COMPENSACION_EJECUTADA` | `{paso_compensado, accion, resultado}` — paso 4: `PROCESAR_PAGO` / `REVERTIR_REDIS`; paso 5: `PAGO_PROCESADO` / `INCRBY+DEL` |
+
+No existe `RESERVA_CANCELADA` (no hay cancelación). Los payloads no llevan nombre ni email: un test verifica que ningún dato personal llegue a lo persistido.
+
+### Vistas CQRS (creadas con `CREATE OR REPLACE VIEW`)
 
 ```sql
--- Ventas por evento (últimos 30 días)
-SELECT 
-    payload->>'evento_id' as evento_id,
-    COUNT(*) as total_reservas,
-    SUM((payload->>'cantidad')::int) as total_entradas,
-    SUM((payload->>'monto_total')::numeric) as ingreso_total
+-- ventas_por_evento: ventas confirmadas de los últimos 30 días
+SELECT payload->>'evento_id' AS evento_id, COUNT(*) AS total_reservas,
+       SUM((payload->>'cantidad')::int) AS total_entradas,
+       SUM((payload->>'monto_total')::numeric) AS ingreso_total
 FROM event_log
-WHERE event_type = 'RESERVA_CONFIRMADA'
-  AND timestamp > NOW() - INTERVAL '30 days'
+WHERE event_type = 'RESERVA_CONFIRMADA' AND timestamp > NOW() - INTERVAL '30 days'
 GROUP BY payload->>'evento_id';
 
--- Tasa de éxito SAGA
-SELECT 
-    DATE_TRUNC('day', timestamp) as dia,
-    COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') as exitosas,
-    COUNT(*) FILTER (WHERE event_type = 'SAGA_FAILED') as fallidas,
-    ROUND(
-        COUNT(*) FILTER (WHERE event_type = 'SAGA_COMPLETED') * 100.0 / 
-        NULLIF(COUNT(*) FILTER (WHERE event_type IN ('SAGA_COMPLETED', 'SAGA_FAILED')), 0), 2
-    ) as tasa_exito_pct
-FROM event_log
-WHERE event_type IN ('SAGA_COMPLETED', 'SAGA_FAILED')
-  AND timestamp > NOW() - INTERVAL '7 days'
-GROUP BY DATE_TRUNC('day', timestamp)
-ORDER BY dia DESC;
-
--- Compensaciones por tipo
-SELECT 
-    payload->>'paso_compensado' as paso,
-    COUNT(*) as total_compensaciones
-FROM event_log
-WHERE event_type = 'COMPENSACION_EJECUTADA'
-  AND timestamp > NOW() - INTERVAL '24 hours'
-GROUP BY payload->>'paso_compensado';
+-- tasa_exito_saga: exitosas vs fallidas por día (últimos 7 días)
+-- compensaciones_por_tipo: COMPENSACION_EJECUTADA agrupadas por paso (últimas 24 h)
 ```
+
+Las ventas se cuentan por `RESERVA_CONFIRMADA`, así que un cobro compensado (`PAGO_PROCESADO` seguido de `COMPENSACION_EJECUTADA`) no las infla.
 
 ---
 
-## Relación Embedded vs Reference
+## Embebido vs Referencia
 
 | Relación | Patrón | Justificación |
 |----------|--------|---------------|
-| Reserva → Usuario | **Reference** (`usuario_id`) | Usuario consultado independientemente, muchos-a-uno |
-| Reserva → Evento | **Reference** (`evento_id`) | Evento consultado independientemente, muchos-a-uno |
-| Usuario → Historial | **Embedded** (`historial_compras[]`) | Acceso frecuente junto a usuario, cardinalidad baja |
-| Evento → Precios | **Embedded** (`precios[]`) | Siempre se leen juntos, atómicos por categoría |
+| Reserva → Usuario | **Referencia** (`usuario_id`) | Viven en servicios distintos; muchos-a-uno |
+| Reserva → Evento | **Referencia** (`evento_id`) | Ídem |
+| Usuario → Historial | **Embebido** (`historial_compras[]`) | Se lee siempre con el usuario |
+| Evento → Precios | **Embebido** (`precios[]`) | Se lee con el evento; el inventario se ajusta atómicamente en el documento |
 
 ---
 
 ## Referencias
 
-- [[microservices/reservas-pagos]] — Especificación completa servicio
-- [[architecture/saga-flow]] — Flujo transaccional
-- [[patterns/event-sourcing-cqrs]] — Event Sourcing + CQRS
-- [[data-models/db-choice-rationale]] — Justificación multi-DB
+- [[reservas-pagos]] — Especificación del servicio
+- [[saga-flow]] — Flujo transaccional
+- [[event-sourcing-cqrs]] — Event Sourcing + CQRS
+- [[db-choice-rationale]] — Justificación multi-DB

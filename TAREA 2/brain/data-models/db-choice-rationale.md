@@ -8,12 +8,14 @@ metadata:
 
 # Razonamiento: Elección de Bases de Datos por Entidad
 
+**Última revisión contra el código:** 2026-11-05. Las capacidades que se mencionan como posibles (sharding, búsqueda de texto, particionamiento) son argumentos de la elección, no cosas implementadas; donde importa se aclara.
+
 ## Resumen de Asignación
 
 | Entidad | Base Principal | Base Secundaria | Patrón |
 |---------|----------------|-----------------|--------|
-| Usuario | MongoDB | — | Embedded (historial) |
-| Evento | MongoDB | Redis (cache) | Embedded (precios/ubicacion) |
+| Usuario | MongoDB | Redis DB 1 (caché de lecturas) | Embedded (historial) |
+| Evento | MongoDB | Redis DB 1 (caché de lecturas) | Embedded (precios/ubicacion) |
 | Reserva | MongoDB | Redis (transacción), PostgreSQL (audit) | Reference |
 | Pago | Redis | — | Atomic Lua |
 | Auditoría | PostgreSQL | — | Event Sourcing |
@@ -36,8 +38,8 @@ metadata:
 | Esquema flexible | ✅ Campos opcionales futuros (preferencias, teléfono) sin migración |
 | Embedded history | ✅ `historial_compras[]` dentro del documento — single query |
 | Índices compuestos | ✅ Unique en email + documento, compuestos para listados |
-| Aggregation pipeline | ✅ Exportación anonimizada con `$project`, `$group` |
-| Sharding | ✅ Por `_id` (hash) para escalar usuarios |
+| Export | ✅ Recorrido con cursor (`find({})`); la minimización y el HMAC se hacen en Python |
+| Sharding | Posible por `_id` (hash); no usado (un solo nodo) |
 
 **Alternativas descartadas:**
 - **PostgreSQL**: Requiere migraciones para campos nuevos, JOIN para historial
@@ -51,7 +53,6 @@ metadata:
 **Requerimientos:**
 - Lecturas masivas de catálogo (alta disponibilidad)
 - Aforo dinámico con alta concurrencia
-- Búsqueda por texto (nombre, descripción, categorías)
 - Precios por categoría atómicos
 
 **Por qué MongoDB:**
@@ -59,25 +60,15 @@ metadata:
 |--------|------------|
 | Documento único | ✅ Todos los datos del evento en un doc |
 | Embedded precios | ✅ Categorías con precio+disponibilidad atómicos |
-| Text search | ✅ Índice `$text` nativo |
-| Consulta por fecha | ✅ Índice rango eficiente |
-| TTL/Archivo | ✅ Eventos finalizados movibles a colección archive |
+| Inventario atómico | ✅ `find_one_and_update` con `$elemMatch` + `$inc` sobre la categoría |
+| Unicidad | ✅ Índice único en `nombre` |
 
-**Redis Cache (Capa Adicional):**
-```python
-# Cache de disponibilidad (TTL 30s)
-async def get_disponibilidad(evento_id):
-    cached = await redis.get(f"evento:disp:{evento_id}")
-    if cached: return int(cached)
-    
-    evento = await mongo.eventos.find_one({"_id": evento_id})
-    disp = evento["entradas_disponibles"]
-    await redis.setex(f"evento:disp:{evento_id}", 30, disp)
-    return disp
-```
+No hay listado ni búsqueda de eventos implementados (ni índice de texto o de fecha); MongoDB los permitiría sin cambiar el modelo.
+
+**Redis como caché AP de lecturas (`services/lectura_cache.py`):** se cachea el documento completo en `cache:evento:{id}` (Redis DB 1). Fresco 30 s; vencido, se relee de MongoDB; si MongoDB no responde, se sirve la copia vencida (`X-Cache: STALE`, se guarda hasta 1 h). La SAGA la saltea con `Cache-Control: no-cache`. Las escrituras de inventario la invalidan. Usuarios usa el mismo módulo (`cache:usuario:{id}`, 10 min).
 
 **Por qué NO solo Redis:**
-- Consultas complejas (búsqueda texto, rangos fecha, filtros categoría)
+- Consultas flexibles a futuro (rangos de fecha, filtros)
 - Persistencia duradera de metadatos evento
 - Exportación/Reportes requieren query flexible
 
@@ -103,9 +94,9 @@ async def get_disponibilidad(evento_id):
 
 **Por qué MongoDB para Reserva (no PostgreSQL):**
 - Documento `saga_log[]` embebido para debugging rápido
-- Esquema variable (diferentes métodos pago → campos extra)
-- Consultas por `usuario_id` + `evento_id` naturales en doc
-- Sharding por `usuario_id` para escalar historial
+- `_id = reserva_id` da la idempotencia sin tabla aparte
+- Consultas por `usuario_id` / `evento_id` / `estado` con índices (listado `GET /api/reservar`)
+- Sharding por `usuario_id` posible (no usado)
 
 **Por qué Redis para Pago (no MongoDB transacciones):**
 | MongoDB Transacciones | Redis Lua |
@@ -119,7 +110,8 @@ async def get_disponibilidad(evento_id):
 - ACID estricto para compliance financiero
 - Event Sourcing: tabla append-only inmutable
 - Consultas analíticas complejas (SQL, JOINs, window functions)
-- Particionamiento nativo por tiempo
+- Particionamiento nativo por tiempo (no usado: una sola tabla)
+- Índice GIN para consultar dentro del payload JSONB
 - Tooling maduro: pgAdmin, BI tools, replication
 
 ---
@@ -135,7 +127,7 @@ async def get_disponibilidad(evento_id):
 | **Escalabilidad escritura** | Sharding | Cluster (limitado) | Read replicas / Citus |
 | **Latencia típica** | 5-20ms | **< 1ms** | 2-10ms |
 | **Persistencia** | WAL + snapshots | AOF + RDB | WAL (crash-safe) |
-| **Caso de uso EventFlow** | Usuarios, Eventos, Reservas | Pagos, Inventario, Cache | Audit Log, Reportes |
+| **Caso de uso EventFlow** | Usuarios, Eventos, Reservas | Pagos, Inventario (DB 0), caché de lecturas (DB 1) | Audit Log, vistas CQRS |
 
 ---
 
@@ -155,13 +147,13 @@ async def get_disponibilidad(evento_id):
 |------------|---------------|-------|
 | `reservas.usuario_id` | Reserva → Usuario | Muchos-a-uno, usuario tiene vida independiente |
 | `reservas.evento_id` | Reserva → Evento | Muchos-a-uno, evento consultado solo |
-| `usuarios.historial_compras[].evento_id` | Embebido → Evento | Denormalización para evitar join en exportación |
+| `usuarios.historial_compras[].evento_id` | Embebido → Evento | Junto con `evento_nombre` copiado, para mostrar el historial sin consultar Eventos |
 
 ---
 
 ## Referencias
 
-- [[decisions/db-selection]] — Decisión macro
-- [[decisions/consistency-strategy]] — Consistencia por operación
-- [[architecture/saga-flow]] — Uso de Redis en SAGA
-- [[patterns/event-sourcing-cqrs]] — PostgreSQL para Event Sourcing
+- [[db-selection]] — Decisión macro
+- [[consistency-strategy]] — Consistencia por operación
+- [[saga-flow]] — Uso de Redis en SAGA
+- [[event-sourcing-cqrs]] — PostgreSQL para Event Sourcing

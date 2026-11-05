@@ -8,6 +8,8 @@ metadata:
 
 # Decisión: Estrategia de Despliegue
 
+**Última revisión contra el código:** 2026-11-05. Implementado: Docker Compose. Kubernetes: solo diseño (no hay manifiestos en el repo).
+
 ## Problema
 
 Desplegar 3 microservicios + 3 bases de datos con:
@@ -18,7 +20,7 @@ Desplegar 3 microservicios + 3 bases de datos con:
 
 ---
 
-## Decisión: Docker Compose para Desarrollo, Kubernetes-ready para Producción
+## Decisión: Docker Compose (implementado); Kubernetes como camino a producción (diseño)
 
 ### Desarrollo Local: Docker Compose
 
@@ -40,7 +42,7 @@ services:
 - Volúmenes nombrados para persistencia
 - Variables de entorno por servicio
 
-### Producción: Kubernetes (Preparado)
+### Producción: Kubernetes (diseño, no implementado)
 
 | Componente | K8s Resource | Configuración |
 |------------|--------------|---------------|
@@ -75,11 +77,14 @@ services:
 MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow
 SERVICE_PORT=8001
+EXPORT_PSEUDONYM_KEY=          # vacía → seudónimos efímeros (anonimización)
+CACHE_REDIS_URL=redis://redis:6379/1
 
 # Eventos Service
 MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow
 SERVICE_PORT=8002
+CACHE_REDIS_URL=redis://redis:6379/1
 
 # Reservas Service
 MONGODB_URI=mongodb://mongodb:27017
@@ -90,6 +95,8 @@ USUARIOS_SERVICE_URL=http://usuarios-service:8001
 EVENTOS_SERVICE_URL=http://eventos-service:8002
 SERVICE_PORT=8003
 ```
+
+`MONGODB_DB` no tiene efecto: la configuración lee `MONGODB_DATABASE` (pydantic-settings), cuyo valor por defecto ya es `eventflow`. Los parámetros de caché (`CACHE_FRESH_SECONDS`, etc.) están en `.env.example`.
 
 ### Bases de Datos
 
@@ -125,7 +132,10 @@ POSTGRES_PASSWORD=eventflow_password
 
 ```bash
 # Construir y levantar todo
-docker compose up -d --build
+make up                  # = docker compose up -d --build
+make test                # tests de los 3 servicios dentro de sus contenedores
+make jmeter              # pruebas de carga (~2 min)
+python3 demo/servidor.py # demo en http://localhost:8080/index.html
 
 # Ver logs
 docker compose logs -f usuarios-service
@@ -144,9 +154,9 @@ docker compose down -v
 docker compose build usuarios-service
 docker compose up -d usuarios-service
 
-# Ejecutar tests
-docker compose exec usuarios-service pytest
-docker compose exec reservas-service pytest
+# Tests: usar make test. Las imágenes copian solo src/, así que
+# `docker compose exec <svc> pytest` no encuentra los tests; make test
+# monta tests/, pytest.ini y el Dockerfile en el contenedor.
 ```
 
 ---
@@ -207,6 +217,6 @@ sh.shardCollection("eventflow.eventos", { "fecha": 1, "_id": "hashed" })
 
 ## Referencias
 
-- [[deployment/docker-compose]] — Archivo docker-compose.yml completo
-- [[deployment/docker-setup]] — Dockerfiles por servicio
-- [[deployment/deployment-checklist]] — Checklist pre-producción
+- [[docker-compose]] — Archivo docker-compose.yml
+- [[docker-setup]] — Dockerfiles por servicio
+- [[deployment-checklist]] — Checklist

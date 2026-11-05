@@ -8,31 +8,37 @@ metadata:
 
 # Esquema de Usuario — MongoDB
 
-## Colección: `usuarios`
+**Última revisión contra el código:** 2026-11-05 (`usuarios-service/src/models/usuario.py`, `services/usuario_service.py`, `services/mongodb.py`)
 
-### Documento Completo
+## Colección: `eventflow.usuarios`
+
+### Documento real
 
 ```json
 {
-  "_id": { "$uuid": "550e8400-e29b-41d4-a716-446655440000" },
+  "_id": { "$binary": "<UUID v4, subtype 4>" },
   "tipo_documento": "DNI",
-  "nro_documento": "12345678",
-  "nombre": "Juan",
-  "apellido": "Pérez",
-  "email": "juan@example.com",
-  "creado_en": { "$date": "2026-09-20T10:00:00.000Z" },
+  "nro_documento": "377174497",
+  "nombre": "Ada",
+  "apellido": "Lovelace",
+  "email": "ada@example.com",
+  "creado_en": { "$date": "2026-11-05T01:26:03.677Z" },
+  "actualizado_en": { "$date": "2026-11-05T01:26:07.464Z" },
   "historial_compras": [
     {
-      "reserva_id": { "$uuid": "550e8400-e29b-41d4-a716-446655440001" },
-      "evento_id": { "$uuid": "550e8400-e29b-41d4-a716-446655440002" },
-      "cantidad": 2,
-      "precio_total": 160.0,
-      "fecha_compra": { "$date": "2026-09-20T10:05:00.000Z" },
-      "estado": "confirmada"
+      "evento_id": { "$binary": "<UUID>" },
+      "evento_nombre": "Concierto Demo",
+      "fecha_compra": { "$date": "2026-11-05T01:26:07.464Z" },
+      "entradas": 2,
+      "total_pagado": 10000,
+      "estado": "confirmada",
+      "reserva_id": { "$binary": "<UUID>" }
     }
   ]
 }
 ```
+
+La API expone `_id` como `usuario_id`.
 
 ---
 
@@ -40,170 +46,99 @@ metadata:
 
 | Campo | Tipo | Requerido | Validaciones | Índice |
 |-------|------|-----------|--------------|--------|
-| `_id` | UUID | Sí | Auto-generado (v4) | Primary (unique) |
-| `tipo_documento` | String | Sí | Enum: `DNI`, `Pasaporte` | — |
-| `nro_documento` | String | Sí | Único, 1-20 chars | Unique |
-| `nombre` | String | Sí | 1-100 chars | — |
-| `apellido` | String | Sí | 1-100 chars | — |
-| `email` | String | Sí | Formato email, único | Unique |
-| `creado_en` | DateTime | Sí | Auto UTC now | Descending |
-| `historial_compras` | Array | No | Ver esquema abajo | — |
+| `_id` | UUID | Sí | Generado (v4) | Primario |
+| `tipo_documento` | String | Sí | Enum: `DNI`, `Pasaporte` | Simple |
+| `nro_documento` | String | Sí | 1-50 caracteres | Único |
+| `nombre` | String | Sí | 1-100 caracteres | Simple |
+| `apellido` | String | Sí | 1-100 caracteres | — |
+| `email` | String | Sí | `EmailStr`, normalizado | Único |
+| `creado_en` | DateTime (UTC) | Sí | Al crear | Simple |
+| `actualizado_en` | DateTime (UTC) | Sí | Al crear y al agregar compras | — |
+| `historial_compras` | Array | Sí (puede estar vacío) | Ver abajo | — |
+
+Un email o documento repetido devuelve 409.
 
 ---
 
-## Subdocumento: historial_compras[]
+## Subdocumento: `historial_compras[]`
 
-**Patrón: EMBEDDED** — Justificación:
+**Patrón: EMBEDDED.**
 
 | Criterio | Decisión | Razón |
 |----------|----------|-------|
-| **Cardinalidad** | One-to-Few (usuario tiene < 100 compras típicamente) | Embedded evita joins |
-| **Acceso** | Siempre se lee con el usuario | Single query |
-| **Tamaño** | Acotado (~2KB por compra, < 200KB total) | Límite 16MB document |
-| **Atomicidad** | Actualizar historial + usuario en una operación | Transacción single-doc |
-| **Crecimiento** | Limitado (archivar > 50 compras) | `$push` con `$slice` |
-
-```json
-{
-  "reserva_id": { "$uuid": "..." },
-  "evento_id": { "$uuid": "..." },
-  "cantidad": { "$numberInt": "2" },
-  "precio_total": { "$numberDouble": "160.0" },
-  "fecha_compra": { "$date": "2026-09-20T10:05:00.000Z" },
-  "estado": "confirmada"
-}
-```
+| **Acceso** | Siempre se lee con el usuario | Una sola consulta (`GET /api/usuarios/{id}`) |
+| **Atomicidad** | El `$push` de una compra es una operación sobre un único documento | Atómica sin transacciones |
+| **Cardinalidad** | Pocas compras por usuario | Lejos del límite de 16 MB |
+| **Crecimiento** | **Sin tope implementado** | Si un usuario acumulara miles de compras habría que paginar o mover el historial a su propia colección |
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `reserva_id` | UUID | Referencia a reserva en colección `reservas` |
-| `evento_id` | UUID | Referencia a evento (para consultas rápidas sin join) |
-| `cantidad` | Int | Entradas compradas |
-| `precio_total` | Double | Monto total de la compra |
-| `fecha_compra` | DateTime | Timestamp de la transacción |
-| `estado` | String | `confirmada`, `cancelada` |
+| `evento_id` | UUID | Evento comprado |
+| `evento_nombre` | String | Copia del nombre (desnormalizado para no consultar Eventos al mostrar el historial) |
+| `fecha_compra` | DateTime (UTC) | Momento del registro |
+| `entradas` | Int | Cantidad de entradas |
+| `total_pagado` | Float | Monto total |
+| `estado` | String | `confirmada` |
+| `reserva_id` | UUID (opcional) | Clave de idempotencia; referencia a `eventflow.reservas` |
+
+### Cómo se agrega una compra
+
+Lo hace Reservas al confirmar (paso 5 de la SAGA), con `POST /api/usuarios/{id}/historial`. Es **idempotente por `reserva_id`**:
+
+```python
+filtro = {"_id": usuario_id, "historial_compras.reserva_id": {"$ne": reserva_id}}
+await collection.update_one(filtro, {
+    "$push": {"historial_compras": compra},
+    "$set": {"actualizado_en": ahora},
+})
+# modified_count 1 → 201 (agregada); 0 y el usuario existe → 200 (ya estaba); no existe → 404
+```
+
+Después invalida la entrada `cache:usuario:{id}` de la caché de lecturas.
 
 ---
 
-## Índices Requeridos
+## Índices (creados al iniciar el servicio)
 
 ```javascript
-// Únicos (constraints de negocio)
-db.usuarios.createIndex({ "email": 1 }, { unique: true, name: "idx_email_unique" })
-db.usuarios.createIndex({ "nro_documento": 1 }, { unique: true, name: "idx_documento_unique" })
-
-// Consultas frecuentes
-db.usuarios.createIndex({ "creado_en": -1 }, { name: "idx_creado_en_desc" })
-db.usuarios.createIndex({ "apellido": 1, "nombre": 1 }, { name: "idx_apellido_nombre" })
-
-// Para exportación anonimizada (solo lectura de historial)
-db.usuarios.createIndex({ "historial_compras.fecha_compra": -1 }, { name: "idx_historial_fecha" })
+db.usuarios.createIndex({ email: 1 }, { unique: true })
+db.usuarios.createIndex({ nro_documento: 1 }, { unique: true })
+db.usuarios.createIndex({ creado_en: 1 })
+db.usuarios.createIndex({ tipo_documento: 1 })
+db.usuarios.createIndex({ nombre: 1 })
 ```
 
 ---
 
 ## Patrones de Acceso
 
-| Query | Índice Usado | Consistencia |
-|-------|--------------|--------------|
-| `findOne({_id})` | Primary | Eventual |
-| `findOne({email})` | `idx_email_unique` | Eventual |
-| `findOne({nro_documento})` | `idx_documento_unique` | Eventual |
-| `find().sort({creado_en: -1}).skip().limit()` | `idx_creado_en_desc` | Eventual |
-| `find({}, {historial_compras: 1})` | Collection scan (exportación batch) | Eventual |
+| Operación | Índice | Consistencia |
+|-----------|--------|--------------|
+| `GET /api/usuarios/{id}` → `findOne({_id})` | Primario (y caché Redis DB 1) | Eventual (AP) |
+| `GET /api/usuarios?skip&limit` | Colección | Eventual |
+| Alta → unicidad de email y documento | Únicos | Fuerte (`w=majority`, journal) |
+| Export → `find({})` | Recorrido completo | Eventual |
 
 ---
 
-## Operaciones Críticas
+## Exportación anonimizada
 
-### Crear Usuario (Write Concern: Majority)
+Implementada en `GET /api/usuarios/exportar?format=json|csv`. Ver la sección de privacidad del README y [[data-flow]].
 
-```python
-async def crear_usuario(db, usuario_doc):
-    result = await db.usuarios.with_options(
-        write_concern=WriteConcern(w='majority', j=True)
-    ).insert_one(usuario_doc)
-    return result.inserted_id
-```
+- **Se eliminan** (no se hashean): `nombre`, `apellido`, `email`, `nro_documento`, `usuario_id`, `reserva_id`.
+- **Se conserva** `tipo_documento` (no identifica a nadie por sí solo).
+- **Se generaliza**: `creado_en` → `mes_alta` (`YYYY-MM`); `fecha_compra` → solo el día.
+- **Seudónimo**: `pseudonimo = HMAC-SHA256(clave, usuario_id)[:32]`.
+  - `EXPORT_PSEUDONYM_KEY` vacía → clave aleatoria por proceso: los seudónimos cambian al reiniciar (**anonimización**).
+  - Con valor → seudónimos estables entre exports (**seudonimización**: quien tiene la clave puede re-identificar).
+- **CSV**: una fila por compra (usuarios sin compras incluidos) y celdas que empiezan con `= + - @` neutralizadas.
 
-### Agregar Compra al Historial (Atómico Single-Doc)
-
-```python
-async def agregar_compra(db, usuario_id, compra_doc):
-    await db.usuarios.update_one(
-        {"_id": usuario_id},
-        {
-            "$push": {
-                "historial_compras": {
-                    "$each": [compra_doc],
-                    "$slice": -50  # Mantener últimas 50
-                }
-            }
-        }
-    )
-```
-
-### Exportar Anonimizado (Read Only)
-
-```python
-async def exportar_anonimizado(db):
-    cursor = db.usuarios.find(
-        {}, 
-        {"historial_compras": 1}  # Solo campos necesarios
-    ).batch_size(1000)
-    
-    async for usuario in cursor:
-        yield anonimizar(usuario)
-```
-
----
-
-## Anonimización (GDPR)
-
-### Campos a Eliminar (PII)
-- `nombre`, `apellido`, `email`
-- `tipo_documento`, `nro_documento`
-
-### Campos a Preservar (Análisis)
-- `historial_compras[]` → agregados: `count`, `sum(precio_total)`
-
-### Algoritmo: Hash Irreversible
-
-```python
-import hashlib
-import os
-
-SALT = os.getenv("ANONYMIZATION_SALT", "eventflow-salt-2026-change-in-prod")
-
-def hash_usuario(usuario_id: UUID) -> str:
-    """SHA-256 irreversible con salt"""
-    return hashlib.sha256(
-        f"{usuario_id}{SALT}".encode()
-    ).hexdigest()
-```
-
-**Propiedades:**
-- Irreversible: No se puede recuperar `usuario_id` del hash
-- Determinista: Mismo usuario = mismo hash (para deduplicación en análisis)
-- Salt único por despliegue: Evita rainbow tables
-
----
-
-## Migración de Esquema (Versionado)
-
-```python
-# v1 → v2: Agregar campo 'telefono' opcional
-async def migrate_v1_to_v2(db):
-    await db.usuarios.update_many(
-        {"telefono": {"$exists": False}},
-        {"$set": {"telefono": None}}
-    )
-```
+Sin k-anonimato: un historial muy particular cruzado con datos externos podría re-identificar.
 
 ---
 
 ## Referencias
 
-- [[microservices/usuarios]] — Especificación completa servicio
-- [[decisions/db-selection]] — Justificación MongoDB + Embedded
-- [[endpoints/usuarios-endpoints]] — API referencia
+- [[usuarios]] — Especificación del servicio
+- [[db-selection]] — Justificación MongoDB + embebido
+- [[usuarios-endpoints]] — API

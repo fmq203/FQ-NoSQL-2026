@@ -10,9 +10,9 @@ metadata:
 
 ## Archivo Completo
 
+Copia del `docker-compose.yml` real (actualizada 2026-11-05). La fuente de verdad es el archivo de la raíz de `TAREA 2/`.
+
 ```yaml
-# docker-compose.yml
-# Ubicación: /home/fqueirolo/TECNOLOGO/NoSQL/TAREA 2/docker-compose.yml
 
 services:
   # ============ MONGODB ============
@@ -80,11 +80,15 @@ services:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DB: eventflow
       SERVICE_PORT: 8001
-      ANONYMIZATION_SALT: eventflow-salt-2026-change-in-production
+      # Vacio = clave aleatoria por proceso (anonimizacion). Con valor = pseudonimos estables.
+      EXPORT_PSEUDONYM_KEY: ${EXPORT_PSEUDONYM_KEY:-}
+      CACHE_REDIS_URL: redis://redis:6379/1
     ports:
       - "8001:8001"
     depends_on:
       mongodb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -103,8 +107,8 @@ services:
     environment:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DB: eventflow
-      REDIS_URL: redis://redis:6379
       SERVICE_PORT: 8002
+      CACHE_REDIS_URL: redis://redis:6379/1
     ports:
       - "8002:8002"
     depends_on:
@@ -173,7 +177,8 @@ volumes:
 ## Comandos de Ejecución
 
 ```bash
-# Construir y levantar todo
+# Construir y levantar todo (equivalen)
+make up
 docker compose up -d --build
 
 # Ver estado
@@ -198,10 +203,11 @@ docker compose down -v
 docker compose build usuarios-service
 docker compose up -d usuarios-service
 
-# Ejecutar tests dentro de contenedor
-docker compose exec usuarios-service pytest -v
-docker compose exec reservas-service pytest -v
+# Tests: make test (las imágenes no incluyen tests/; make los monta)
+make test
 ```
+
+También se pueden subir y bajar contenedores desde la demo (`python3 demo/servidor.py`, tarjeta "Contenedores Docker").
 
 ---
 
@@ -223,17 +229,18 @@ docker compose exec reservas-service pytest -v
 ### Usuarios Service
 ```bash
 MONGODB_URI=mongodb://mongodb:27017
-MONGODB_DB=eventflow
+MONGODB_DB=eventflow                     # sin efecto: la config lee MONGODB_DATABASE (default eventflow)
 SERVICE_PORT=8001
-ANONYMIZATION_SALT=eventflow-salt-2026-change-in-production
+EXPORT_PSEUDONYM_KEY=                    # vacía → seudónimos efímeros por proceso
+CACHE_REDIS_URL=redis://redis:6379/1     # caché de lecturas
 ```
 
 ### Eventos Service
 ```bash
 MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=eventflow
-REDIS_URL=redis://redis:6379
 SERVICE_PORT=8002
+CACHE_REDIS_URL=redis://redis:6379/1
 ```
 
 ### Reservas Service
@@ -294,6 +301,6 @@ volumes:
 
 ## Referencias
 
-- [[deployment/docker-setup]] - Dockerfiles por servicio
-- [[deployment/deployment-checklist]] - Checklist pre-producción
+- [[docker-setup]] - Dockerfiles por servicio
+- [[deployment-checklist]] - Checklist
 - [[decisions/deployment-strategy]] - Estrategia completa

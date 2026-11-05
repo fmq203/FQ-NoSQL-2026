@@ -624,3 +624,25 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Lección:** un paso que "solo" produce un artefacto secundario necesita su propio chequeo; acá el éxito del paso principal tapó el fallo del secundario durante tres semanas.
 
 **Tags:** #jmeter #docker #demo #bug #reportes #claude-opus-5
+
+---
+
+### 2026-11-05 — Revisión completa de `brain/` contra el código
+
+**Contexto:** Pedido explícito: revisar todos los documentos del brain y corregir lo necesario, el día de la pre-defensa. Buena parte del brain se había escrito en la etapa de diseño (septiembre) y nunca se contrastó con lo implementado.
+
+**Método:** primero se juntó la "verdad" desde el sistema corriendo y el código (OpenAPI de los 3 servicios, modelos Pydantic, índices reales de MongoDB, documentos de muestra, claves de Redis, Lua de `redis_pago.py`, DDL de `init_pg_schema()`, payloads de cada `insert_event_log`, configuración de clientes, Dockerfiles, `docker-compose.yml`, métricas de `/metrics`); después, doc por doc. Afirmaciones dudosas se verificaron contra el stack (p. ej. códigos de `decrementar-inventario`, 404 de reservas, que la DDL nueva corre sobre la base real).
+
+**Qué estaba mal (ejemplos):** endpoints faltantes (historial, inventario, listado y auditoría de reservas, `/metrics`); `fecha` duplicada y campos inexistentes en eventos (`descripcion`, `venue`, `coordenadas`, `categorias`); historial con otros nombres de campo y un `$slice -50` que no existe; anonimización descrita como SHA-256 con salt; event_log con columnas inexistentes (`metadata`, `tipo`, `datos`, `hash_anterior`) y eventos inventados (`RESERVA_CANCELADA`, `PAGO_REVERTIDO`); Lua con TTL de 24 h y compensación de cantidad fija 1; "DELETE reserva" como compensación; validación "en paralelo" de usuario y evento; códigos 400 donde son 404/422; `postgresql-init.sql` con un esquema que chocaría con el real; "spec-kit" descrito como generador de OpenAPI por decoradores; Kubernetes como "preparado"; tests con un comando que no encuentra tests; cifras de tests viejas; enlaces `[[...]]` del índice que no apuntaban a ningún archivo.
+
+**Resultado:** reescritos o corregidos 30 documentos; los dos bocetos que no corresponden (`openapi-template.json`, `spec-kit-code-example.py`) quedan marcados como históricos en vez de borrarse. Cada doc indica su fecha de revisión y separa lo implementado de lo que no. `event-sourcing-cqrs.md` ahora dice explícitamente que es event sourcing **de auditoría** (MongoDB sigue siendo la fuente de verdad, sin replay). Verificado: ningún término viejo en el brain (grep), todos los `[[enlaces]]` resuelven, los 7 diagramas Mermaid parsean con el parser oficial (con control negativo).
+
+**Hallazgos en el código (documentados, no corregidos):**
+1. **Segunda capa de compensación en `SagaOrchestrator`**: cuando falla el paso 5 ejecuta `compensate_step_4_payment` (solo loguea) y registra un `COMPENSACION_EJECUTADA` nominal además del real del handler; `compensate_step_5_reservation` solo correría si fallara el paso 6, que no falla. Redundante con las compensaciones inline.
+2. **Read preferences**: Usuarios (y el cliente de health de Reservas) usan `_ServerMode(2)` = `SECONDARY` con `maxStalenessSeconds=1`; Eventos `secondaryPreferred` con el mismo `maxStaleness`. En un nodo standalone se ignoran; en un replica set fallarían (MongoDB exige `maxStalenessSeconds >= 90`, y `SECONDARY` no cae al primario).
+3. `compensaciones_por_tipo` agrupa por nombres distintos para la misma idea: `PROCESAR_PAGO` (paso 4) y `PAGO_PROCESADO` (paso 5).
+4. `idempotency_hit_total` cuenta también coincidencias en Redis/PostgreSQL aunque la SAGA se ejecute igual (reintento tras un fallo).
+5. `MONGODB_DB` en `docker-compose.yml` no tiene efecto (la config lee `MONGODB_DATABASE`; el default coincide).
+6. Dependencias listadas y no usadas (`testcontainers`; `asyncpg`/`psycopg`/`sqlalchemy` en Usuarios).
+
+**Tags:** #brain #documentacion #revision #deuda-tecnica #claude-opus-5

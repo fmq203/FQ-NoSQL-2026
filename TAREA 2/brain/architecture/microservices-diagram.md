@@ -23,8 +23,8 @@ graph TB
     end
 
     subgraph Databases["Bases de Datos Políglotas"]
-        MG[(MongoDB\n:27017\nUsuarios, Eventos, Reservas)]
-        RD[(Redis\n:6379\nPagos atómicos, Cache, Inventario)]
+        MG[(MongoDB\n:27017\nBD eventflow: una colección\npor servicio)]
+        RD[(Redis\n:6379\nDB0: pagos + inventario Lua\nDB1: caché de lecturas)]
         PG[(PostgreSQL\n:5432\nAudit Log, Event Sourcing)]
     end
 
@@ -34,6 +34,8 @@ graph TB
 
     US --> MG
     ES --> MG
+    US -.->|caché AP| RD
+    ES -.->|caché AP| RD
     RS --> MG
     RS --> RD
     RS --> PG
@@ -52,31 +54,36 @@ graph TB
 ## Descripción de Interacciones
 
 ### 1. Cliente → Servicios (Directo)
-- **GET /api/usuarios/{id}** → Usuarios Service → MongoDB
-- **GET /api/eventos/{id}** → Eventos Service → MongoDB
+- **GET /api/usuarios/{id}** → Usuarios Service → caché Redis (DB 1) o MongoDB
+- **GET /api/eventos/{id}** → Eventos Service → caché Redis (DB 1) o MongoDB
 - **POST /api/reservar** → Reservas Service (Orquestador)
 
 ### 2. Reservas Service → Otros Servicios (Orquestación SAGA)
 ```
 POST /api/reservar
     │
-    ├─► GET /api/usuarios/{usuario_id}     (Validar usuario existe)
+    ├─► GET /api/usuarios/{usuario_id}      (Validar usuario; Cache-Control: no-cache)
     │
-    ├─► GET /api/eventos/{evento_id}       (Validar evento + aforo)
+    ├─► GET /api/eventos/{evento_id}        (Validar evento, estado, categoría y stock; no-cache)
     │
-    ├─► Redis: Lua Script (Pago atómico + Decremento inventario)
+    ├─► Redis: Lua pagar_y_decrementar      (Pago + decremento atómicos, idempotente por reserva_id)
+    ├─► POST /api/eventos/{id}/decrementar-inventario  (si falla → Lua compensar)
     │
-    ├─► MongoDB: Insert Reserva
+    ├─► MongoDB: insert reserva (_id = reserva_id, con saga_log)
+    │                                       (si falla → Lua compensar + incrementar-inventario)
+    ├─► POST /api/usuarios/{id}/historial   (best-effort: si falla, HISTORIAL_PENDIENTE)
     │
-    └─► PostgreSQL: Insert Audit Event
+    └─► PostgreSQL: un evento por paso en event_log (no bloqueante)
 ```
+
+Las llamadas HTTP tienen 3 reintentos con backoff y circuit breaker por servicio.
 
 ### 3. Flujos de Datos por Base de Datos
 
 | Base de Datos | Escritura | Lectura |
 |---------------|-----------|---------|
-| **MongoDB** | Usuarios, Eventos, Reservas | Usuarios, Eventos, Historial |
-| **Redis** | Pago (Lua), Inventario temporal | Cache disponibilidad |
+| **MongoDB** | Usuarios (+ historial), Eventos (+ inventario), Reservas | Usuarios, Eventos, Reservas |
+| **Redis** | DB 0: pago e inventario (Lua). DB 1: caché de lecturas | DB 1: GET de usuarios y eventos (HIT/STALE) |
 | **PostgreSQL** | Audit log (Event Sourcing) | Reportes, Compliance |
 
 ---

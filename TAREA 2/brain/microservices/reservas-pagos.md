@@ -10,20 +10,21 @@ metadata:
 
 ## Responsabilidad
 
-Orquesta la transacción distribuida de compra de entradas mediante **SAGA Orchestration** y estructura la lógica de validación con **Chain of Responsibility**. Coordina: Usuarios, Eventos, Redis (pagos), MongoDB (reservas), PostgreSQL (auditoría).
+Orquesta la compra de entradas como una **SAGA orquestada**, ejecutada como **Chain of Responsibility** de 6 handlers. Coordina Usuarios y Eventos (HTTP), Redis (cobro + inventario atómicos), MongoDB (reserva confirmada) y PostgreSQL (auditoría).
+
+Revisado contra el código: 2026-11-05 (`reservas-service/src/`).
 
 ---
 
 ## Tecnologías
 
 - **Framework**: FastAPI (Python 3.11)
-- **Bases de Datos**: 
-  - Redis (pagos atómicos + inventario)
-  - MongoDB (persistencia reservas)
-  - PostgreSQL (audit log / Event Sourcing)
-- **Clientes HTTP**: httpx (async) para Usuarios/Eventos Services
-- **Puerto**: 8003
-- **Documentación**: http://localhost:8003/docs
+- **Datos**:
+  - Redis DB 0 — `pago:{reserva_id}` y `evento:{id}:categoria:{cat}:disponibles` (scripts Lua)
+  - MongoDB — `eventflow.reservas`
+  - PostgreSQL — `event_log` + vistas CQRS (los crea `init_pg_schema()` al iniciar)
+- **Clientes HTTP**: httpx async hacia Usuarios y Eventos (timeout 5 s, 3 reintentos con backoff, circuit breaker)
+- **Puerto**: 8003 — docs en http://localhost:8003/docs
 
 ---
 
@@ -31,86 +32,36 @@ Orquesta la transacción distribuida de compra de entradas mediante **SAGA Orche
 
 ```
 POST /api/reservar
+    │  ¿reserva_id ya confirmado en MongoDB? → 200 (idempotencia)
+    ▼
+SagaOrchestrator.execute()  → SAGA_STARTED
     │
     ▼
-┌─────────────────────────────────────┐
-│ Chain of Responsibility             │
-├─────────────────────────────────────┤
-│ 1. ValidadorDeDatos                 │ ← Validación esquema
-│ 2. ValidadorInventario (Usuario)    │ ← HTTP → Usuarios Service
-│ 3. ValidadorEvento                  │ ← HTTP → Eventos Service
-│ 4. ProcesadorPago (Redis Lua)       │ ← Atómico: Pago + Inventario
-│ 5. ConfirmadorReserva (MongoDB)     │ ← Persistencia reserva
-│ 6. Auditor (PostgreSQL)             │ ← Event Sourcing / Audit Log
-└─────────────────────────────────────┘
-    │
+┌────────────────────────────────────────────┐
+│ ChainBuilder.build()                       │
+│ 1. ValidadorDeDatos                        │ validación local
+│ 2. ValidadorInventario                     │ GET usuario (no-cache)
+│ 3. ValidadorEvento                         │ GET evento: estado, categoría, stock
+│ 4. ProcesadorPago                          │ Lua pagar_y_decrementar + decrementar en Eventos
+│ 5. ConfirmadorReserva                      │ insert MongoDB + historial en Usuarios (best-effort)
+│ 6. Auditor                                 │ SAGA_COMPLETED
+└────────────────────────────────────────────┘
+    │ si context.error → SAGA_FAILED
     ▼
-Compensaciones automáticas si falla cualquier paso
+201 / 200 / error RFC 7807
 ```
+
+Las compensaciones reales están **dentro de los handlers 4 y 5** (ver [[saga-flow]]). El orquestador tiene además un mapa `compensation_handlers` para los pasos 4 y 5; en la práctica solo agrega un `COMPENSACION_EJECUTADA` nominal del paso 4 cuando falla el 5 (su handler solo escribe un log). Ver la nota al final.
 
 ---
 
 ## Modelo de Datos
 
-### Redis: Inventario y Pagos
+Detalle completo en [[reservation-schema]] y [[event-log-schema]]. Resumen:
 
-```redis
-# Contador de inventario por evento (inicializado al crear evento)
-SET inventario:{evento_id} 50000
-EXPIRE inventario:{evento_id} 86400  # 24h, renovado por evento service
-
-# Registro de pago (creado en SAGA paso 4)
-HSET pago:{reserva_id} 
-  reserva_id "uuid"
-  usuario_id "uuid" 
-  monto 150.0
-  metodo_pago "tarjeta"
-  estado "confirmado"
-  timestamp "2026-09-20T10:00:00Z"
-EXPIRE pago:{reserva_id} 86400
-```
-
-### MongoDB: Colección `reservas`
-
-```json
-{
-  "_id": "UUID",
-  "usuario_id": "UUID",
-  "evento_id": "UUID",
-  "cantidad": 2,
-  "metodo_pago": "tarjeta",
-  "monto_total": 160.0,
-  "numero_confirmacion": "CONF-20260920-A1B2C3D4",
-  "estado": "confirmada | cancelada | fallida",
-  "creado_en": "ISODate",
-  "saga_log": [
-    { "paso": "USUARIO_VALIDADO", "timestamp": "ISODate", "exitoso": true },
-    { "paso": "EVENTO_VALIDADO", "timestamp": "ISODate", "exitoso": true },
-    { "paso": "PAGO_PROCESADO", "timestamp": "ISODate", "exitoso": true },
-    { "paso": "RESERVA_CONFIRMADA", "timestamp": "ISODate", "exitoso": true },
-    { "paso": "AUDITORIA_REGISTRADA", "timestamp": "ISODate", "exitoso": true }
-  ]
-}
-```
-
-### PostgreSQL: Tabla `event_log` (Event Sourcing)
-
-```sql
-CREATE TABLE event_log (
-    id BIGSERIAL PRIMARY KEY,
-    event_type VARCHAR(50) NOT NULL,           -- SAGA_STARTED, USUARIO_VALIDADO, etc.
-    aggregate_id UUID NOT NULL,                -- reserva_id
-    aggregate_type VARCHAR(50) NOT NULL,       -- 'Reserva'
-    payload JSONB NOT NULL,                    -- Datos del evento
-    metadata JSONB,                            -- Contexto adicional
-    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    correlation_id UUID                        -- Para trazar SAGA completa
-);
-
-CREATE INDEX idx_event_log_aggregate ON event_log(aggregate_id);
-CREATE INDEX idx_event_log_type ON event_log(event_type);
-CREATE INDEX idx_event_log_timestamp ON event_log(timestamp);
-```
+- **MongoDB** `eventflow.reservas`: `_id = reserva_id`, `usuario_id`, `evento_id`, `cantidad`, `categoria`, `metodo_pago`, `monto_total`, `numero_confirmacion` (único), `estado` (`confirmada`), `creado_en`, `saga_log[]`. Solo se guardan reservas confirmadas.
+- **Redis**: `pago:{reserva_id}` (hash, TTL 90 días) e inventario por categoría (sembrado con `SETNX` desde lo que informó Eventos).
+- **PostgreSQL** `event_log(id, event_type, aggregate_id, aggregate_type, payload JSONB, correlation_id, timestamp)` + índice GIN.
 
 ---
 
@@ -118,154 +69,99 @@ CREATE INDEX idx_event_log_timestamp ON event_log(timestamp);
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/health` | Health check |
-| POST | `/api/reservar` | Iniciar SAGA + Chain of Responsibility |
+| GET | `/health` | Health check de MongoDB, Redis, PostgreSQL, Usuarios y Eventos |
+| GET | `/metrics` | Prometheus |
+| POST | `/api/reservar` | SAGA (201 nueva, 200 reintento) |
+| GET | `/api/reservar` | Listar reservas |
+| GET | `/api/reservar/{reserva_id}` | Obtener reserva |
+| GET | `/api/reservar/{reserva_id}/audit` | Línea de tiempo en PostgreSQL |
 
-### POST /api/reservar
-
-```json
-// Request
-{
-  "usuario_id": "550e8400-e29b-41d4-a716-446655440000",
-  "evento_id": "550e8400-e29b-41d4-a716-446655440001",
-  "cantidad": 2,
-  "metodo_pago": "tarjeta"
-}
-
-// Response 201 (Éxito)
-{
-  "reserva_id": "550e8400-e29b-41d4-a716-446655440002",
-  "estado": "confirmada",
-  "numero_confirmacion": "CONF-20260920-A1B2C3D4"
-}
-
-// Response 400/404/409/500 (Error)
-{
-  "detail": "Inventario insuficiente. Disponibles: 1"
-}
-```
-
----
-
-## Flujo SAGA Detallado
-
-Ver [[architecture/saga-flow]] para diagrama completo.
-
-### Pasos Exitosos
-
-1. **ValidadorDeDatos** — Validar UUIDs, cantidad > 0, método pago válido
-2. **ValidadorInventario** — GET `/api/usuarios/{id}` → Usuario existe
-3. **ValidadorEvento** — GET `/api/eventos/{id}` → Evento existe + aforo >= cantidad
-4. **ProcesadorPago** — **Lua Script Redis atómico**:
-   - Verificar `inventario:evento_id >= cantidad`
-   - `DECRBY inventario:evento_id cantidad`
-   - `HSET pago:reserva_id {datos_pago}`
-5. **ConfirmadorReserva** — INSERT en MongoDB `reservas`
-6. **Auditor** — INSERT en PostgreSQL `event_log` (SAGA_COMPLETED)
-
-### Compensaciones (Rollback)
-
-| Fallo en | Acción |
-|----------|--------|
-| Paso 1-3 (Validaciones) | Ninguna (solo lectura) |
-| Paso 4 (Redis) | Automática en Lua (transacción atómica) |
-| Paso 5 (MongoDB) | `DELETE reserva` + Lua compensación Redis (`INCRBY` + `DEL`) |
-| Paso 6 (PostgreSQL) | Log warning — reserva ya confirmada |
+Request, respuestas y códigos de error en [[reservas-endpoints]]. Los errores son RFC 7807 con códigos específicos (`USER_NOT_FOUND`, `EVENT_NOT_FOUND`, `EVENT_NOT_AVAILABLE`, `INSUFFICIENT_INVENTORY`, `PAYMENT_FAILED`, `RESERVATION_FAILED`, `SERVICE_UNAVAILABLE`, `VALIDATION_ERROR`, `RESERVA_NOT_FOUND`).
 
 ---
 
 ## Chain of Responsibility
 
-Ver [[chain-of-responsibility]] para implementación completa.
-
-### Handlers en Orden
-
 ```python
-handlers = [
-    ValidadorDeDatos(),           # Local
-    ValidadorInventario(client),  # HTTP → Usuarios
-    ValidadorEvento(client),      # HTTP → Eventos
-    ProcesadorPago(redis),        # Redis Lua
-    ConfirmadorReserva(mongo),    # MongoDB
-    Auditor(pg_pool)              # PostgreSQL
-]
+# chain/validators.py — ChainBuilder.build()
+validador_datos = ValidadorDeDatos()
+validador_inventario = ValidadorInventario()
+...
+validador_datos.set_next(validador_inventario)   # 1→2→3→4→5→6
 ```
 
-Cada handler:
-- Recibe `ReservaContext` (dataclass con todos los datos)
-- Procesa o retorna error
-- Pasa al siguiente con `set_next()`
+Los handlers no reciben dependencias por constructor: usan los clientes globales (`http_clients`, `redis_pago`, `mongo`, `postgresql`). Cada uno recibe el `ReservaContext`, hace su paso, escribe su entrada en `saga_log` y su evento en `event_log`; si falla, deja `context.error` y la cadena se corta. Ver [[chain-of-responsibility]].
 
 ---
 
-## Eventos de Auditoría (Event Sourcing)
+## Compensaciones
 
-| Event Type | Cuándo | Payload Clave |
-|------------|--------|---------------|
-| `SAGA_STARTED` | Inicio POST /api/reservar | request data |
-| `USUARIO_VALIDADO` | Paso 2 OK | usuario_id |
-| `EVENTO_VALIDADO` | Paso 3 OK | evento_id, aforo_disponible |
-| `PAGO_PROCESADO` | Paso 4: cobro OK en Redis (antes de sincronizar con Eventos) | reserva_id, monto, metodo_pago |
-| `INVENTARIO_DECREMENTADO` | Paso 4 OK: Eventos Service sincronizado | evento_id, cantidad |
-| `RESERVA_CONFIRMADA` | Paso 5 OK | reserva_id, numero_confirmacion |
-| `SAGA_COMPLETED` | Paso 6 OK | aggregate completo |
-| `SAGA_FAILED` | Cualquier fallo | error, paso_fallido |
-| `COMPENSACION_EJECUTADA` | Rollback | pasos_compensados |
+| Fallo en | Acción | Respuesta |
+|----------|--------|-----------|
+| Pasos 1-3 | Ninguna (nada se modificó) | 404 / 409 / 422 / 503 |
+| Paso 4: Lua sin stock | Ninguna (el Lua no descontó) | 409 |
+| Paso 4: sincronización con Eventos | Lua `compensar_pago` | 503 |
+| Paso 5: insert MongoDB | Lua `compensar_pago` + `incrementar-inventario` | 500 |
+| Historial / event_log | Ninguna (no bloquean) | 201 igual |
 
 ---
 
-## CQRS (Command Query Responsibility Segregation)
+## Resiliencia
 
-### Escritura (Commands) → PostgreSQL Event Log
-- Cada paso SAGA = evento inmutable
-- Fuente de verdad para auditoría
+- **Reintentos**: 3 (0,5 / 1 / 2 s) ante timeout, error de red o 5xx de Usuarios/Eventos; un 404 no se reintenta.
+- **Circuit breaker** por servicio: abre con 5 fallos seguidos, rechaza al instante 30 s, después deja pasar una prueba (half-open). Estado en `/health` y en la métrica `circuit_breaker_state`.
+- **Fault injection de demo**: `?simular_fallo=sync_pago` fuerza la falla de la sincronización del paso 4.
 
-### Lectura (Queries) → Vistas Materializadas / MongoDB
-- `reservas` collection para consultas operativas
-- Vistas PostgreSQL para reportes analíticos
+---
+
+## CQRS
+
+- **Escritura**: cada paso de la SAGA agrega un evento inmutable a `event_log`.
+- **Lectura**: vistas `ventas_por_evento` (desde `RESERVA_CONFIRMADA`), `tasa_exito_saga`, `compensaciones_por_tipo`; y `eventflow.reservas` para la consulta operativa.
 
 ```sql
--- Vista para reportes de ventas
-CREATE VIEW ventas_por_evento AS
-SELECT 
-    e.nombre as evento,
-    COUNT(r.id) as total_reservas,
-    SUM(r.cantidad) as total_entradas,
-    SUM(r.monto_total) as ingreso_total
-FROM event_log r
-JOIN eventos e ON e.id = r.payload->>'evento_id'
-WHERE r.event_type = 'RESERVA_CONFIRMADA'
-GROUP BY e.nombre;
+-- ventas_por_evento: todo sale del payload (los eventos no están en PostgreSQL)
+SELECT payload->>'evento_id' AS evento_id, COUNT(*) AS total_reservas,
+       SUM((payload->>'cantidad')::int) AS total_entradas,
+       SUM((payload->>'monto_total')::numeric) AS ingreso_total
+FROM event_log
+WHERE event_type = 'RESERVA_CONFIRMADA' AND timestamp > NOW() - INTERVAL '30 days'
+GROUP BY payload->>'evento_id';
 ```
 
 ---
 
 ## Idempotencia
 
-- `reserva_id` (UUID v4) generado al inicio → clave de idempotencia
-- Redis: `pago:{reserva_id}` evita doble procesamiento
-- MongoDB: `_id = reserva_id` (unique index)
-- PostgreSQL: `aggregate_id` permite detectar duplicados
+`reserva_id` (UUID v4, del cliente o generado): chequeo previo en MongoDB (→ 200), `pago:{reserva_id}` en el Lua, `_id` en MongoDB y `$ne` en el historial del usuario.
 
 ---
 
-## Manejo de Errores
+## Testing
 
-| Error | HTTP | Acción |
-|-------|------|--------|
-| Usuario no existe | 404 | Fin SAGA, sin compensación |
-| Evento no existe | 404 | Fin SAGA, sin compensación |
-| Inventario insuficiente | 409 | Fin SAGA, sin compensación |
-| Pago falla (Redis) | 500 | Compensación automática Lua |
-| MongoDB error | 500 | Compensación Redis + MongoDB |
-| PostgreSQL error | 500 | Log warning, reserva confirmada |
+```bash
+make test     # reservas: 112 passed, 4 skipped (unit, integración, contrato, carga con dependencias mockeadas)
+make jmeter   # de punta a punta: doble venta (50/250 con stock 50) y SAGA sostenida (satura en ≈50 req/s)
+```
+
+---
+
+## Nota: segunda capa de compensación en el orquestador
+
+`SagaOrchestrator._handle_error()` calcula los pasos a compensar con `range(failed_step - 1, 3, -1)` y ejecuta `compensation_handlers` (configurados en `routes/reservas.py` para los pasos 4 y 5):
+
+- Falla en paso ≤ 4 → no corre nada.
+- Falla en paso 5 → corre `compensate_step_4_payment`, que **solo escribe un log**, y registra un `COMPENSACION_EJECUTADA` con `accion: "COMPENSATION"`. Ese evento se suma al real que ya registró el handler 5, así que la auditoría de un fallo en MongoDB muestra dos compensaciones.
+- `compensate_step_5_reservation` (que sí revierte) solo correría si fallara el paso 6, que no falla (el Auditor atrapa sus errores).
+
+Es redundante con las compensaciones inline; queda como deuda técnica documentada.
 
 ---
 
 ## Referencias
 
-- [[architecture/saga-flow]] — Diagrama y pasos SAGA
+- [[saga-flow]] — Diagrama, Lua y compensaciones
 - [[chain-of-responsibility]] — Implementación CoR
-- [[patterns/event-sourcing-cqrs]] — Event Sourcing + CQRS
-- [[data-models/reservation-schema]] — Esquemas detallados
-- [[endpoints/reservas-endpoints]] — Referencia OpenAPI
+- [[event-sourcing-cqrs]] — Event Sourcing + CQRS
+- [[reservation-schema]] — Esquemas detallados
+- [[reservas-endpoints]] — Referencia OpenAPI
