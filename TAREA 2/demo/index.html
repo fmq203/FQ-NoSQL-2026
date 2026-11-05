@@ -202,12 +202,13 @@
 
   <section class="card" id="docker-card">
     <h2>Contenedores Docker</h2>
-    <p class="hint">Subir o bajar cada contenedor desde acá (<code>docker compose up -d</code> / <code>stop</code>; los datos se conservan). Por ejemplo, bajar <b>mongodb</b> para mostrar las lecturas AP. Necesita la página servida con <code>python3 demo/servidor.py</code>.</p>
+    <p class="hint">Subir o bajar cada contenedor desde acá (<code>docker compose up -d</code> / <code>stop</code>; los datos se conservan). Por ejemplo, bajar <b>mongodb</b> para mostrar las lecturas AP. <b>Limpiar datos</b> vacía usuarios, eventos, reservas, Redis y la auditoría para arrancar la demo de cero. Necesita la página servida con <code>python3 demo/servidor.py</code>.</p>
     <div class="docker-grid" id="docker-grid"></div>
     <div class="actions">
       <button id="btn-docker-up-all">▲ Subir todo</button>
       <button class="danger" id="btn-docker-down-all">▼ Bajar todo</button>
       <button class="secondary" id="btn-docker-refresh">↻ Estado</button>
+      <button class="danger" id="btn-limpiar-datos" title="Vacía MongoDB, Redis y el event_log de PostgreSQL (conserva índices y vistas)">🧹 Limpiar datos</button>
       <span id="docker-msg" style="font-size:12.5px; color:var(--muted);"></span>
     </div>
     <pre class="result" id="res-docker" style="display:none"></pre>
@@ -534,6 +535,40 @@ $('btn-docker-down-all').addEventListener('click', () => {
   if (confirm('¿Bajar todos los contenedores? La demo deja de responder hasta volver a subirlos.')) accionDocker('stop', 'todos');
 });
 $('btn-docker-refresh').addEventListener('click', refreshDocker);
+
+/** Los IDs que quedaron en la página apuntan a datos que ya no existen. */
+function olvidarIdsDeLaPagina() {
+  ['r-usuario', 'r-evento', 'hist-usuario-id', 'audit-reserva-id', 'ap-evento-id'].forEach(id => { if ($(id)) $(id).value = ''; });
+  ['usuario-id-badge', 'evento-id-badge'].forEach(id => { if ($(id)) $(id).style.display = 'none'; });
+  ['res-usuario', 'res-evento', 'res-reserva', 'res-scenario'].forEach(id => { if ($(id)) $(id).style.display = 'none'; });
+  lastReservaId = null;
+  lastReservaPayload = null;
+}
+
+$('btn-limpiar-datos').addEventListener('click', async () => {
+  if (dockerOcupado) return;
+  if (!confirm('¿Borrar todos los usuarios, eventos, reservas, claves de Redis y la auditoría? No se puede deshacer.')) return;
+  dockerOcupado = true;
+  $('btn-limpiar-datos').disabled = true;
+  $('docker-msg').textContent = 'Limpiando datos…';
+  const r = await callApi('/control/limpiar', { method: 'POST', headers: CONTROL_HEADERS });
+  dockerOcupado = false;
+  $('btn-limpiar-datos').disabled = false;
+  if (r.ok) {
+    let borrados = {};
+    try { borrados = JSON.parse(r.body.resultados.mongodb.salida); } catch { /* salida inesperada: se informa sin números */ }
+    const detalle = Object.entries(borrados).map(([k, v]) => `${v} ${k}`).join(', ');
+    $('docker-msg').textContent = `Datos limpios${detalle ? ` (${detalle}; Redis y auditoría vacíos)` : ''}.`;
+    $('res-docker').style.display = 'none';
+    olvidarIdsDeLaPagina();
+  } else {
+    $('docker-msg').textContent = r.status === 403 || r.status === 404 || r.status === 0
+      ? 'Control no disponible: abrí la demo con  python3 demo/servidor.py.'
+      : 'Falló la limpieza (¿algún contenedor de base de datos está bajado?), ver detalle abajo.';
+    showResult('res-docker', r);
+  }
+  await refreshDocker();
+});
 refreshDocker();
 
 // ---- Pipeline visual ----
@@ -555,6 +590,8 @@ const PIPELINE_STEPS = ['datos', 'usuario', 'evento', 'pago', 'reserva', 'audita
  */
 async function animatePipeline(failStep) {
   resetPipeline();
+  // Error que no sabemos ubicar: el pipeline queda en gris (nunca en verde, que significa éxito).
+  if (failStep && !PIPELINE_STEPS.includes(failStep)) return;
   for (const step of PIPELINE_STEPS) {
     markStep(step, 'active');
     await new Promise(r => setTimeout(r, 200));
@@ -577,7 +614,13 @@ function stepForError(body) {
   if (code === 'VALIDATION_ERROR') return detail.includes('categoria') ? 'evento' : 'datos';
   if (code === 'PAYMENT_FAILED') return 'pago';
   if (code === 'RESERVATION_FAILED') return 'reserva';
-  return null;
+  if (code === 'SERVICE_UNAVAILABLE') {
+    // Mismo código para una dependencia caída en distintos pasos: el detail dice cuál.
+    if (detail.includes('usuario')) return 'usuario';
+    if (detail.includes('sincronizando inventario')) return 'pago';
+    if (detail.includes('evento')) return 'evento';
+  }
+  return 'desconocido';
 }
 
 // ---- Paso 1: usuario ----

@@ -4,7 +4,8 @@
     python3 demo/servidor.py --port 9000
 
 Solo stdlib. La API de control corre `docker compose` sobre el docker-compose.yml
-de TAREA 2, con una lista fija de servicios y acciones (sin shell). Como cualquier
+de TAREA 2, con una lista fija de servicios y acciones (sin shell), y "limpiar
+datos" vacía MongoDB, Redis y el event_log de PostgreSQL con comandos fijos. Como cualquier
 página abierta en el navegador puede pegarle a localhost, se defiende así:
 - escucha solo en 127.0.0.1;
 - exige el header X-Demo-Control (un fetch de otro origen con ese header necesita
@@ -58,6 +59,27 @@ def estado_contenedores() -> dict:
     return estado
 
 
+# Vacía los datos conservando la estructura (índices de Mongo, tabla y vistas de PostgreSQL).
+_LIMPIAR_MONGO_JS = (
+    'const e = db.getSiblingDB("eventflow");'
+    'print(JSON.stringify(Object.fromEntries('
+    '["usuarios", "eventos", "reservas"].map(c => [c, e[c].deleteMany({}).deletedCount]))));'
+)
+LIMPIEZA = (
+    ("mongodb", ["mongosh", "--quiet", "--eval", _LIMPIAR_MONGO_JS]),
+    ("redis", ["redis-cli", "FLUSHALL"]),  # DB 0 (pagos/inventario) y DB 1 (caché de lecturas)
+    ("postgresql", ["sh", "-c", 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "TRUNCATE event_log RESTART IDENTITY"']),
+)
+
+
+def limpiar_datos() -> dict:
+    resultados = {}
+    for servicio, comando in LIMPIEZA:
+        proc = docker_compose("exec", "-T", servicio, *comando)
+        resultados[servicio] = {"ok": proc.returncode == 0, "salida": (proc.stdout + proc.stderr).strip()}
+    return resultados
+
+
 def accion_docker(accion: str, servicio: str) -> subprocess.CompletedProcess:
     objetivo = [] if servicio == "todos" else [servicio]
     if accion == "start":
@@ -101,6 +123,15 @@ class DemoHandler(SimpleHTTPRequestHandler):
             self._json(503, {"detail": f"No se pudo consultar Docker: {exc}"})
 
     def do_POST(self):
+        if self.path == "/control/limpiar":
+            if not self._control_autorizado():
+                return
+            try:
+                resultados = limpiar_datos()
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                return self._json(503, {"detail": f"No se pudo ejecutar docker compose: {exc}"})
+            todo_ok = all(r["ok"] for r in resultados.values())
+            return self._json(200 if todo_ok else 500, {"resultados": resultados})
         partes = self.path.strip("/").split("/")
         if len(partes) != 3 or partes[0] != "control":
             return self._json(404, {"detail": "Not Found"})

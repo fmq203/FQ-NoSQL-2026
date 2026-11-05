@@ -582,3 +582,17 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Verificado contra el stack real:** con `eventos-service` caído, una reserva da 503 en ≈3,8 s (3 reintentos 0,5/1/2 s); al subirlo, reintentar el mismo `reserva_id` da 201 y otra vez 200. Con 5 fallos seguidos se abre el circuit breaker y el sexto falla en ≈30 ms, incluso después de levantar el servicio, hasta pasar los 30 s de half-open: hay que tenerlo presente en vivo. La página se probó en Chromium headless (imagen Docker de Playwright, porque el WSL no tiene las librerías del navegador y no hay sudo) además de jsdom.
 
 **Tags:** #demo #docker #seguridad-local #csrf #idempotencia #circuit-breaker #claude-opus-5
+
+---
+
+### 2026-11-04 — Demo: botón "Limpiar datos" y pipeline en verde ante un 503
+
+**Contexto:** Para ensayar hacía falta arrancar de cero (las bases tenían ~15.800 documentos, 76.679 filas de auditoría y ~9.800 claves Redis de tests y JMeter). Y al bajar `eventos-service` desde la página, la reserva daba el 503 correcto pero el pipeline marcaba los 6 pasos en verde.
+
+**Cambios:**
+- `POST /control/limpiar` en `demo/servidor.py` (comandos fijos: `deleteMany` en las colecciones de `eventflow`, `FLUSHALL` en Redis, `TRUNCATE event_log RESTART IDENTITY`), con las mismas protecciones que el resto de `/control`. Conserva índices, tabla y vistas. La página pide confirmación, informa qué borró y vacía los IDs que quedaron en los formularios.
+- Bug del pipeline: `stepForError` no conocía `SERVICE_UNAVAILABLE` y devolvía `null`, que `animatePipeline` interpreta como éxito. Ahora el 503 se ubica por el `detail` (usuario → paso 2, evento → paso 3, sincronización de inventario → paso 4) y un error desconocido deja el pipeline en gris: **la ausencia de información nunca se dibuja como éxito**.
+
+**Verificado:** en Chromium contra el stack, eventos caído → `datos:ok usuario:ok evento:fail` y el resto sin marcar; al subirlo, el reintento marca los 6 en verde. Limpiar datos deja las tres colecciones en 0 con sus índices, Redis vacío y `event_log` en 0; sin header o desde otro origen responde 403.
+
+**Tags:** #demo #bug #pipeline #docker #limpieza #claude-opus-5
