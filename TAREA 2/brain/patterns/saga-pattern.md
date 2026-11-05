@@ -136,7 +136,7 @@ return {1, 'COMPENSACION_OK'}
 | `STARTED` | SAGA iniciada | → `USUARIO_VALIDADO` |
 | `USUARIO_VALIDADO` | Usuario existe | → `EVENTO_VALIDADO` |
 | `EVENTO_VALIDADO` | Evento existe + aforo | → `PAGO_PROCESADO` |
-| `PAGO_PROCESADO` | Pago + inventario OK | → `RESERVA_CONFIRMADA` |
+| `PAGO_PROCESADO` | Cobro + inventario OK en Redis | → `INVENTARIO_DECREMENTADO` (o `COMPENSACION_EJECUTADA` si falla la sincronización con Eventos) |
 | `RESERVA_CONFIRMADA` | Reserva en MongoDB | → `SAGA_COMPLETED` |
 | `SAGA_COMPLETED` | Todo OK + Audit log | **FINAL** |
 | `SAGA_FAILED` | Fallo + compensaciones | **FINAL** |

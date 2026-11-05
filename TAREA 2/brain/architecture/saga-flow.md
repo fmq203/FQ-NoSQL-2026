@@ -172,7 +172,7 @@ return {1, 'COMPENSACION_OK'}
 | `STARTED` | SAGA iniciada | ValidadorDeDatos |
 | `USUARIO_VALIDADO` | Usuario existe | ValidadorEvento |
 | `EVENTO_VALIDADO` | Evento existe + aforo | ProcesadorPago |
-| `PAGO_PROCESADO` | Pago + inventario OK en Redis | ConfirmadorReserva |
+| `PAGO_PROCESADO` | Pago + inventario OK en Redis (antes de sincronizar con Eventos) | ConfirmadorReserva, o compensación si la sincronización falla |
 | `RESERVA_CONFIRMADA` | Reserva en MongoDB | Auditor |
 | `SAGA_COMPLETED` | Todo OK + Audit log | — |
 | `SAGA_FAILED` | Fallo + compensaciones ejecutadas | — |

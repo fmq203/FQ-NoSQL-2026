@@ -596,3 +596,15 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Verificado:** en Chromium contra el stack, eventos caído → `datos:ok usuario:ok evento:fail` y el resto sin marcar; al subirlo, el reintento marca los 6 en verde. Limpiar datos deja las tres colecciones en 0 con sus índices, Redis vacío y `event_log` en 0; sin header o desde otro origen responde 403.
 
 **Tags:** #demo #bug #pipeline #docker #limpieza #claude-opus-5
+
+---
+
+### 2026-11-04 — Auditoría: el cobro compensado no figuraba en el event_log
+
+**Contexto:** Mirando en la demo la auditoría del escenario de compensación aparecieron dos problemas. La columna de hora mostraba solo "953": `toLocaleTimeString` con `fractionalSecondDigits` deja de agregar hora/minutos/segundos si no se piden explícitamente. Y el log saltaba de `EVENTO_VALIDADO` a `COMPENSACION_EJECUTADA`: `ProcesadorPago` emitía `PAGO_PROCESADO` recién cuando terminaban bien el cobro en Redis **y** la sincronización con Eventos, así que un cobro real que después se compensaba no quedaba registrado.
+
+**Cambio:** `PAGO_PROCESADO` se emite apenas el Lua cobra, antes de sincronizar; `INVENTARIO_DECREMENTADO` sigue saliendo cuando Eventos confirma. La compensación ahora se lee `PAGO_PROCESADO → COMPENSACION_EJECUTADA → SAGA_FAILED`, sin `INVENTARIO_DECREMENTADO`. Antes de moverlo se verificó que no rompe nada: las vistas CQRS cuentan ventas por `RESERVA_CONFIRMADA` (un cobro compensado no infla `ventas_por_evento`) e `insert_event_log` atrapa sus errores (PostgreSQL caído no deja un cobro sin compensar). El test de fault injection ahora exige `PAGO_PROCESADO` antes de la compensación y la ausencia de `INVENTARIO_DECREMENTADO`. La auditoría de la demo muestra la hora completa y el tiempo desde el inicio (+ms).
+
+**Verificado:** `make test` → 56 / 93 / 112 (+4 skipped). En Chromium contra el stack: compensación con aforo 5 → 5 y la secuencia nueva en ≈50 ms; el camino feliz conserva sus 8 eventos en orden.
+
+**Tags:** #event-sourcing #auditoria #saga #compensacion #demo #claude-opus-5

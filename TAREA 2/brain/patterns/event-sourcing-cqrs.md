@@ -43,8 +43,8 @@ CREATE TABLE event_log (
 | `SAGA_STARTED` | Reserva | Request completo | Inicio POST /api/reservar |
 | `USUARIO_VALIDADO` | Reserva | usuario_id, nombre | Paso 2 OK |
 | `EVENTO_VALIDADO` | Reserva | evento_id, aforo_disponible | Paso 3 OK |
-| `PAGO_PROCESADO` | Reserva | reserva_id, monto, metodo_pago | Paso 4 OK |
-| `INVENTARIO_DECREMENTADO` | Reserva | evento_id, cantidad, nuevo_disponible | Paso 4 OK |
+| `PAGO_PROCESADO` | Reserva | reserva_id, monto, metodo_pago | Paso 4: cobro OK en Redis (se emite antes de sincronizar con Eventos; si esa sincronización falla, le sigue `COMPENSACION_EJECUTADA`) |
+| `INVENTARIO_DECREMENTADO` | Reserva | evento_id, cantidad | Paso 4 OK: Redis y Eventos Service alineados |
 | `RESERVA_CONFIRMADA` | Reserva | reserva_id, numero_confirmacion, monto_total | Paso 5 OK |
 | `SAGA_COMPLETED` | Reserva | pasos_completados: 6 | Paso 6 OK |
 | `SAGA_FAILED` | Reserva | error, paso_fallido, compensaciones | Cualquier fallo |

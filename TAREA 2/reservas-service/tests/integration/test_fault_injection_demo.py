@@ -70,11 +70,16 @@ class TestFaultInjectionDemo:
         # El audit trail (event_log) debe reflejar la compensacion, para
         # que la vista CQRS compensaciones_por_tipo la vea.
         event_types = [
-            call.kwargs.get("event_type") or call.args[0]
-            for call in mocks["pg"].call_args_list
+            getattr(tipo, "value", tipo)
+            for tipo in (call.kwargs.get("event_type") or call.args[0] for call in mocks["pg"].call_args_list)
         ]
         assert "COMPENSACION_EJECUTADA" in event_types
         assert "SAGA_FAILED" in event_types
+        # El cobro que se compensa tiene que figurar antes que su compensacion;
+        # el inventario nunca llego a sincronizarse con Eventos.
+        assert "PAGO_PROCESADO" in event_types
+        assert event_types.index("PAGO_PROCESADO") < event_types.index("COMPENSACION_EJECUTADA")
+        assert "INVENTARIO_DECREMENTADO" not in event_types
 
     @pytest.mark.asyncio
     async def test_sin_el_query_param_no_afecta_el_flujo_normal(self, client: AsyncClient, mocks):

@@ -998,12 +998,18 @@ function renderAuditTimeline(eventos) {
   if (!eventos || eventos.length === 0) {
     return '<p style="color:var(--muted); font-size:12.5px;">Sin eventos para ese reserva_id (¿probaste algún escenario arriba primero?).</p>';
   }
+  const inicio = new Date(eventos[0].timestamp).getTime();
   return eventos.map(e => {
     const cls = e.event_type === 'SAGA_FAILED' ? 'failed' : e.event_type === 'COMPENSACION_EJECUTADA' ? 'compensacion' : '';
-    const hora = new Date(e.timestamp).toLocaleTimeString('es-AR', { hour12: false, fractionalSecondDigits: 3 });
+    const t = new Date(e.timestamp);
+    // Con fractionalSecondDigits hay que pedir hora/min/seg explícitamente: si no, solo muestra los milisegundos.
+    const hora = t.toLocaleTimeString('es-AR', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false,
+    });
+    const delta = t.getTime() - inicio;
     return `<div class="timeline-event ${cls}">
       <div class="ev-type">${e.event_type}</div>
-      <div class="ev-time">${hora}</div>
+      <div class="ev-time">${hora}<br>${delta ? `+${delta} ms` : 'inicio'}</div>
       <div class="ev-payload">${JSON.stringify(e.payload)}</div>
     </div>`;
   }).join('');

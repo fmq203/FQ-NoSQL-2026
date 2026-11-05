@@ -205,8 +205,8 @@ Cada handler:
 | `SAGA_STARTED` | Inicio POST /api/reservar | request data |
 | `USUARIO_VALIDADO` | Paso 2 OK | usuario_id |
 | `EVENTO_VALIDADO` | Paso 3 OK | evento_id, aforo_disponible |
-| `PAGO_PROCESADO` | Paso 4 OK | reserva_id, monto, metodo_pago |
-| `INVENTARIO_DECREMENTADO` | Paso 4 OK | evento_id, cantidad |
+| `PAGO_PROCESADO` | Paso 4: cobro OK en Redis (antes de sincronizar con Eventos) | reserva_id, monto, metodo_pago |
+| `INVENTARIO_DECREMENTADO` | Paso 4 OK: Eventos Service sincronizado | evento_id, cantidad |
 | `RESERVA_CONFIRMADA` | Paso 5 OK | reserva_id, numero_confirmacion |
 | `SAGA_COMPLETED` | Paso 6 OK | aggregate completo |
 | `SAGA_FAILED` | Cualquier fallo | error, paso_fallido |

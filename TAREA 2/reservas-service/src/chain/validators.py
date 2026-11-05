@@ -237,6 +237,19 @@ class ProcesadorPago(BaseHandler):
                 status = "insufficient_inventory" if es_inventario_insuficiente else "payment_failed"
                 return
 
+            # El cobro ya ocurrio en Redis: se registra ahora, antes de
+            # sincronizar con Eventos. Si la sincronizacion falla, el audit
+            # trail muestra el cobro y despues su compensacion, en vez de
+            # una compensacion de algo que nunca aparece cobrado.
+            db_start = time.perf_counter()
+            await insert_event_log(
+                event_type=EventType.PAGO_PROCESADO,
+                aggregate_id=context.reserva_id,
+                payload={"monto": monto_total, "metodo_pago": context.metodo_pago},
+                correlation_id=context.correlation_id
+            )
+            record_db_operation_duration("postgresql", "insert", "success", time.perf_counter() - db_start)
+
             # Sincronizar la venta hacia eventos-service. Redis ya decidio
             # de forma atomica que la venta es valida (arriba); esto solo
             # mantiene entradas_disponibles/precios[].disponibles alineados
@@ -283,17 +296,7 @@ class ProcesadorPago(BaseHandler):
             self._add_saga_log(context, self._step_name, True,
                 f"Pago procesado: {monto_total}")
 
-            # Emit event
-            db_start = time.perf_counter()
-            await insert_event_log(
-                event_type=EventType.PAGO_PROCESADO,
-                aggregate_id=context.reserva_id,
-                payload={"monto": monto_total, "metodo_pago": context.metodo_pago},
-                correlation_id=context.correlation_id
-            )
-            record_db_operation_duration("postgresql", "insert", "success", time.perf_counter() - db_start)
-
-            # Emit inventory decremented event
+            # Emit inventory decremented event (Redis + Eventos ya alineados)
             db_start = time.perf_counter()
             await insert_event_log(
                 event_type=EventType.INVENTARIO_DECREMENTADO,
