@@ -178,8 +178,10 @@ make test
 Página HTML estática (sin build, sin dependencias) que llama a las tres APIs en vivo desde el navegador: crear usuario → crear evento → reservar (SAGA), con pipeline animado, idempotencia y un botón de error real. Ver [`demo/README.md`](./demo/README.md).
 
 ```bash
-cd demo && python3 -m http.server 8080   # abrir http://localhost:8080
+python3 demo/servidor.py   # abrir http://localhost:8080/index.html
 ```
+
+`servidor.py` además habilita los botones para subir y bajar cada contenedor desde la página (solo desde `127.0.0.1` y desde la propia página).
 
 ### Verificar que todo funciona
 

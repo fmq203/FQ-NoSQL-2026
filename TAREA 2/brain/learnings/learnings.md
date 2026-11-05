@@ -567,3 +567,18 @@ Se rediseñó `animatePipeline()` para tomar el paso exacto donde falla (`failSt
 **Verificación:** `make test` → usuarios 56, eventos 93, reservas 112 (+4 skipped). Contra el stack real, `docker compose stop mongodb` + `GET` con `Cache-Control: no-cache` en ambos servicios → `503`, `Retry-After: 5`, cuerpo RFC 7807; MongoDB vuelto a levantar después.
 
 **Tags:** #rfc7807 #503 #disponibilidad #documentacion #demo #pre-defensa #claude-opus-5
+
+---
+
+### 2026-11-04 — Demo: tarjetas minimizables, control de Docker desde la página y reintento real
+
+**Contexto:** Ensayando la presentación, los escenarios de un click quedaban lejos del pipeline (las tarjetas 1–3 ocupan casi una pantalla) y para la demo de lecturas AP había que ir a la terminal a bajar MongoDB.
+
+**Cambios:**
+- Tarjetas 1–3 minimizables (una por una o "Minimizar pasos 1–3"); minimizadas quedan los botones, los IDs y la respuesta compacta. El estado se recuerda en `localStorage` (con try/catch: sin storage solo no se recuerda).
+- `demo/servidor.py` (stdlib) reemplaza a `python3 -m http.server`: sirve la página y expone `/control/estado` y `/control/{start|stop}/{servicio|todos}` (`docker compose up -d` / `stop`, nunca `down -v`). Como cualquier web abierta en el navegador puede pegarle a localhost: escucha solo en 127.0.0.1, lista fija de servicios y acciones sin shell, header `X-Demo-Control` obligatorio (fuerza un preflight CORS que nunca se aprueba) y chequeo de `Host`/`Origin` contra DNS rebinding. Probado: 403 sin header, con otro origen y con otro Host; 400 con servicio o acción inválidos.
+- "Reintentar" reenviaba el `reserva_id` pero con los datos del formulario (tras "Probar error" mandaba otro evento) y, con la tarjeta minimizada, no daba ninguna señal. Ahora reenvía exactamente la misma petición, anima el pipeline y explica el 200 (ya existía) o el 201 (el intento anterior no se concretó).
+
+**Verificado contra el stack real:** con `eventos-service` caído, una reserva da 503 en ≈3,8 s (3 reintentos 0,5/1/2 s); al subirlo, reintentar el mismo `reserva_id` da 201 y otra vez 200. Con 5 fallos seguidos se abre el circuit breaker y el sexto falla en ≈30 ms, incluso después de levantar el servicio, hasta pasar los 30 s de half-open: hay que tenerlo presente en vivo. La página se probó en Chromium headless (imagen Docker de Playwright, porque el WSL no tiene las librerías del navegador y no hay sudo) además de jsdom.
+
+**Tags:** #demo #docker #seguridad-local #csrf #idempotencia #circuit-breaker #claude-opus-5

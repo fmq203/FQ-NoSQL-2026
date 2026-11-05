@@ -112,6 +112,30 @@
   }
   section.card p.hint { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
 
+  /* Tarjetas 1-3 minimizables: quedan los botones y el ID, para ver los escenarios junto al pipeline */
+  .card-toggle {
+    margin-left: auto; background: #232c42; color: var(--muted);
+    padding: 3px 10px; font-size: 11.5px; font-weight: 600;
+  }
+  section.card.collapsed { padding: 10px 20px; margin-bottom: 10px; }
+  section.card.collapsed h2 { margin-bottom: 8px; }
+  section.card.collapsed > .hint,
+  section.card.collapsed > .grid-form { display: none !important; }
+  /* la respuesta sigue a la vista (es el feedback de los botones), pero compacta */
+  section.card.collapsed > pre.result { max-height: 110px; overflow: auto; margin-top: 8px; }
+  .docker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .docker-row {
+    display: flex; flex-direction: column; gap: 8px; background: #0c111c;
+    border: 1px solid var(--panel-border); border-radius: 8px; padding: 9px 10px; font-size: 12.5px;
+  }
+  .docker-row .svc-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .docker-row .svc-name { font-family: var(--mono); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .docker-row .svc-state { color: var(--muted); font-size: 11px; font-family: var(--mono); }
+  .docker-row .svc-btns { display: flex; gap: 6px; }
+  .docker-row .svc-btns button { flex: 1; padding: 5px 0; font-size: 12px; }
+  .collapse-all { display: flex; justify-content: flex-end; margin: -14px 0 8px; }
+  .collapse-all button { background: none; color: var(--muted); padding: 2px 4px; font-size: 12px; font-weight: 500; }
+
   .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 12px; }
   .field { display: flex; flex-direction: column; gap: 4px; }
   .field label { font-size: 11.5px; color: var(--muted); }
@@ -176,6 +200,19 @@
 
   <div class="services" id="services"></div>
 
+  <section class="card" id="docker-card">
+    <h2>Contenedores Docker</h2>
+    <p class="hint">Subir o bajar cada contenedor desde acá (<code>docker compose up -d</code> / <code>stop</code>; los datos se conservan). Por ejemplo, bajar <b>mongodb</b> para mostrar las lecturas AP. Necesita la página servida con <code>python3 demo/servidor.py</code>.</p>
+    <div class="docker-grid" id="docker-grid"></div>
+    <div class="actions">
+      <button id="btn-docker-up-all">▲ Subir todo</button>
+      <button class="danger" id="btn-docker-down-all">▼ Bajar todo</button>
+      <button class="secondary" id="btn-docker-refresh">↻ Estado</button>
+      <span id="docker-msg" style="font-size:12.5px; color:var(--muted);"></span>
+    </div>
+    <pre class="result" id="res-docker" style="display:none"></pre>
+  </section>
+
   <h3 style="font-size:13px; color:var(--muted); margin:0 0 8px;">Infraestructura (bases de datos poliglotas)</h3>
   <div class="infra">
     <div class="svc-col">
@@ -215,7 +252,9 @@
     <div class="step" data-step="auditar"><b>6</b>Auditar (PostgreSQL)</div>
   </div>
 
-  <section class="card">
+  <div class="collapse-all"><button id="btn-collapse-all" type="button">Minimizar pasos 1–3</button></div>
+
+  <section class="card collapsible" data-card="usuario">
     <h2><span class="step-badge">1</span>Crear usuario</h2>
     <p class="hint">POST /api/usuarios — usuarios-service</p>
     <div class="grid-form">
@@ -234,7 +273,7 @@
     <pre class="result" id="res-usuario" style="display:none"></pre>
   </section>
 
-  <section class="card">
+  <section class="card collapsible" data-card="evento">
     <h2><span class="step-badge">2</span>Crear evento</h2>
     <p class="hint">POST /api/eventos — eventos-service</p>
     <div class="grid-form">
@@ -258,7 +297,7 @@
     <pre class="result" id="res-evento" style="display:none"></pre>
   </section>
 
-  <section class="card">
+  <section class="card collapsible" data-card="reservar">
     <h2><span class="step-badge">3</span>Reservar (dispara la SAGA)</h2>
     <p class="hint">POST /api/reservar — reservas-service. usuario_id/evento_id se completan solos con los pasos 1 y 2, o los podés pegar manualmente.</p>
     <div class="grid-form">
@@ -423,6 +462,80 @@ async function refreshHealth() {
 $('btn-refresh-health').addEventListener('click', refreshHealth);
 refreshHealth();
 
+// ---- Contenedores Docker (vía demo/servidor.py, mismo origen que la página) ----
+
+const DOCKER_SERVICES = ['mongodb', 'redis', 'postgresql', 'usuarios-service', 'eventos-service', 'reservas-service'];
+const CONTROL_HEADERS = { 'X-Demo-Control': '1' };
+let dockerOcupado = false;
+
+function dockerDot({ state, health }) {
+  if (state !== 'running') return 'down';
+  if (health === 'unhealthy') return 'unhealthy';
+  if (health === 'starting') return 'degraded';
+  return 'healthy';
+}
+
+function renderDocker(servicios) {
+  $('docker-grid').innerHTML = DOCKER_SERVICES.map(s => {
+    const e = servicios?.[s];
+    const texto = e ? [e.state, e.health].filter(Boolean).join(' · ') : 'desconocido';
+    const corriendo = e?.state === 'running';
+    return `
+      <div class="docker-row">
+        <div class="svc-head">
+          <span class="dot ${e ? dockerDot(e) : 'unknown'}"></span>
+          <span class="svc-name" title="${s}">${s}</span>
+        </div>
+        <span class="svc-state">${texto}</span>
+        <div class="svc-btns">
+          <button data-docker="start" data-svc="${s}" ${corriendo || dockerOcupado ? 'disabled' : ''}>▲ Subir</button>
+          <button class="danger" data-docker="stop" data-svc="${s}" ${!corriendo || dockerOcupado ? 'disabled' : ''}>▼ Bajar</button>
+        </div>
+      </div>`;
+  }).join('');
+  $('docker-grid').querySelectorAll('button[data-docker]').forEach(b =>
+    b.addEventListener('click', () => accionDocker(b.dataset.docker, b.dataset.svc)));
+}
+
+async function refreshDocker() {
+  const r = await callApi('/control/estado', { headers: CONTROL_HEADERS });
+  if (!r.ok) {
+    renderDocker(null);
+    $('docker-msg').textContent = r.status === 503
+      ? (r.body?.detail ?? 'Docker no responde')
+      : 'Control no disponible: abrí la demo con  python3 demo/servidor.py  (no con http.server ni file://).';
+    return false;
+  }
+  renderDocker(r.body.servicios);
+  if (!dockerOcupado) $('docker-msg').textContent = '';
+  return true;
+}
+
+async function accionDocker(accion, servicio) {
+  if (dockerOcupado) return;
+  dockerOcupado = true;
+  ['btn-docker-up-all', 'btn-docker-down-all'].forEach(id => $(id).disabled = true);
+  const verbo = accion === 'start' ? 'Subiendo' : 'Bajando';
+  $('docker-msg').textContent = `${verbo} ${servicio === 'todos' ? 'todos los contenedores' : servicio}…`;
+  await refreshDocker();
+  const r = await callApi(`/control/${accion}/${servicio}`, { method: 'POST', headers: CONTROL_HEADERS });
+  dockerOcupado = false;
+  ['btn-docker-up-all', 'btn-docker-down-all'].forEach(id => $(id).disabled = false);
+  $('docker-msg').textContent = r.ok ? `Listo: ${accion === 'start' ? 'subido' : 'bajado'} ${servicio}.` : 'Falló, ver detalle abajo.';
+  if (r.ok) $('res-docker').style.display = 'none'; else showResult('res-docker', r);
+  await refreshDocker();
+  // Los servicios tardan unos segundos en pasar a healthy: se refresca de nuevo en breve.
+  refreshHealth();
+  setTimeout(() => { refreshDocker(); refreshHealth(); }, 4000);
+}
+
+$('btn-docker-up-all').addEventListener('click', () => accionDocker('start', 'todos'));
+$('btn-docker-down-all').addEventListener('click', () => {
+  if (confirm('¿Bajar todos los contenedores? La demo deja de responder hasta volver a subirlos.')) accionDocker('stop', 'todos');
+});
+$('btn-docker-refresh').addEventListener('click', refreshDocker);
+refreshDocker();
+
 // ---- Pipeline visual ----
 
 function resetPipeline() {
@@ -531,6 +644,7 @@ $('btn-crear-evento').addEventListener('click', async () => {
 // ---- Paso 3: reserva ----
 
 let lastReservaId = null;
+let lastReservaPayload = null;
 
 /** Recuerda el ultimo reserva_id usado (exito o falla) y lo deja
  * precargado en el visor de auditoria del pie de pagina. */
@@ -554,6 +668,7 @@ async function hacerReserva(overrides = {}) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
   setLastReserva(reserva_id);
+  lastReservaPayload = payload;
   return r;
 }
 
@@ -568,9 +683,16 @@ $('btn-reintentar').addEventListener('click', async () => {
     showResult('res-reserva', { ok: false, body: { detail: 'Primero hacé una reserva (arriba) para tener un reserva_id que reintentar.' } });
     return;
   }
-  const r = await hacerReserva({ reserva_id: lastReservaId });
-  showResult('res-reserva', r);
-  // Idempotencia: debe volver 200 (no 201) con la misma reserva
+  // Reenvía exactamente la misma petición (como un cliente que perdió la respuesta).
+  const r = await callApi(`${cfg().reservas}/api/reservar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(lastReservaPayload),
+  });
+  const nota = {
+    200: 'Reintento: la reserva ya existía → 200 (idempotente: no se cobró ni se descontó stock de nuevo).',
+    201: 'Reintento: el intento anterior no se había concretado → ahora sí, 201 (reintentar es seguro).',
+  }[r.status];
+  showResult('res-reserva', nota ? { ...r, body: { nota, ...r.body } } : r);
+  await animatePipeline(r.ok ? null : stepForError(r.body));
 });
 
 $('btn-error-evento').addEventListener('click', async () => {
@@ -860,6 +982,46 @@ async function consultarAuditoria() {
 }
 
 $('btn-consultar-audit').addEventListener('click', consultarAuditoria);
+
+// ---- Tarjetas 1-3 minimizables (el estado se recuerda en este navegador) ----
+const COLLAPSE_KEY = 'eventflow-demo-colapsadas';
+const collapsibleCards = [...document.querySelectorAll('section.card.collapsible')];
+
+function leerColapsadas() {
+  try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || []; } catch { return []; }
+}
+
+function guardarColapsadas() {
+  const colapsadas = collapsibleCards.filter(c => c.classList.contains('collapsed')).map(c => c.dataset.card);
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(colapsadas)); } catch { /* sin storage: no se recuerda */ }
+}
+
+function setCollapsed(card, collapsed) {
+  card.classList.toggle('collapsed', collapsed);
+  card.querySelector('.card-toggle').textContent = collapsed ? 'Expandir' : 'Minimizar';
+  card.querySelector('.card-toggle').setAttribute('aria-expanded', String(!collapsed));
+  const todas = collapsibleCards.every(c => c.classList.contains('collapsed'));
+  $('btn-collapse-all').textContent = todas ? 'Expandir pasos 1–3' : 'Minimizar pasos 1–3';
+}
+
+const colapsadasGuardadas = leerColapsadas();
+collapsibleCards.forEach(card => {
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'card-toggle';
+  toggle.addEventListener('click', () => {
+    setCollapsed(card, !card.classList.contains('collapsed'));
+    guardarColapsadas();
+  });
+  card.querySelector('h2').appendChild(toggle);
+  setCollapsed(card, colapsadasGuardadas.includes(card.dataset.card));
+});
+
+$('btn-collapse-all').addEventListener('click', () => {
+  const colapsar = !collapsibleCards.every(c => c.classList.contains('collapsed'));
+  collapsibleCards.forEach(card => setCollapsed(card, colapsar));
+  guardarColapsadas();
+});
 </script>
 </body>
 </html>

@@ -15,24 +15,23 @@ docker compose up -d --build   # --build es importante: reconstruye con el códi
 
 ## Cómo abrirlo
 
-Cualquiera de las dos funciona:
-
 ```bash
-# Opción 1: servido (recomendado, evita cualquier restricción de origen file://)
-cd demo
-python3 -m http.server 8080
-# abrir http://localhost:8080
+# Recomendado: sirve la página y habilita los botones de "Contenedores Docker"
+python3 demo/servidor.py          # abrir http://localhost:8080/index.html  (--port para cambiarlo)
 
-# Opción 2: abrir el archivo directo
-xdg-open index.html   # o doble click en el Finder/Explorador
+# Alternativa sin control de Docker: abrir el archivo directo (o cualquier servidor estático)
+xdg-open demo/index.html
 ```
+
+`servidor.py` (solo stdlib) agrega una API local que corre `docker compose up -d` / `stop` sobre el `docker-compose.yml` de `TAREA 2/`. Acepta solo los 6 servicios del compose y esas dos acciones (sin shell), escucha únicamente en `127.0.0.1` y rechaza peticiones que no vengan de la propia página (header `X-Demo-Control` + chequeo de `Host`/`Origin`), así otra web abierta en el navegador no puede bajar los contenedores. Bajar un contenedor no borra datos: se usa `stop`, no `down -v`.
 
 ## Qué muestra
 
 1. **Diagrama de infraestructura** (estático): los 3 servicios, sus puertos y sus datos: un MongoDB con una colección por servicio (usuarios, eventos, reservas) más Redis y PostgreSQL en Reservas.
 2. **Estado en vivo** de los 3 servicios (`/health`, con sus `checks` por dependencia — Mongo/Redis/PostgreSQL/circuit breakers).
 3. **Pipeline visual** de la SAGA (Chain of Responsibility, 6 pasos) que se anima al reservar.
-4. **Crear usuario** → `POST /api/usuarios`.
+3b. **Contenedores Docker** → subir/bajar cada contenedor (o todos) con su estado y health; por ejemplo, bajar `mongodb` para la demo de lecturas AP sin ir a la terminal.
+4. **Crear usuario** → `POST /api/usuarios`. Las tarjetas 1–3 se pueden minimizar (botón en cada una o "Minimizar pasos 1–3"): quedan solo los botones y el ID creado, así los escenarios se ven junto al pipeline. El navegador recuerda cuáles quedaron minimizadas.
 5. **Crear evento** → `POST /api/eventos`.
 6. **Reservar** → `POST /api/reservar` (usuario_id/evento_id se autocompletan de los pasos anteriores).
 7. **Reintentar con el mismo `reserva_id`** → demuestra idempotencia (200, no 201, sin doble cobro).
